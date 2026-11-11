@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block titulo %}Alterar senha{% endblock %}
+{% block conteudo %}
+<div style="max-width:480px;margin:0 auto">
+  <div class="card destaque">
+    <h1>{% if obrigatorio %}Crie sua senha{% else %}Alterar senha{% endif %}</h1>
+    {% if obrigatorio %}<div class="caixa-alerta">Você está usando a senha padrão. Para continuar, crie uma senha só sua (mínimo de 6 caracteres).</div>{% endif %}
+    <form method="post" novalidate>{% csrf_token %}
+      {% include "core/_form.html" %}
+      <button class="btn bloco" type="submit">Salvar nova senha</button>
+    </form>
+    {% if obrigatorio %}<form method="post" action="{% url 'logout' %}" class="mt-1 texto-centro">{% csrf_token %}<button class="btn sec sm" type="submit">Sair</button></form>{% endif %}
+  </div>
+</div>
+{% endblock %}

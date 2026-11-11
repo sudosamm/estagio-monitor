@@ -1,0 +1,58 @@
+from django.contrib import admin
+from django.contrib.auth import views as auth_views
+from django.http import HttpResponse
+from django.urls import path
+
+from core.views import agenda, comum, estagio, orientador, supervisor
+
+urlpatterns = [
+    path("", comum.inicio, name="inicio"),
+    path("entrar/", auth_views.LoginView.as_view(redirect_authenticated_user=True), name="login"),
+    path("sair/", auth_views.LogoutView.as_view(), name="logout"),
+    path("senha/", comum.trocar_senha, name="trocar_senha"),
+    path("perfil/", comum.perfil, name="perfil"),
+    path("notificacoes/", comum.notificacoes, name="notificacoes"),
+    path("notificacoes/lidas/", comum.notificacoes_marcar_lidas, name="notificacoes_lidas"),
+    path("notificacoes/<int:pk>/", comum.notificacao_abrir, name="notificacao_abrir"),
+    path("arquivos/<int:pk>/", comum.baixar_documento, name="baixar_documento"),
+    path("arquivos/<int:pk>/excluir/", comum.excluir_documento, name="excluir_documento"),
+    # estágio (todos os papéis)
+    path("estagios/<int:pk>/", estagio.estagio_detalhe, name="estagio_detalhe"),
+    path("estagios/<int:pk>/presenca/", estagio.marcar_presenca, name="marcar_presenca"),
+    path("estagios/<int:pk>/saida/", estagio.registrar_saida, name="registrar_saida"),
+    path("estagios/<int:pk>/ausencia/", estagio.informar_ausencia, name="informar_ausencia"),
+    path("estagios/<int:pk>/dia/<str:data>/", estagio.estagio_dia, name="estagio_dia"),
+    path("estagios/<int:pk>/mensagens/", estagio.enviar_mensagem, name="enviar_mensagem"),
+    path("estagios/<int:pk>/arquivos/", estagio.enviar_documento, name="enviar_documento"),
+    path("estagios/<int:pk>/frequencia/", estagio.folha_frequencia, name="folha_frequencia"),
+    path("estagios/<int:pk>/editar/", estagio.editar_estagio, name="editar_estagio"),
+    path("estagios/<int:pk>/escalas/", estagio.nova_escala, name="nova_escala"),
+    path("escalas/<int:pk>/excluir/", estagio.excluir_escala, name="excluir_escala"),
+    path("registros/<int:pk>/validar/", estagio.validar_registro, name="validar_registro"),
+    # orientador
+    path("painel/", orientador.painel, name="painel"),
+    path("estagios/", orientador.estagios_lista, name="estagios_lista"),
+    path("estagios/novos/", orientador.criar_estagiarios, name="criar_estagiarios"),
+    path("escalas/alterar/", orientador.escala_lote, name="escala_lote"),
+    path("contas/", orientador.usuarios, name="usuarios"),
+    path("contas/supervisores/novos/", orientador.criar_supervisores, name="criar_supervisores"),
+    path("contas/orientadores/novo/", orientador.criar_orientador, name="criar_orientador"),
+    path("contas/<int:pk>/", orientador.editar_usuario, name="editar_usuario"),
+    path("contas/<int:pk>/senha-padrao/", orientador.redefinir_senha, name="redefinir_senha"),
+    path("cursos/", orientador.cursos, name="cursos"),
+    path("cursos/<int:pk>/", orientador.cursos, name="curso_editar"),
+    path("locais/", orientador.locais, name="locais"),
+    path("locais/<int:pk>/", orientador.locais, name="local_editar"),
+    path("dias-sem-estagio/", orientador.dias_sem_estagio, name="dias_sem_estagio"),
+    path("documentos/", orientador.documentos_gerais, name="documentos_gerais"),
+    # supervisor
+    path("supervisao/", supervisor.painel_supervisor, name="painel_supervisor"),
+    path("supervisao/confirmar/", supervisor.confirmar_lote, name="confirmar_lote"),
+    # agenda
+    path("agenda/", agenda.agendamentos, name="agendamentos"),
+    path("agenda/novo/", agenda.novo_agendamento, name="novo_agendamento"),
+    path("agenda/<int:pk>/", agenda.agendamento_detalhe, name="agendamento_detalhe"),
+    path("agenda/<int:pk>/cancelar/", agenda.cancelar_agendamento, name="cancelar_agendamento"),
+    path("admin/", admin.site.urls),
+    path("saude/", lambda r: HttpResponse("ok"), name="saude"),
+]

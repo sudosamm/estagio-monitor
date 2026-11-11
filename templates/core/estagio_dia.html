@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}{{ dia|date:"d/m/Y" }} · {{ estagio.estagiario }}{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div>
+    <div class="migalha"><a href="{{ estagio.get_absolute_url }}?mes={{ dia|date:'Y-m' }}">← {% if e_estagiario %}Meu estágio{% else %}{{ estagio.estagiario }}{% endif %}</a></div>
+    <h1>{{ dia|date:"l, d \d\e F \d\e Y" }}</h1>
+    <p>{% if not e_estagiario %}{{ estagio.estagiario }} · {% endif %}{{ estagio.local|default:"" }}</p>
+  </div>
+  {% selo status.codigo status.rotulo|default:"Sem estágio previsto" %}
+</div>
+<div class="grade grade-lado">
+  <div>
+    <div class="card">
+      <h2>Situação do dia</h2>
+      <dl class="dl">
+        <dt>Previsto na escala</dt><dd>{% if status.previsto %}Sim{% if status.escala.horario_display %} · {{ status.escala.horario_display }}{% endif %} · {{ status.escala.horas_por_dia|horas }}{% elif status.motivo_sem_estagio %}Não — {{ status.motivo_sem_estagio }}{% else %}Não{% endif %}</dd>
+        {% if registro %}
+          <dt>Registro</dt><dd>{{ registro.get_situacao_display }}</dd>
+          {% if registro.hora_chegada %}<dt>Chegada</dt><dd>{{ registro.hora_chegada|time:"H:i" }}</dd>{% endif %}
+          {% if registro.hora_saida %}<dt>Saída</dt><dd>{{ registro.hora_saida|time:"H:i" }}</dd>{% endif %}
+          <dt>Horas</dt><dd>{{ registro.horas|horas }}</dd>
+          <dt>Validação</dt><dd>{{ registro.get_confirmacao_display }}{% if registro.confirmado_por %} — {{ registro.confirmado_por }} em {{ registro.confirmado_em|date:"d/m H:i" }}{% endif %}</dd>
+          {% if registro.motivo %}<dt>Motivo</dt><dd class="quebra">{{ registro.motivo }}</dd>{% endif %}
+          {% if registro.obs_supervisor %}<dt>Obs. supervisor</dt><dd class="quebra">{{ registro.obs_supervisor }}</dd>{% endif %}
+        {% else %}
+          <dt>Registro</dt><dd>Nenhum</dd>
+        {% endif %}
+      </dl>
+      {% if pode_lancar and registro and registro.confirmacao == "PENDENTE" %}
+      <hr>
+      <form method="post" action="{% url 'validar_registro' registro.pk %}">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.path }}">
+        <div class="campo"><label>Observação (opcional)</label><textarea name="obs" rows="2"></textarea></div>
+        <div class="acoes">
+          <button class="btn" name="acao" value="confirmar" type="submit">{% icone "check" %} Confirmar</button>
+          <button class="btn perigo" name="acao" value="contestar" type="submit">{% icone "x" %} Contestar</button>
+        </div>
+      </form>
+      {% endif %}
+    </div>
+    <div class="card">
+      <h2>Como foi o dia</h2>
+      {% if diario_form %}
+        <form method="post">{% csrf_token %}{% with form=diario_form %}{% include "core/_form.html" %}{% endwith %}<button class="btn" type="submit">Salvar anotação</button></form>
+      {% elif registro.diario %}
+        <p class="quebra">{{ registro.diario }}</p>
+      {% elif e_estagiario %}
+        <p class="vazio">Marque presença para poder anotar como foi o dia.</p>
+      {% else %}
+        <p class="vazio">O estagiário não fez anotações neste dia.</p>
+      {% endif %}
+    </div>
+  </div>
+  <div>
+    {% if lancamento_form %}
+    <div class="card destaque">
+      <h3>{% if registro %}Ajustar registro{% else %}Lançar registro{% endif %}</h3>
+      {% if futuro %}<p class="muted">Dias futuros não podem ser validados.</p>{% else %}
+      <p class="muted" style="font-size:.85rem">Use quando o estagiário esqueceu de marcar presença ou para corrigir algo.</p>
+      <form method="post">{% csrf_token %}{% with form=lancamento_form %}{% include "core/_form.html" %}{% endwith %}<button class="btn bloco" type="submit">Salvar</button></form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

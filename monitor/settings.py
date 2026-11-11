@@ -1,0 +1,136 @@
+"""Configurações do Estágio Monitor.
+
+Tudo que muda entre ambientes vem de variáveis de ambiente (ver .env.example).
+"""
+import os
+import sys
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def env_bool(name, default=False):
+    return os.environ.get(name, str(default)).strip().lower() in {"1", "true", "yes", "sim", "on"}
+
+
+def env_list(name, default=""):
+    return [v.strip() for v in os.environ.get(name, default).split(",") if v.strip()]
+
+
+SECRET_KEY = os.environ.get("SECRET_KEY", "dev-inseguro-troque-em-producao")
+DEBUG = env_bool("DEBUG", False)
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "")
+
+# Atrás do Cloudflare Tunnel / proxy do Coolify
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+SESSION_COOKIE_SECURE = env_bool("COOKIES_SEGUROS", not DEBUG)
+CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 14  # 14 dias
+X_FRAME_OPTIONS = "DENY"
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "core",
+]
+
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.TrocaSenhaObrigatoriaMiddleware",
+]
+
+ROOT_URLCONF = "monitor.urls"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+                "core.context_processors.globais",
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = "monitor.wsgi.application"
+
+# Dados persistentes (banco + anexos) ficam em DATA_DIR -> volume no Docker
+DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR / "data"))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": DATA_DIR / "db.sqlite3",
+        "OPTIONS": {
+            "transaction_mode": "IMMEDIATE",
+            "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;",
+        },
+    }
+}
+
+AUTH_USER_MODEL = "core.Usuario"
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 6}},
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+]
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "inicio"
+LOGOUT_REDIRECT_URL = "login"
+
+LANGUAGE_CODE = "pt-br"
+TIME_ZONE = os.environ.get("TZ", "America/Fortaleza")
+USE_I18N = True
+USE_TZ = True
+
+STATIC_URL = "static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        if not (DEBUG or "test" in sys.argv)
+        else "django.contrib.staticfiles.storage.StaticFilesStorage"
+    },
+}
+
+# Anexos NÃO são servidos publicamente: passam por uma view que checa permissão.
+MEDIA_ROOT = DATA_DIR / "anexos"
+MEDIA_URL = "/nao-publico/"
+DATA_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+TAMANHO_MAX_ANEXO_MB = int(os.environ.get("TAMANHO_MAX_ANEXO_MB", "10"))
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Regras do sistema
+SENHA_PADRAO = os.environ.get("SENHA_PADRAO", "estagio123")
+NOME_SISTEMA = os.environ.get("NOME_SISTEMA", "Estágio Monitor")
+NOME_INSTITUICAO = os.environ.get("NOME_INSTITUICAO", "Secretaria da Educação do Ceará")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "INFO"},
+}

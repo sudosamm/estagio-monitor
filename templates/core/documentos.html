@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Arquivos{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Arquivos</h1><p>Modelos, orientações e frequências para seus estagiários.</p></div></div>
+<div class="grade grade-lado">
+  <div class="card"><ul class="lista">{% for d in documentos %}
+    <li><span class="arquivo-ic">{{ d.extensao|truncatechars:5 }}</span>
+      <span class="cresce"><a href="{% url 'baixar_documento' d.pk %}" target="_blank"><strong>{{ d.titulo }}</strong></a>
+      <small style="display:block">{{ d.get_categoria_display }} · {% if d.estagio %}{{ d.estagio.estagiario }}{% elif d.curso %}todos de {{ d.curso }}{% else %}todos os estagiários{% endif %} · enviado por {{ d.enviado_por.primeiro_nome }} em {{ d.criado_em|date:"d/m/Y" }}</small></span>
+      <form method="post" action="{% url 'excluir_documento' d.pk %}" data-confirmar="Remover “{{ d.titulo }}”?">{% csrf_token %}<button class="btn perigo sm" type="submit">{% icone "lixo" %}</button></form></li>
+  {% empty %}<li class="vazio">Nenhum arquivo enviado.</li>{% endfor %}</ul></div>
+  <div class="card destaque"><h3>Publicar arquivo</h3>
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}{% include "core/_form.html" %}<button class="btn bloco" type="submit">{% icone "upload" %} Publicar e avisar</button></form></div>
+</div>
+{% endblock %}

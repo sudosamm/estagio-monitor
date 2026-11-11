@@ -1,0 +1,53 @@
+{% load static ui %}<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frequência {{ nav.titulo }} — {{ estagio.estagiario }}</title>
+<style>
+  body { font-family: "Open Sans", Arial, sans-serif; color: #111; margin: 0; padding: 24px 16px; background: #f4f6f5; }
+  .folha { max-width: 820px; margin: 0 auto; background: #fff; padding: 28px 32px; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+  .topo { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #00843d; padding-bottom: 10px; margin-bottom: 14px; }
+  h1 { font-size: 18px; margin: 0; } h2 { font-size: 14px; margin: 0; color: #555; font-weight: 600; }
+  .dados { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; font-size: 13px; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { border: 1px solid #999; padding: 6px; text-align: left; }
+  th { background: #e6f3ec; }
+  .ass { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-top: 48px; font-size: 12px; text-align: center; }
+  .ass div { border-top: 1px solid #333; padding-top: 4px; }
+  .barra { max-width: 820px; margin: 0 auto 12px; display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; }
+  .barra a, .barra button { font: inherit; font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid #ccc; background: #fff; color: #00843d; text-decoration: none; cursor: pointer; }
+  .barra button { background: #00843d; color: #fff; border-color: #00843d; }
+  @media print { body { background: #fff; padding: 0; } .folha { box-shadow: none; padding: 0; } .barra { display: none; } }
+</style></head>
+<body>
+<div class="barra">
+  <span><a href="?mes={{ nav.anterior }}">← Mês anterior</a> <a href="?mes={{ nav.proximo }}">Próximo mês →</a></span>
+  <span><a href="{{ estagio.get_absolute_url }}">Voltar</a> <button onclick="window.print()">Imprimir / salvar PDF</button></span>
+</div>
+<div class="folha">
+  <div class="topo"><div><h1>Folha de frequência de estágio</h1><h2>{{ NOME_INSTITUICAO }}</h2></div><strong>{{ nav.titulo }}</strong></div>
+  <div class="dados">
+    <div><strong>Estagiário(a):</strong> {{ estagio.estagiario.nome_completo }}</div>
+    <div><strong>Matrícula:</strong> {{ estagio.estagiario.matricula|default:"—" }}</div>
+    <div><strong>Curso:</strong> {{ estagio.curso }}{% if estagio.turma %} — {{ estagio.turma }}{% endif %}</div>
+    <div><strong>Concedente:</strong> {{ estagio.local|default:"—" }}</div>
+    <div><strong>Supervisor(a):</strong> {{ estagio.supervisor|default:"—" }}</div>
+    <div><strong>Orientador(a):</strong> {{ estagio.orientador }}</div>
+    <div><strong>Escala:</strong> {{ escala.dias_display|default:"—" }} {{ escala.horario_display }}</div>
+    <div><strong>Horas confirmadas no mês:</strong> {{ total|horas }}</div>
+  </div>
+  <table>
+    <thead><tr><th style="width:90px">Data</th><th style="width:60px">Dia</th><th>Entrada</th><th>Saída</th><th>Horas</th><th>Situação</th><th style="width:140px">Visto supervisor</th></tr></thead>
+    <tbody>
+    {% for d in dias %}
+      <tr>
+        <td>{{ d.data|date:"d/m/Y" }}</td><td>{{ d.data|date:"D" }}</td>
+        <td>{{ d.registro.hora_chegada|time:"H:i"|default:"" }}</td><td>{{ d.registro.hora_saida|time:"H:i"|default:"" }}</td>
+        <td>{% if d.registro %}{{ d.registro.horas|horas }}{% endif %}</td>
+        <td>{% if d.codigo == "previsto" or d.codigo == "hoje" %}{% else %}{{ d.rotulo }}{% endif %}</td>
+        <td>{% if d.codigo == "confirmado" %}✓ {{ d.registro.confirmado_por.primeiro_nome }}{% endif %}</td>
+      </tr>
+    {% empty %}<tr><td colspan="7">Nenhum dia de estágio previsto neste mês.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <div class="ass"><div>Estagiário(a)</div><div>Supervisor(a)</div><div>Orientador(a)</div></div>
+</div>
+</body></html>

@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}{{ estagio.estagiario }}{% endblock %}
+{% block conteudo %}
+{% if not e_estagiario %}<div class="migalha"><a href="{% if e_orientador %}{% url 'estagios_lista' %}{% else %}{% url 'painel_supervisor' %}{% endif %}">← Estagiários</a></div>{% endif %}
+<div class="est-cab">
+  <span class="avatar">{{ estagio.estagiario.iniciais }}</span>
+  <div class="info">
+    <h1>{% if e_estagiario %}Meu estágio{% else %}{{ estagio.estagiario.nome_completo }}{% endif %}</h1>
+    <div class="est-meta">
+      <span>{% icone "escola" %}{{ estagio.curso }}{% if estagio.turma %} · {{ estagio.turma }}{% endif %}</span>
+      <span>{% icone "pin" %}{{ estagio.local|default:"Local a definir" }}{% if estagio.setor %} · {{ estagio.setor }}{% endif %}</span>
+      <span>{% icone "usuario" %}Supervisor: {{ estagio.supervisor|default:"a definir" }}</span>
+      <span>{% icone "usuarios" %}Orientador: {{ estagio.orientador }}</span>
+      {% if escala_atual %}<span>{% icone "calendario" %}{{ escala_atual.dias_display }}{% if escala_atual.horario_display %} · {{ escala_atual.horario_display }}{% endif %}</span>{% endif %}
+      {% if not estagio.ativo %}<span class="selo fora">Encerrado</span>{% endif %}
+    </div>
+  </div>
+  <div class="acoes">
+    {% if e_orientador %}
+      <a class="btn sec" href="{% url 'editar_estagio' estagio.pk %}">{% icone "editar" %} Editar</a>
+      <a class="btn" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "calendario" %} Agendar visita</a>
+    {% else %}
+      <a class="btn" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "mensagem" %} Pedir visita ou conversa</a>
+    {% endif %}
+    <a class="btn sec" href="{% url 'folha_frequencia' estagio.pk %}" target="_blank">{% icone "impressora" %} Frequência</a>
+  </div>
+</div>
+
+<nav class="abas">
+  <a href="?aba=visao" class="{% if aba == 'visao' %}ativo{% endif %}">Visão geral</a>
+  <a href="?aba=registros" class="{% if aba == 'registros' %}ativo{% endif %}">Registros e diário</a>
+  <a href="?aba=mensagens" class="{% if aba == 'mensagens' %}ativo{% endif %}">Dúvidas e mensagens</a>
+  <a href="?aba=arquivos" class="{% if aba == 'arquivos' %}ativo{% endif %}">Arquivos</a>
+  <a href="?aba=agenda" class="{% if aba == 'agenda' %}ativo{% endif %}">Visitas</a>
+  <a href="?aba=escalas" class="{% if aba == 'escalas' %}ativo{% endif %}">Dias de estágio</a>
+</nav>
+
+{% if aba == "visao" %}
+<div class="grade grade-lado">
+  <div>
+    {% include "core/_hoje.html" %}
+    {% include "core/_calendario.html" %}
+  </div>
+  <div>
+    <div class="card destaque">
+      <h3>Carga horária</h3>
+      <div class="horas-num"><strong>{{ horas.cumpridas|horas }}</strong><span class="muted">de {{ horas.total|horas }}</span></div>
+      <div class="progresso" title="{{ horas.pct }}% confirmadas"><div class="feito" style="width:{{ horas.pct|stringformat:'.1f' }}%"></div><div class="pendente" style="width:{{ horas.pct_pendente|stringformat:'.1f' }}%"></div></div>
+      <div class="legenda-mini">
+        <span><i style="background:var(--verde)"></i>{{ horas.pct }}% confirmadas</span>
+        {% if horas.pendentes %}<span><i style="background:#8fb8ea"></i>{{ horas.pendentes|horas }} aguardando</span>{% endif %}
+      </div>
+      <hr>
+      <dl class="dl">
+        <dt>Faltam</dt><dd>{{ horas.faltam|horas }}</dd>
+        <dt>Previsão de término</dt><dd>{% if horas.previsao_termino %}{{ horas.previsao_termino|date:"d/m/Y" }}{% elif horas.faltam %}—{% else %}Concluído 🎉{% endif %}</dd>
+        <dt>Presenças</dt><dd>{{ horas.presencas }}</dd>
+        <dt>Ausências informadas</dt><dd>{{ horas.ausencias }}</dd>
+        <dt>Faltas</dt><dd>{{ horas.faltas }}</dd>
+        <dt>Período</dt><dd>{{ estagio.data_inicio|date:"d/m/Y" }}{% if estagio.data_fim %} a {{ estagio.data_fim|date:"d/m/Y" }}{% endif %}</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h3>Próximos dias de estágio</h3>
+      <ul class="lista">
+        {% for d in proximos %}<li><span class="cresce"><strong>{{ d.data|date:"l" }}</strong>, {{ d.data|date:"d/m" }}</span><span class="muted">{{ d.escala.horario_display|default:d.escala.horas_por_dia|default:"" }}</span></li>
+        {% empty %}<li class="vazio">Nenhum dia previsto.</li>{% endfor %}
+      </ul>
+    </div>
+    {% if proximas_visitas %}
+    <div class="card laranja">
+      <h3>Visitas agendadas</h3>
+      <ul class="lista">{% for v in proximas_visitas %}<li><a class="cresce" href="{{ v.get_absolute_url }}"><strong>{{ v.data_hora|date:"d/m H:i" }}</strong> — {{ v.assunto }}</a></li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+    {% if estagio.local %}
+    <div class="card">
+      <h3>Local de estágio</h3>
+      <p class="mb-0"><strong>{{ estagio.local.nome }}</strong></p>
+      {% if estagio.local.endereco_completo %}<p class="muted mb-0">{{ estagio.local.endereco_completo }}</p>{% endif %}
+      {% if estagio.local.telefone %}<p class="mb-0">{% icone "telefone" %} {{ estagio.local.telefone }}</p>{% endif %}
+      {% if estagio.local.link_mapa %}<p class="mt-1 mb-0"><a class="btn sec sm" href="{{ estagio.local.link_mapa }}" target="_blank" rel="noopener">{% icone "pin" %} Ver no mapa</a></p>{% endif %}
+      {% if estagio.supervisor %}<hr><p class="mb-0">Supervisor: <strong>{{ estagio.supervisor }}</strong>{% if estagio.supervisor.cargo %} · {{ estagio.supervisor.cargo }}{% endif %}</p>{% if estagio.supervisor.telefone %}<p class="muted mb-0">{{ estagio.supervisor.telefone }}</p>{% endif %}{% endif %}
+    </div>
+    {% endif %}
+    {% if e_orientador and estagio.observacoes_orientador %}
+    <div class="card"><h3>Minhas anotações</h3><p class="quebra mb-0">{{ estagio.observacoes_orientador }}</p><small>Só você vê isto.</small></div>
+    {% endif %}
+  </div>
+</div>
+
+{% elif aba == "registros" %}
+<div class="card">
+  <div class="card-cab"><h2>Registros</h2><small>Clique em um dia para ver detalhes, anotar ou ajustar.</small></div>
+  <div class="tabela-wrap"><table class="tabela">
+    <thead><tr><th>Dia</th><th>Situação</th><th>Horário</th><th>Horas</th><th>Validação</th><th>Diário / motivo</th><th></th></tr></thead>
+    <tbody>
+    {% for r in registros %}
+      <tr>
+        <td><strong>{{ r.data|date:"d/m/Y" }}</strong><br><small>{{ r.data|date:"l" }}</small></td>
+        <td>{{ r.get_situacao_display }}</td>
+        <td>{{ r.hora_chegada|time:"H:i"|default:"" }}{% if r.hora_saida %}–{{ r.hora_saida|time:"H:i" }}{% endif %}</td>
+        <td>{{ r.horas|horas }}</td>
+        <td>{% if r.confirmacao == "CONFIRMADA" %}<span class="selo confirmado">Confirmado</span>{% elif r.confirmacao == "CONTESTADA" %}<span class="selo contestado">Contestado</span>{% else %}<span class="selo aguardando">Pendente</span>{% endif %}{% if r.confirmado_por %}<br><small>{{ r.confirmado_por.primeiro_nome }}</small>{% endif %}</td>
+        <td style="max-width:320px">{{ r.diario|default:r.motivo|truncatechars:110 }}{% if r.obs_supervisor %}<br><small><strong>Supervisor:</strong> {{ r.obs_supervisor|truncatechars:80 }}</small>{% endif %}</td>
+        <td><a class="btn sec sm" href="{% url 'estagio_dia' estagio.pk r.data|date:'Y-m-d' %}">Abrir</a></td>
+      </tr>
+    {% empty %}<tr><td colspan="7" class="vazio">Nenhum registro ainda.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+{% elif aba == "mensagens" %}
+<div class="card">
+  <div class="card-cab"><h2>Dúvidas e mensagens</h2><small>Visível para estagiário, supervisor e orientador.</small></div>
+  <div class="chat">
+    {% for m in mensagens %}
+      <div class="msg{% if m.autor == user %} minha{% endif %}">
+        <span class="avatar sm verde" title="{{ m.autor }}">{{ m.autor.iniciais }}</span>
+        <div>
+          <div class="meta">{{ m.autor.primeiro_nome }} · {{ m.autor.get_papel_display }} · {{ m.criado_em|date:"d/m H:i" }}{% if m.privada_orientador %} · <span class="privada">privada</span>{% endif %}</div>
+          <div class="bolha-msg">{{ m.texto }}</div>
+        </div>
+      </div>
+    {% empty %}<div class="vazio">Nenhuma mensagem. Use este espaço para tirar dúvidas e combinar o que for preciso.</div>{% endfor %}
+    <span id="fim"></span>
+  </div>
+  <form method="post" action="{% url 'enviar_mensagem' estagio.pk %}">{% csrf_token %}
+    <div class="campo">{{ mensagem_form.texto }}</div>
+    <div class="acoes entre" style="justify-content:space-between">
+      {% if not e_supervisor or e_orientador %}<label class="flex" style="font-size:.88rem">{{ mensagem_form.privada_orientador }} Somente estagiário e orientador (o supervisor não vê)</label>{% else %}<span></span>{% endif %}
+      <button class="btn" type="submit">{% icone "mensagem" %} Enviar</button>
+    </div>
+  </form>
+</div>
+
+{% elif aba == "arquivos" %}
+<div class="grade grade-lado">
+  <div class="card">
+    <h2>Arquivos</h2>
+    <ul class="lista">
+    {% for d in documentos %}
+      <li>
+        <span class="arquivo-ic">{{ d.extensao|truncatechars:5 }}</span>
+        <span class="cresce"><a href="{% url 'baixar_documento' d.pk %}" target="_blank"><strong>{{ d.titulo }}</strong></a>
+          <small style="display:block">{{ d.get_categoria_display }} · {{ d.enviado_por.primeiro_nome }} · {{ d.criado_em|date:"d/m/Y" }}{% if not d.estagio_id %} · <span class="etiqueta">geral</span>{% endif %}</small>
+          {% if d.descricao %}<small style="display:block">{{ d.descricao|truncatechars:120 }}</small>{% endif %}</span>
+        {% if d.enviado_por == user or e_orientador %}{% if d.estagio_id %}
+        <form method="post" action="{% url 'excluir_documento' d.pk %}" data-confirmar="Remover “{{ d.titulo }}”?">{% csrf_token %}<button class="btn perigo sm" type="submit" aria-label="Remover">{% icone "lixo" %}</button></form>
+        {% endif %}{% endif %}
+      </li>
+    {% empty %}<li class="vazio">Nenhum arquivo.</li>{% endfor %}
+    </ul>
+  </div>
+  <div class="card destaque">
+    <h3>Enviar arquivo</h3>
+    <p class="muted" style="font-size:.85rem">Ex.: folha de frequência assinada, relatório, termo de compromisso.</p>
+    <form method="post" action="{% url 'enviar_documento' estagio.pk %}" enctype="multipart/form-data">{% csrf_token %}
+      {% with form=documento_form %}{% include "core/_form.html" %}{% endwith %}
+      <button class="btn bloco" type="submit">{% icone "upload" %} Enviar</button>
+    </form>
+  </div>
+</div>
+
+{% elif aba == "agenda" %}
+<div class="card">
+  <div class="card-cab"><h2>Visitas e conversas</h2><a class="btn sm" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "mais" %} {% if e_orientador %}Agendar{% else %}Solicitar{% endif %}</a></div>
+  {% include "core/_lista_agendamentos.html" with itens=agendamentos %}
+</div>
+
+{% elif aba == "escalas" %}
+<div class="grade grade-lado">
+  <div class="card">
+    <h2>Histórico de dias de estágio</h2>
+    <p class="muted">A escala mais recente que já começou é a que vale. Mudanças futuras aparecem aqui antes de começarem.</p>
+    <ul class="lista">
+    {% for e in escalas %}
+      <li>
+        <span class="cresce"><strong>{{ e.dias_display }}</strong>{% if e.horario_display %} · {{ e.horario_display }}{% endif %} · {{ e.horas_por_dia|horas }}/dia
+          <small style="display:block">a partir de {{ e.vigente_desde|date:"d/m/Y" }}{% if e == escala_atual %} · <strong style="color:var(--verde)">vigente</strong>{% elif e.vigente_desde > escala_atual.vigente_desde or not escala_atual %} · <strong style="color:var(--laranja)">futura</strong>{% endif %}{% if e.criado_por %} · por {{ e.criado_por.primeiro_nome }}{% endif %}</small></span>
+        {% if e_orientador %}<form method="post" action="{% url 'excluir_escala' e.pk %}" data-confirmar="Remover esta escala?">{% csrf_token %}<button class="btn perigo sm" type="submit">{% icone "lixo" %}</button></form>{% endif %}
+      </li>
+    {% endfor %}
+    </ul>
+  </div>
+  {% if e_orientador %}
+  <div class="card destaque">
+    <h3>Mudar dias a partir de uma data</h3>
+    <form method="post" action="{% url 'nova_escala' estagio.pk %}">{% csrf_token %}
+      {% with form=escala_form %}{% include "core/_form.html" %}{% endwith %}
+      <button class="btn bloco" type="submit">Salvar escala</button>
+    </form>
+    <p class="muted mt-1" style="font-size:.85rem">Para mudar vários estagiários de uma vez, use <a href="{% url 'escala_lote' %}">Alterar dias</a>.</p>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

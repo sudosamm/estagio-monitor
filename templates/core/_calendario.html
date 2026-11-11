@@ -1,0 +1,30 @@
+{% load ui %}
+<div class="card">
+  <div class="cal-nav">
+    <a class="btn sec sm" href="?aba=visao&mes={{ nav.anterior }}" aria-label="Mês anterior">{% icone "esq" %}</a>
+    <h3>{{ nav.titulo }}</h3>
+    <a class="btn sec sm" href="?aba=visao&mes={{ nav.proximo }}" aria-label="Próximo mês">{% icone "dir" %}</a>
+  </div>
+  <div class="calendario">
+    {% for d in dias_semana %}<div class="cab">{{ d }}</div>{% endfor %}
+    {% for semana in semanas %}{% for d in semana %}
+      {% if d %}
+        <a class="dia {{ d.codigo }}{% if d.hoje %} e-hoje{% endif %}" href="{% url 'estagio_dia' estagio.pk d.data|date:'Y-m-d' %}" title="{{ d.data|date:'d/m' }} — {{ d.rotulo|default:'sem estágio' }}{% if d.motivo_sem_estagio %}: {{ d.motivo_sem_estagio }}{% endif %}">
+          <span class="n">{{ d.data.day }}</span>
+          {% if d.data in dias_visita %}<span class="visita" title="Visita/conversa agendada"></span>{% endif %}
+          <span class="ic">{% if d.codigo == "confirmado" %}✓ {{ d.registro.horas|horas }}{% elif d.codigo == "aguardando" %}aguard.{% elif d.codigo == "ausencia" or d.codigo == "ausencia_ok" %}ausente{% elif d.codigo == "falta" %}falta{% elif d.codigo == "sem_registro" %}sem reg.{% elif d.codigo == "hoje" %}hoje{% elif d.codigo == "previsto" %}estágio{% elif d.codigo == "contestado" %}contest.{% elif d.codigo == "sem_estagio" %}feriado{% endif %}</span>
+        </a>
+      {% else %}<div class="dia vazio"></div>{% endif %}
+    {% endfor %}{% endfor %}
+  </div>
+  <div class="legenda">
+    <span><i style="background:#fff;border-color:#9fd1b4"></i>Previsto</span>
+    <span><i style="background:var(--st-confirmado)"></i>Confirmado</span>
+    <span><i style="background:var(--st-aguardando)"></i>Aguardando supervisor</span>
+    <span><i style="background:var(--st-ausencia)"></i>Ausência informada</span>
+    <span><i style="background:var(--st-falta)"></i>Falta</span>
+    <span><i style="background:#fbe4e2;border-color:#f0a8a2"></i>Sem registro</span>
+    <span><i style="background:var(--cinza-200)"></i>Feriado/recesso</span>
+    <span><i style="background:var(--laranja);border-radius:50%"></i>Visita</span>
+  </div>
+</div>

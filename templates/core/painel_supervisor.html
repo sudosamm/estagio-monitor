@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Meus estagiários{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Olá, {{ user.primeiro_nome }}</h1><p>{% now "l, d \d\e F" %} · {{ user.local|default:"" }}</p></div>
+  <a class="btn" href="{% url 'novo_agendamento' %}">{% icone "mensagem" %} Pedir visita ou conversa</a></div>
+<div class="grade grade-lado">
+  <div class="card destaque">
+    <h2>Hoje</h2>
+    <div class="quadro">
+    {% for e in estagios %}
+      <a class="aluno-card {{ e.st.codigo }}" href="{{ e.get_absolute_url }}">
+        <span class="avatar sm verde">{{ e.estagiario.iniciais }}</span>
+        <span class="cresce"><strong>{{ e.estagiario }}</strong><small>{% if e.st.registro.hora_chegada %}chegou {{ e.st.registro.hora_chegada|time:"H:i" }} · {% endif %}{{ e.st.rotulo|default:"sem estágio hoje" }}</small></span>
+      </a>
+    {% empty %}<p class="vazio">Nenhum estagiário vinculado a você ainda.</p>{% endfor %}
+    </div>
+  </div>
+  <div class="card laranja">
+    <h2>Para confirmar</h2>
+    {% if pendentes %}
+    <form method="post" action="{% url 'confirmar_lote' %}">{% csrf_token %}
+      <label class="flex" style="font-size:.85rem;margin-bottom:.5rem"><input type="checkbox" data-marcar-todos=".chk-reg"> Marcar todos</label>
+      <ul class="lista">
+      {% for r in pendentes %}
+        <li><input type="checkbox" class="chk-reg" name="registros" value="{{ r.pk }}" id="r{{ r.pk }}">
+          <label for="r{{ r.pk }}" class="cresce"><strong>{{ r.estagio.estagiario.primeiro_nome }}</strong> · {{ r.data|date:"d/m" }}<small style="display:block">{{ r.get_situacao_display }}{% if r.hora_chegada %} às {{ r.hora_chegada|time:"H:i" }}{% endif %}{% if r.motivo %} — {{ r.motivo|truncatechars:50 }}{% endif %}</small></label>
+          <a class="btn sec sm" href="{% url 'estagio_dia' r.estagio_id r.data|date:'Y-m-d' %}">Ver</a></li>
+      {% endfor %}
+      </ul>
+      <button class="btn bloco mt-1" type="submit">{% icone "check" %} Confirmar selecionados</button>
+    </form>
+    <p class="muted mt-1" style="font-size:.82rem">Se alguém não estava presente, abra o dia e use “Contestar”.</p>
+    {% else %}<p class="vazio">Nada pendente. 👍</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

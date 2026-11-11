@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Feriados e recessos{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Feriados, recessos e eventos</h1><p>Dias em que seus estagiários não vão ao estágio. Eles não contam como falta e saem da previsão de término.</p></div></div>
+<div class="grade grade-lado">
+  <div>
+    <div class="card"><h2>Próximos</h2><ul class="lista">{% for d in futuros %}
+      <li><span class="cresce"><strong>{{ d.data|date:"D, d/m/Y" }}</strong> — {{ d.descricao }}{% if d.curso %} <span class="etiqueta">{{ d.curso }}</span>{% endif %}</span>
+      <form method="post">{% csrf_token %}<button class="btn perigo sm" name="excluir" value="{{ d.pk }}" type="submit">{% icone "lixo" %}</button></form></li>
+    {% empty %}<li class="vazio">Nenhum dia cadastrado.</li>{% endfor %}</ul></div>
+    {% if passados %}<div class="card"><h3>Anteriores</h3><ul class="lista">{% for d in passados %}<li class="muted">{{ d.data|date:"d/m/Y" }} — {{ d.descricao }}</li>{% endfor %}</ul></div>{% endif %}
+  </div>
+  <div class="card destaque"><h3>Adicionar</h3>
+    <form method="post">{% csrf_token %}{% include "core/_form.html" %}<button class="btn bloco" type="submit">Adicionar e avisar</button></form></div>
+</div>
+{% endblock %}

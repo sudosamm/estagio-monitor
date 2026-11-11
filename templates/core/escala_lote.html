@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block titulo %}Alterar dias de estágio{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Alterar dias de estágio</h1><p>Ex.: “a partir de 16/11, a turma passa a ir de segunda a sexta”. O histórico anterior é mantido.</p></div></div>
+<form class="filtros card" method="get">
+  <div><label class="rotulo">Curso</label><select name="curso"><option value="">Todos</option>{% for c in cursos %}<option value="{{ c.pk }}"{% if filtro_curso == c.pk|stringformat:"s" %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+  <div><label class="rotulo">Turma</label><select name="turma"><option value="">Todas</option>{% for t in turmas %}<option{% if filtro_turma == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+  <button class="btn sec" type="submit">Filtrar lista</button>
+</form>
+<form method="post" class="card destaque" novalidate>{% csrf_token %}
+  {% if form.non_field_errors %}<div class="aviso error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+  <div class="grade grade-2">
+    <div>
+      <div class="campo{% if form.vigente_desde.errors %} erro-campo{% endif %}"><label>{{ form.vigente_desde.label }}</label>{{ form.vigente_desde }}{% for e in form.vigente_desde.errors %}<div class="erro">{{ e }}</div>{% endfor %}</div>
+      <div class="campo"><span class="rotulo">Dias de estágio</span><div class="opcoes">{% for op in form.dias %}<label>{{ op.tag }} {{ op.choice_label }}</label>{% endfor %}</div>{% for e in form.dias.errors %}<div class="erro">{{ e }}</div>{% endfor %}</div>
+      <div class="form-linha">
+        <div class="campo"><label>Entrada</label>{{ form.horario_entrada }}</div>
+        <div class="campo"><label>Saída</label>{{ form.horario_saida }}{% for e in form.horario_saida.errors %}<div class="erro">{{ e }}</div>{% endfor %}</div>
+        <div class="campo"><label>Horas por dia</label>{{ form.horas_por_dia }}</div>
+      </div>
+    </div>
+    <div>
+      <div class="campo">
+        <span class="rotulo">Estagiários ({{ form.fields.estagios.queryset.count }})</span>
+        <div class="flex" style="margin-bottom:.4rem"><input type="search" placeholder="Filtrar nomes…" data-filtrar="#lista-estagios"><label class="flex" style="white-space:nowrap;font-size:.85rem"><input type="checkbox" data-marcar-todos="#lista-estagios input"> Todos</label></div>
+        <div class="opcoes lista" id="lista-estagios">{% for op in form.estagios %}<label>{{ op.tag }} {{ op.choice_label }}</label>{% endfor %}</div>
+        {% for e in form.estagios.errors %}<div class="erro">{{ e }}</div>{% endfor %}
+      </div>
+    </div>
+  </div>
+  <button class="btn grande" type="submit">Aplicar nova escala e avisar</button>
+</form>
+{% endblock %}
