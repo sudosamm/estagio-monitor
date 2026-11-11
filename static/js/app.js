@@ -25,3 +25,39 @@ document.querySelectorAll("[data-filtrar]").forEach((input) => {
     document.querySelectorAll(input.dataset.filtrar + " label").forEach((l) => { l.hidden = !l.textContent.toLowerCase().includes(termo); });
   });
 });
+// carga de 4 horas não tem intervalo: esconde os campos de intervalo
+document.querySelectorAll("select[name$='horas_por_dia']").forEach((sel) => {
+  const campos = sel.form ? sel.form.querySelectorAll("input[data-intervalo]") : [];
+  const ajustar = () => {
+    const semIntervalo = sel.value === "4";
+    campos.forEach((i) => {
+      const c = i.closest(".campo");
+      if (c) c.hidden = semIntervalo;
+      if (semIntervalo) i.value = "";
+    });
+  };
+  sel.addEventListener("change", ajustar);
+  ajustar();
+});
+// copiar o valor de um campo
+document.querySelectorAll("[data-copiar]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const alvo = document.querySelector(btn.dataset.copiar);
+    navigator.clipboard?.writeText(alvo.value).then(() => { btn.textContent = "Copiado!"; });
+  });
+});
+// avisos para fora do sistema: os links de WhatsApp/e-mail usam o texto revisado
+document.querySelectorAll("form.aviso-externo").forEach((form) => {
+  const texto = form.querySelector("textarea");
+  const atualizar = () => {
+    const msg = encodeURIComponent(texto.value);
+    const wa = form.querySelector("[data-canal=whatsapp]");
+    if (wa) wa.href = wa.href.split("?")[0] + "?text=" + msg;
+    const em = form.querySelector("[data-canal=email]");
+    if (em) em.href = "mailto:" + form.dataset.email + "?subject=" + encodeURIComponent(form.dataset.assunto) + "&body=" + msg;
+  };
+  texto.addEventListener("input", atualizar);
+  form.querySelector("[data-copiar-texto]")?.addEventListener("click", (ev) => {
+    navigator.clipboard?.writeText(texto.value).then(() => { ev.target.textContent = "Copiado!"; });
+  });
+});

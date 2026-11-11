@@ -1,5 +1,4 @@
 """Tela do estágio (compartilhada por estagiário, supervisor e orientador) e ações do dia a dia."""
-import calendar
 from datetime import date, datetime
 
 from django.contrib import messages
@@ -12,12 +11,16 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from ..forms import AusenciaForm, DiarioForm, DocumentoForm, EscalaForm, EstagioForm, LancamentoForm, MensagemForm
-from ..models import DIAS_ABREV, Agendamento, Documento, Escala, Registro
-from ..services import (
-    calendario_mes, horas_padrao, notificar, proximos_dias, resumo_horas, status_hoje, status_periodo,
+from ..forms import (
+    AusenciaForm, DiarioForm, DocumentoForm, EscalaForm, EstagioForm, LancamentoForm, MensagemForm, PlanejarDiaForm,
+    horas_str,
 )
-from .base import destino_seguro, eh_orientador_do, eh_supervisor_do, orientador_requerido, pegar_estagio
+from ..models import DIAS_ABREV, Agendamento, DiaPlanejado, Documento, Escala, Registro
+from ..services import (
+    calendario_mes, horas_padrao, limite_calendario, notificar, proximos_dias, resumo_horas,
+    status_hoje, status_periodo,
+)
+from .base import destino_seguro, eh_orientador_do, eh_supervisor_do, orientador_requerido, pegar_estagio, permissao
 
 MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro",
          "Outubro", "Novembro", "Dezembro"]
@@ -51,6 +54,24 @@ def _mensagens_visiveis(estagio, user):
     return qs
 
 
+def _previsao(estagio):
+    return resumo_horas(estagio)["previsao_termino"]
+
+
+def _avisar_previsao(request, estagio, antes):
+    """Mostra ao usuário como a mudança afetou a previsão de término."""
+    depois = _previsao(estagio)
+    if antes == depois:
+        if depois:
+            messages.info(request, f"Previsão de término continua em {depois:%d/%m/%Y}.")
+        return
+    if antes and depois:
+        direcao = "adiada" if depois > antes else "antecipada"
+        messages.info(request, f"Previsão de término {direcao}: de {antes:%d/%m/%Y} para {depois:%d/%m/%Y}.")
+    elif depois:
+        messages.info(request, f"Previsão de término: {depois:%d/%m/%Y}.")
+
+
 def _documentos_visiveis(estagio):
     return Documento.objects.filter(
         Q(estagio=estagio)
@@ -65,26 +86,34 @@ def estagio_detalhe(request, pk):
     user = request.user
     aba = request.GET.get("aba", "visao")
     ano, mes = _mes_param(request)
+    horas = resumo_horas(estagio)
+    limite = limite_calendario(estagio, horas)
     ctx = {
         "estagio": estagio,
         "aba": aba,
         "hoje": status_hoje(estagio),
-        "horas": resumo_horas(estagio),
+        "horas": horas,
         "escala_atual": estagio.escala_em(timezone.localdate()),
         "e_orientador": eh_orientador_do(user, estagio),
         "e_supervisor": eh_supervisor_do(user, estagio),
         "e_estagiario": estagio.estagiario_id == user.pk,
         "nao_lidas_msg": 0,
+        "pode_escalas": eh_orientador_do(user, estagio) and user.pode("escalas"),
+        "pode_agenda": not user.is_gestor or user.pode("agenda"),
     }
     if aba == "visao":
-        semanas = calendario_mes(estagio, ano, mes)
+        from .frequencia import resumo_impressoes
+
+        semanas = calendario_mes(estagio, ano, mes, limite)
+        if ctx["e_orientador"] or ctx["e_supervisor"]:
+            ctx["impressoes"] = resumo_impressoes(estagio)
         visitas = Agendamento.objects.filter(
             estagios=estagio, data_hora__year=ano, data_hora__month=mes,
         ).exclude(status=Agendamento.Status.CANCELADO)
         dias_visita = {timezone.localtime(v.data_hora).date() for v in visitas if v.data_hora}
         ctx.update(
             semanas=semanas, dias_visita=dias_visita, nav=_nav_mes(ano, mes), dias_semana=DIAS_ABREV,
-            proximos=proximos_dias(estagio, 6), ausencia_form=AusenciaForm(initial={"data": timezone.localdate()}),
+            proximos=proximos_dias(estagio, 6, limite), ausencia_form=AusenciaForm(initial={"data": timezone.localdate()}),
             diario_form=DiarioForm(initial={"diario": ctx["hoje"].registro.diario if ctx["hoje"].registro else ""}),
             proximas_visitas=estagio.agendamentos.filter(
                 status=Agendamento.Status.AGENDADO, data_hora__gte=timezone.now()
@@ -102,12 +131,14 @@ def estagio_detalhe(request, pk):
         ctx["agendamentos"] = estagio.agendamentos.select_related("solicitante").order_by("-criado_em")
     elif aba == "escalas":
         ctx["escalas"] = estagio.escalas.select_related("criado_por")
-        if ctx["e_orientador"]:
+        if ctx["pode_escalas"]:
             atual = ctx["escala_atual"]
             ctx["escala_form"] = EscalaForm(initial={
                 "vigente_desde": timezone.localdate(),
                 "dias": atual.dias_lista if atual else [0, 1],
                 "horario_entrada": atual.horario_entrada if atual else None,
+                "saida_intervalo": atual.saida_intervalo if atual else None,
+                "volta_intervalo": atual.volta_intervalo if atual else None,
                 "horario_saida": atual.horario_saida if atual else None,
                 "horas_por_dia": atual.horas_por_dia if atual else estagio.curso.horas_por_dia_padrao,
             })
@@ -155,16 +186,28 @@ def marcar_presenca(request, pk):
     return redirect(estagio)
 
 
+PONTOS = {
+    "saida_intervalo": "Saída para o intervalo registrada",
+    "volta_intervalo": "Volta do intervalo registrada",
+    "hora_saida": "Saída registrada",
+}
+
+
 @login_required
 @require_POST
 def registrar_saida(request, pk):
+    """Registra intervalo (saída/volta) ou a saída do dia, no horário atual."""
     estagio = pegar_estagio(request, pk)
     if estagio.estagiario_id != request.user.pk:
         raise PermissionDenied
+    ponto = request.POST.get("ponto", "hora_saida")
+    if ponto not in PONTOS:
+        raise Http404
     reg = get_object_or_404(Registro, estagio=estagio, data=timezone.localdate())
-    reg.hora_saida = timezone.localtime().time().replace(second=0, microsecond=0)
-    reg.save(update_fields=["hora_saida"])
-    messages.success(request, f"Saída registrada às {reg.hora_saida:%H:%M}.")
+    agora = timezone.localtime().time().replace(second=0, microsecond=0)
+    setattr(reg, ponto, agora)
+    reg.save(update_fields=[ponto, "atualizado_em"])
+    messages.success(request, f"{PONTOS[ponto]} às {agora:%H:%M}.")
     return redirect(estagio)
 
 
@@ -180,6 +223,7 @@ def informar_ausencia(request, pk):
             messages.error(request, " ".join(erros))
         return redirect(estagio)
     dia, motivo = form.cleaned_data["data"], form.cleaned_data["motivo"]
+    antes = _previsao(estagio)
     reg = Registro.objects.filter(estagio=estagio, data=dia).first()
     if reg and reg.situacao == Registro.Situacao.PRESENTE and reg.confirmacao == Registro.Confirmacao.CONFIRMADA:
         messages.error(request, "Esse dia já tem presença confirmada pelo supervisor.")
@@ -191,13 +235,15 @@ def informar_ausencia(request, pk):
     reg.confirmacao = Registro.Confirmacao.PENDENTE
     reg.registrado_por = request.user
     reg.save()
+    DiaPlanejado.objects.filter(estagio=estagio, data=dia).delete()
     messages.success(request, f"Ausência em {dia:%d/%m} informada ao supervisor e ao orientador.")
+    _avisar_previsao(request, estagio, antes)
     notificar(
         [estagio.supervisor, estagio.orientador],
         f"{estagio.estagiario} informou ausência em {dia:%d/%m}: {motivo[:80]}",
         reverse("estagio_dia", args=[estagio.pk, dia.isoformat()]),
     )
-    return redirect(estagio)
+    return redirect(destino_seguro(request, estagio.get_absolute_url() + f"?mes={dia:%Y-%m}"))
 
 
 # ----------------------------------------------------------------- dia
@@ -256,11 +302,77 @@ def estagio_dia(request, pk, data):
             messages.success(request, "Anotação do dia salva.")
             return redirect(request.path)
 
+    # ---- planejamento de dias de hoje em diante (entra na previsão de término)
+    hoje = timezone.localdate()
+    pode_planejar = (e_estagiario or pode_lancar) and dia >= hoje and dia >= estagio.data_inicio and estagio.ativo
+    plano_form = None
+    if pode_planejar:
+        resposta = _planejar_dia(request, estagio, dia, status, reg)
+        if resposta:
+            return resposta
+        sem_registro_presenca = not reg or reg.situacao != Registro.Situacao.PRESENTE
+        if sem_registro_presenca:
+            plano_form = PlanejarDiaForm(prefix="p", initial={
+                "horas": horas_str(status.plano.horas if status.plano else horas_padrao(estagio, dia)),
+                "motivo": status.plano.motivo if status.plano else "",
+            })
+
     return render(request, "core/estagio_dia.html", {
         "estagio": estagio, "dia": dia, "status": status, "registro": reg, "lancamento_form": lancamento_form,
         "diario_form": diario_form, "e_estagiario": e_estagiario, "pode_lancar": pode_lancar,
-        "futuro": dia > timezone.localdate(),
+        "futuro": dia > hoje, "pode_planejar": pode_planejar, "plano_form": plano_form,
+        "ausencia_form": AusenciaForm(initial={"data": dia}), "previsao": _previsao(estagio),
     })
+
+
+def _planejar_dia(request, estagio, dia, status, reg):
+    """Trata os botões de planejamento do dia. Devolve um redirect quando algo foi feito."""
+    if request.method != "POST":
+        return None
+    acao = request.POST.get("planejar")
+    if not acao:
+        return None
+    antes = _previsao(estagio)
+    quem = request.user.primeiro_nome
+    link = reverse("estagio_dia", args=[estagio.pk, dia.isoformat()])
+    avisar = [estagio.estagiario, estagio.supervisor, estagio.orientador]
+
+    if acao == "salvar":
+        form = PlanejarDiaForm(request.POST, prefix="p")
+        if not form.is_valid():
+            messages.error(request, "Escolha quantas horas vai estagiar.")
+            return redirect(request.path)
+        if reg and reg.situacao == Registro.Situacao.PRESENTE:
+            messages.error(request, "Este dia já tem presença registrada.")
+            return redirect(request.path)
+        if reg:  # tinha ausência informada: o estagiário mudou de ideia
+            reg.delete()
+        horas = form.cleaned_data["horas"]
+        regular = status.escala and dia.weekday() in status.escala.dias_lista and not status.motivo_sem_estagio
+        if regular and horas == status.escala.horas_por_dia:
+            DiaPlanejado.objects.filter(estagio=estagio, data=dia).delete()
+            messages.success(request, f"{dia:%d/%m} volta a ser um dia normal da escala.")
+        else:
+            DiaPlanejado.objects.update_or_create(estagio=estagio, data=dia, defaults={
+                "horas": horas, "motivo": form.cleaned_data["motivo"], "criado_por": request.user,
+            })
+            messages.success(request, f"{dia:%d/%m} planejado: {horas_str(horas)} horas de estágio.")
+            notificar(avisar, f"{quem} planejou estágio em {dia:%d/%m} ({horas_str(horas)}h)"
+                      + (f": {form.cleaned_data['motivo']}" if form.cleaned_data["motivo"] else "."), link,
+                      exceto=request.user)
+    elif acao == "remover":
+        DiaPlanejado.objects.filter(estagio=estagio, data=dia).delete()
+        messages.success(request, f"Planejamento de {dia:%d/%m} removido.")
+        notificar(avisar, f"{quem} removeu o estágio planejado para {dia:%d/%m}.", link, exceto=request.user)
+    elif acao == "cancelar_ausencia":
+        if reg and reg.situacao == Registro.Situacao.AUSENCIA:
+            reg.delete()
+            messages.success(request, f"Ausência de {dia:%d/%m} cancelada.")
+            notificar(avisar, f"{quem} cancelou a ausência informada para {dia:%d/%m}.", link, exceto=request.user)
+    else:
+        raise Http404
+    _avisar_previsao(request, estagio, antes)
+    return redirect(request.path)
 
 
 @login_required
@@ -348,7 +460,7 @@ def editar_estagio(request, pk):
     })
 
 
-@orientador_requerido
+@permissao("escalas")
 @require_POST
 def nova_escala(request, pk):
     estagio = pegar_estagio(request, pk)
@@ -370,7 +482,7 @@ def nova_escala(request, pk):
     return redirect(estagio.get_absolute_url() + "?aba=escalas")
 
 
-@orientador_requerido
+@permissao("escalas")
 @require_POST
 def excluir_escala(request, pk):
     esc = get_object_or_404(Escala.objects.select_related("estagio"), pk=pk)
@@ -382,16 +494,3 @@ def excluir_escala(request, pk):
         esc.delete()
         messages.success(request, "Escala removida.")
     return redirect(esc.estagio.get_absolute_url() + "?aba=escalas")
-
-
-@login_required
-def folha_frequencia(request, pk):
-    estagio = pegar_estagio(request, pk)
-    ano, mes = _mes_param(request)
-    _, ultimo = calendar.monthrange(ano, mes)
-    dias = [d for d in status_periodo(estagio, date(ano, mes, 1), date(ano, mes, ultimo)) if d.previsto or d.registro]
-    total = sum((d.registro.horas for d in dias if d.registro and d.codigo == "confirmado"), 0)
-    return render(request, "core/folha_frequencia.html", {
-        "estagio": estagio, "dias": dias, "nav": _nav_mes(ano, mes), "total": total,
-        "dias_semana": DIAS_ABREV, "escala": estagio.escala_em(date(ano, mes, ultimo)),
-    })

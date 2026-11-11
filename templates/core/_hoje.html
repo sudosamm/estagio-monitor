@@ -11,12 +11,22 @@
     </form>
   {% elif st.codigo == "aguardando" or st.codigo == "confirmado" or st.codigo == "contestado" %}
     <h2>{% if st.codigo == "confirmado" %}Presença confirmada{% elif st.codigo == "contestado" %}Presença contestada pelo supervisor{% else %}Presença marcada{% endif %}</h2>
-    <p>Chegada {{ reg.hora_chegada|time:"H:i"|default:"—" }}{% if reg.hora_saida %} · saída {{ reg.hora_saida|time:"H:i" }}{% endif %} · {{ reg.horas|horas }}
+    <p>{{ reg.horas|horas }}
       {% if st.codigo == "aguardando" %} · aguardando confirmação do supervisor{% endif %}
       {% if reg.confirmado_por %} · por {{ reg.confirmado_por.primeiro_nome }}{% endif %}</p>
     {% if reg.obs_supervisor %}<p><strong>Supervisor:</strong> {{ reg.obs_supervisor }}</p>{% endif %}
+    <p class="pontos">{% if reg.hora_chegada %}<span>Entrada <b>{{ reg.hora_chegada|time:"H:i" }}</b></span>{% endif %}{% if reg.saida_intervalo %}<span>Intervalo <b>{{ reg.saida_intervalo|time:"H:i" }}</b></span>{% endif %}{% if reg.volta_intervalo %}<span>Volta <b>{{ reg.volta_intervalo|time:"H:i" }}</b></span>{% endif %}{% if reg.hora_saida %}<span>Saída <b>{{ reg.hora_saida|time:"H:i" }}</b></span>{% endif %}</p>
     <div class="acoes">
-      {% if not reg.hora_saida %}<form method="post" action="{% url 'registrar_saida' estagio.pk %}">{% csrf_token %}<button class="btn" type="submit">{% icone "relogio" %} Registrar saída</button></form>{% endif %}
+      {% if not reg.hora_saida %}
+        {% with com_intervalo=escala_atual.tem_intervalo %}
+        {% if com_intervalo and not reg.saida_intervalo %}
+          <form method="post" action="{% url 'registrar_saida' estagio.pk %}">{% csrf_token %}<input type="hidden" name="ponto" value="saida_intervalo"><button class="btn" type="submit">{% icone "relogio" %} Saí para o intervalo</button></form>
+        {% elif com_intervalo and not reg.volta_intervalo %}
+          <form method="post" action="{% url 'registrar_saida' estagio.pk %}">{% csrf_token %}<input type="hidden" name="ponto" value="volta_intervalo"><button class="btn" type="submit">{% icone "relogio" %} Voltei do intervalo</button></form>
+        {% endif %}
+        <form method="post" action="{% url 'registrar_saida' estagio.pk %}"{% if com_intervalo and not reg.volta_intervalo %} data-confirmar="Encerrar o dia agora, sem registrar o intervalo?"{% endif %}>{% csrf_token %}<input type="hidden" name="ponto" value="hora_saida"><button class="btn{% if com_intervalo and not reg.volta_intervalo %} sec{% endif %}" type="submit">{% icone "sair" %} Registrar saída</button></form>
+        {% endwith %}
+      {% endif %}
       <a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">{% icone "livro" %} {% if reg.diario %}Ver anotação do dia{% else %}Anotar como foi o dia{% endif %}</a>
     </div>
   {% elif st.codigo == "ausencia" or st.codigo == "ausencia_ok" %}
@@ -41,7 +51,7 @@
 {% else %}
   <h2>{{ estagio.estagiario.primeiro_nome }} hoje: {{ st.rotulo|default:"sem estágio previsto" }}</h2>
   <p>
-    {% if reg %}{% if reg.hora_chegada %}Chegada {{ reg.hora_chegada|time:"H:i" }}{% endif %}{% if reg.hora_saida %} · saída {{ reg.hora_saida|time:"H:i" }}{% endif %}{% if reg.motivo %} · {{ reg.motivo|truncatechars:120 }}{% endif %}
+    {% if reg %}{{ reg.horario_display }}{% if reg.motivo %} · {{ reg.motivo|truncatechars:120 }}{% endif %}
     {% elif st.previsto %}Previsto{% if escala_atual.horario_display %} das {{ escala_atual.horario_display }}{% endif %} — ainda não marcou presença.
     {% elif proximos %}Próximo dia de estágio: {{ proximos.0.data|date:"l, d/m" }}.{% endif %}
   </p>

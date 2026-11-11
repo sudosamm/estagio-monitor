@@ -1,21 +1,37 @@
 {% extends "base.html" %}
+{% load ui %}
 {% block titulo %}Meus dados{% endblock %}
 {% block conteudo %}
 <div class="titulo-pagina"><h1>Meus dados</h1></div>
-<div class="grade grade-2">
+<div class="grade grade-lado">
+  <div class="card destaque">
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+      {% if form.non_field_errors %}<div class="aviso error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+      <div class="perfil-foto">
+        {% avatar user "xl" %}
+        <div class="cresce">{% with campo=form.foto %}{% include "core/_campo.html" %}{% endwith %}</div>
+      </div>
+      <h2>Contato</h2>
+      <div class="form-linha">{% for campo in form.campos_contato %}{% include "core/_campo.html" %}{% endfor %}</div>
+      {% if form.tem_curriculo %}
+        <h2 class="mt-1">Perfil profissional</h2>
+        <p class="muted" style="font-size:.88rem">Opcional. Ajuda as concedentes a conhecerem você nos próximos processos de seleção de estágio.</p>
+        {% for campo in form.campos_curriculo %}{% include "core/_campo.html" %}{% endfor %}
+        {% if user.curriculo %}<p><a class="btn sec sm" href="{% url 'curriculo_usuario' user.pk %}" target="_blank" rel="noopener">{% icone "arquivo" %} Ver meu currículo atual</a></p>{% endif %}
+      {% endif %}
+      <button class="btn" type="submit">Salvar</button>
+    </form>
+  </div>
   <div class="card">
     <dl class="dl">
       <dt>Nome</dt><dd>{{ user.nome_completo }}</dd>
       <dt>Usuário</dt><dd>{{ user.username }}</dd>
       <dt>Perfil</dt><dd>{{ user.get_papel_display }}</dd>
       {% if user.matricula %}<dt>Matrícula</dt><dd>{{ user.matricula }}</dd>{% endif %}
-      {% if user.local %}<dt>Local</dt><dd>{{ user.local }}</dd>{% endif %}
+      {% if user.local %}<dt>Concedente</dt><dd>{{ user.local }}</dd>{% endif %}
     </dl>
-    <p class="mt-1"><a class="btn sec" href="{% url 'trocar_senha' %}">Alterar senha</a></p>
-  </div>
-  <div class="card">
-    <h2>Contato</h2>
-    <form method="post">{% csrf_token %}{% include "core/_form.html" %}<button class="btn" type="submit">Salvar</button></form>
+    <p class="muted mt-1" style="font-size:.85rem">Nome e matrícula são alterados pelo orientador.</p>
+    <p class="mb-0"><a class="btn sec" href="{% url 'trocar_senha' %}">{% icone "chave" %} Alterar senha</a></p>
   </div>
 </div>
 {% endblock %}

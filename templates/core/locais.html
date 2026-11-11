@@ -1,15 +1,23 @@
 {% extends "base.html" %}
 {% load ui %}
-{% block titulo %}Locais de estágio{% endblock %}
+{% block titulo %}Concedentes{% endblock %}
 {% block conteudo %}
-<div class="titulo-pagina"><div><h1>Locais de estágio</h1><p>Empresas e instituições concedentes.</p></div><a class="btn sec" href="{% url 'criar_supervisores' %}">{% icone "mais" %} Supervisores</a></div>
-<div class="grade grade-lado">
-  <div class="card"><ul class="lista">{% for l in itens %}
-    <li><span class="avatar sm verde">{% icone "pin" %}</span><span class="cresce"><strong>{{ l.nome }}</strong><small style="display:block">{{ l.endereco_completo|default:"sem endereço" }}{% if l.telefone %} · {{ l.telefone }}{% endif %}</small><small style="display:block">{{ l.n }} estagiário(s) · {{ l.n_sup }} supervisor(es)</small></span>
-      {% if l.link_mapa %}<a class="btn sec sm" href="{{ l.link_mapa }}" target="_blank" rel="noopener">Mapa</a>{% endif %}
-      <a class="btn sec sm" href="{% url 'local_editar' l.pk %}">Editar</a></li>
-  {% empty %}<li class="vazio">Cadastre o primeiro local ao lado.</li>{% endfor %}</ul></div>
-  <div class="card destaque"><h3>{% if editando %}Editar {{ editando }}{% else %}Novo local{% endif %}</h3>
-    <form method="post">{% csrf_token %}{% include "core/_form.html" %}<div class="acoes"><button class="btn" type="submit">Salvar</button>{% if editando %}<a class="btn sec" href="{% url 'locais' %}">Cancelar</a>{% endif %}</div></form></div>
+<div class="titulo-pagina">
+  <div><h1>Concedentes</h1><p>Empresas, órgãos e profissionais que recebem estagiários.</p></div>
+  <div class="acoes"><a class="btn sec" href="{% url 'criar_supervisores' %}">{% icone "mais" %} Supervisores</a><a class="btn" href="{% url 'local_novo' %}">{% icone "mais" %} Nova concedente</a></div>
+</div>
+<form class="filtros card" method="get">
+  <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ q }}" placeholder="Nome, razão social, CNPJ ou município"></div>
+  <button class="btn" type="submit">Buscar</button>
+</form>
+<div class="card">
+  <ul class="lista">{% for l in itens %}
+    <li><span class="avatar sm verde">{% icone "predio" %}</span>
+      <span class="cresce"><strong>{{ l.nome }}</strong>{% if l.razao_social and l.razao_social != l.nome %} <small>· {{ l.razao_social }}</small>{% endif %}
+        <small style="display:block">{% if l.cnpj %}{{ l.cnpj }} · {% endif %}{{ l.endereco_completo|default:"sem endereço" }}{% if l.telefone %} · {{ l.telefone }}{% endif %}</small>
+        <small style="display:block">{{ l.n }} estagiário(s) · {{ l.n_sup }} supervisor(es){% if not l.cnpj or not l.representante_nome %} · <span class="alerta-txt">cadastro incompleto</span>{% endif %}</small></span>
+      {% if l.link_mapa %}<a class="btn sec sm oculto-mobile" href="{{ l.link_mapa }}" target="_blank" rel="noopener">Mapa</a>{% endif %}
+      <a class="btn sec sm" href="{% url 'local_editar' l.pk %}">Abrir</a></li>
+  {% empty %}<li class="vazio">Nenhuma concedente{% if q %} encontrada{% else %}. <a href="{% url 'local_novo' %}">Cadastre a primeira</a>{% endif %}.</li>{% endfor %}</ul>
 </div>
 {% endblock %}

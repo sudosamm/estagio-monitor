@@ -10,7 +10,9 @@ class UsuarioAdmin(UserAdmin):
     list_filter = ("papel", "is_active")
     search_fields = ("username", "nome_completo", "email")
     fieldsets = UserAdmin.fieldsets + (
-        ("Estágio Monitor", {"fields": ("papel", "nome_completo", "telefone", "matricula", "cargo", "local", "deve_trocar_senha")}),
+        ("Estágio Monitor", {"fields": ("papel", "nome_completo", "telefone", "cpf", "matricula", "cargo", "local", "foto",
+                                   "cursos_coordenados", "deve_trocar_senha")}),
+        ("Perfil profissional", {"fields": ("apresentacao", "habilidades", "curriculo", "perfil_visivel")}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (("Estágio Monitor", {"fields": ("papel", "nome_completo")}),)
 
@@ -35,6 +37,26 @@ class RegistroAdmin(admin.ModelAdmin):
     date_hierarchy = "data"
 
 
-for m in (models.Curso, models.LocalEstagio, models.DiaSemEstagio, models.Agendamento,
-          models.Documento, models.Mensagem, models.Notificacao):
+@admin.register(models.ImpressaoFrequencia)
+class ImpressaoAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "estagio", "usuario", "mes", "aberta_em", "impressoes", "ultima_impressao")
+    search_fields = ("codigo", "estagio__estagiario__nome_completo")
+    list_filter = ("mes",)
+
+
+class VagaInline(admin.TabularInline):
+    model = models.VagaCandidatura
+    extra = 0
+
+
+@admin.register(models.Candidatura)
+class CandidaturaAdmin(admin.ModelAdmin):
+    list_display = ("nome", "ano", "status", "contato_nome", "contato_telefone", "criado_em")
+    list_filter = ("ano", "status")
+    search_fields = ("nome", "razao_social", "cnpj", "protocolo")
+    inlines = [VagaInline]
+
+
+for m in (models.AvisoExterno, models.Curso, models.LocalEstagio, models.DiaSemEstagio, models.Agendamento, models.DiaPlanejado,
+          models.Documento, models.Mensagem, models.Notificacao, models.Configuracao):
     admin.site.register(m)

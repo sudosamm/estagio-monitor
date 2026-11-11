@@ -5,10 +5,13 @@
 <div class="titulo-pagina">
   <div><h1>Olá, {{ user.primeiro_nome }}</h1><p>{% now "l, d \d\e F \d\e Y" %}</p></div>
   <div class="acoes">
-    <a class="btn sec" href="{% url 'criar_estagiarios' %}">{% icone "mais" %} Estagiários</a>
-    <a class="btn" href="{% url 'novo_agendamento' %}">{% icone "calendario" %} Agendar visita</a>
+    {% if user|pode:"estagiarios" %}<a class="btn sec" href="{% url 'criar_estagiarios' %}">{% icone "mais" %} Estagiários</a>{% endif %}
+    {% if user|pode:"agenda" %}<a class="btn" href="{% url 'novo_agendamento' %}">{% icone "calendario" %} Agendar visita</a>{% endif %}
   </div>
 </div>
+{% if candidaturas_pendentes %}
+<a class="faixa-aviso" href="{% url 'captacao' %}?status=PENDENTE">{% icone "predio" %}<span><strong>{{ candidaturas_pendentes }} concedente{{ candidaturas_pendentes|pluralize }}</strong> aguardando análise na captação.</span><span class="btn sm">Analisar</span></a>
+{% endif %}
 <div class="kpis">
   <div class="kpi"><div class="valor">{{ total }}</div><div class="rotulo">Estagiários ativos</div></div>
   <div class="kpi amarelo"><div class="valor">{{ previstos_hoje }}</div><div class="rotulo">Previstos hoje</div></div>

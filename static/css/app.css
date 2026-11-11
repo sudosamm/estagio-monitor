@@ -126,8 +126,8 @@ main { flex: 1; padding-block: 1.5rem 3rem; }
 .grade-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grade-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grade-lado { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
-@media (max-width: 900px) { .grade-lado, .grade-3 { grid-template-columns: 1fr; } }
-@media (max-width: 640px) { .grade-2 { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .grade-lado, .grade-3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .grade-2 { grid-template-columns: minmax(0, 1fr); } }
 
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
 .kpi { background: #fff; border-radius: var(--raio); box-shadow: var(--sombra); padding: .9rem 1rem; border-left: 4px solid var(--verde); }
@@ -365,3 +365,62 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .oculto-mobile { }
 @media (max-width: 640px) { .oculto-mobile { display: none !important; } h1 { font-size: 1.35rem; } }
 .inline { display: inline; }
+
+/* ---------- fotos de perfil */
+img.avatar { object-fit: cover; padding: 0; background: var(--cinza-200); }
+.avatar.lg { width: 56px; height: 56px; font-size: 20px; }
+.avatar.xl { width: 96px; height: 96px; font-size: 32px; }
+.perfil-foto { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; }
+.perfil-foto .cresce { flex: 1; min-width: 0; }
+
+/* ---------- formulários */
+.campo[hidden] { display: none !important; }
+.campo.tipo-hora { display: inline-block; width: calc(50% - .5rem); margin-right: .25rem; vertical-align: top; }
+fieldset.secao { border: 0; padding: 0; margin: 0 0 1.1rem; min-width: 0; }
+fieldset.secao legend { font-weight: 700; font-size: 1.02rem; color: var(--verde-escuro); padding: 0; margin-bottom: .6rem; width: 100%; border-bottom: 1px solid var(--cinza-200); padding-bottom: .3rem; }
+fieldset.secao .form-linha > .campo:has(textarea), fieldset.secao .form-linha > .tipo-radioselect { grid-column: 1 / -1; }
+
+/* ---------- previsão de término */
+.previsao { display: flex; gap: .75rem; align-items: flex-start; background: var(--verde-claro); color: var(--verde-escuro); border-radius: 10px; padding: .8rem .9rem; margin: .9rem 0 .6rem; }
+.previsao svg { width: 26px; height: 26px; flex: none; margin-top: .1rem; }
+.previsao small { display: block; color: inherit; opacity: .85; }
+.previsao strong { display: block; font-size: 1.35rem; line-height: 1.2; }
+.previsao.atrasada { background: #fff4e0; color: #7a4a00; }
+.alerta-txt { color: #a85f00 !important; font-weight: 600; }
+.dia.extra { border: 2px dashed var(--verde); }
+.dia.fim { box-shadow: inset 0 0 0 3px var(--laranja); }
+.dia .marca-fim { position: absolute; bottom: 3px; right: 4px; color: var(--laranja-escuro); line-height: 0; }
+.dia .marca-fim svg { width: 13px; height: 13px; }
+.legenda svg { width: 14px; height: 14px; color: var(--laranja-escuro); }
+
+/* ---------- registro do dia */
+.pontos { display: flex; flex-wrap: wrap; gap: .3rem 1rem; }
+.pontos b { font-size: 1.05rem; }
+.lista.compacta > li { padding: .45rem 0; }
+
+/* ---------- banco de talentos */
+.talentos { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+.talento { display: flex; flex-direction: column; gap: .6rem; margin: 0; }
+.talento p { margin: 0; font-size: .9rem; }
+.talento .btn { align-self: flex-start; margin-top: auto; }
+.talento-cab { display: flex; gap: .75rem; align-items: center; }
+.talento-cab h3 { margin: 0; }
+.tags { display: flex; flex-wrap: wrap; gap: .3rem; }
+h1 svg.ic, h2 svg.ic, h3 svg.ic { width: 1.05em; height: 1.05em; vertical-align: -.15em; color: var(--laranja-escuro); }
+.pessoa > .avatar { flex: none; }
+
+/* ---------- captação */
+.campo-oculto { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.vagas-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 1rem; }
+.vagas-grade input { max-width: 120px; }
+.vagas-lista { display: flex; flex-wrap: wrap; gap: .6rem; }
+.vagas-lista div { background: var(--verde-claro); color: var(--verde-escuro); border-radius: 10px; padding: .5rem .8rem; display: flex; align-items: baseline; gap: .4rem; }
+.vagas-lista strong { font-size: 1.4rem; }
+.passos { padding-left: 1.2rem; margin: 0; font-size: .9rem; }
+.passos li { margin-bottom: .4rem; }
+.faixa-aviso { display: flex; align-items: center; gap: .75rem; background: #fff4e0; color: #7a4a00; border-radius: var(--raio); padding: .75rem 1rem; margin-bottom: 1rem; text-decoration: none; box-shadow: var(--sombra); }
+.faixa-aviso svg { width: 22px; height: 22px; flex: none; }
+.faixa-aviso span:nth-child(2) { flex: 1; }
+.faixa-aviso:hover { color: #7a4a00; filter: brightness(.98); }
+.navegacao .contador { display: inline-block; background: var(--laranja); color: #fff; border-radius: 999px; font-size: .72rem; padding: 0 .45rem; margin-left: .2rem; }
+.aviso-externo textarea { font-size: .88rem; }

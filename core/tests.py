@@ -8,8 +8,17 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Agendamento, Curso, Documento, Escala, Estagio, LocalEstagio, Notificacao, Registro, Usuario
-from .services import criar_usuario, gerar_username, resumo_horas, status_periodo
+import io
+
+from PIL import Image
+
+from .forms import EscalaForm
+from .models import (
+    Agendamento, AvisoExterno, Candidatura, Configuracao, VagaCandidatura, Curso, DiaPlanejado, DiaSemEstagio, Documento, Escala, Estagio, ImpressaoFrequencia,
+    LocalEstagio, Notificacao, Registro, Usuario,
+)
+from .services import criar_usuario, gerar_username, linhas_folha, resumo_horas, status_periodo
+from .validators import cnpj_valido, cpf_valido
 
 QUARTA = date(2026, 11, 11)
 
@@ -163,3 +172,305 @@ class AgendaEArquivosTests(Base):
         self.entrar(_ativo(criar_usuario("Intruso Silva", Usuario.Papel.ESTAGIARIO)))
         self.assertEqual(self.client.get(reverse("baixar_documento", args=[doc.pk])).status_code, 403)
         doc.arquivo.delete()
+
+
+class TurnosTests(Base):
+    def _dados(self, **kw):
+        d = {"vigente_desde": "2026-11-16", "dias": ["0", "1"], "horas_por_dia": "8", "horario_entrada": "07:00",
+             "saida_intervalo": "11:00", "volta_intervalo": "13:00", "horario_saida": "17:00"}
+        d.update(kw)
+        return d
+
+    def test_escala_de_8h_com_intervalo(self):
+        form = EscalaForm(data=self._dados())
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.dados_escala()["saida_intervalo"].hour, 11)
+
+    def test_horarios_que_nao_somam_a_carga(self):
+        form = EscalaForm(data=self._dados(horario_saida="16:00"))
+        self.assertFalse(form.is_valid())
+        self.assertIn("somam 7h", str(form.errors))
+        form = EscalaForm(data=self._dados(volta_intervalo=""))
+        self.assertFalse(form.is_valid())
+
+    def test_estagiario_registra_intervalo_e_saida(self):
+        from datetime import time
+
+        Escala.objects.create(estagio=self.est, vigente_desde=QUARTA, dias="2", horas_por_dia=8, horario_entrada=time(7),
+                              saida_intervalo=time(11), volta_intervalo=time(13), horario_saida=time(17))
+        self.entrar(self.aluno)
+        self.client.post(reverse("marcar_presenca", args=[self.est.pk]))
+        r = self.client.get(self.est.get_absolute_url())
+        self.assertContains(r, "Saí para o intervalo")
+        for ponto in ("saida_intervalo", "volta_intervalo", "hora_saida"):
+            self.client.post(reverse("registrar_saida", args=[self.est.pk]), {"ponto": ponto})
+        reg = Registro.objects.get(estagio=self.est, data=QUARTA)
+        self.assertTrue(reg.saida_intervalo and reg.volta_intervalo and reg.hora_saida)
+        self.assertEqual(reg.horas, 8)
+
+
+class PrevisaoTests(Base):
+    """Escala seg/ter 4h desde 02/11, curso de 100h, hoje = quarta 11/11."""
+
+    def test_ausencia_adia_e_dia_extra_antecipa(self):
+        inicial = resumo_horas(self.est)["previsao_termino"]
+        self.entrar(self.aluno)
+        r = self.client.post(reverse("informar_ausencia", args=[self.est.pk]),
+                             {"data": "2026-11-16", "motivo": "Evento da escola"}, follow=True)
+        adiada = resumo_horas(self.est)["previsao_termino"]
+        self.assertGreater(adiada, inicial)
+        self.assertContains(r, "Previsão de término adiada")
+
+        self.client.post(reverse("estagio_dia", args=[self.est.pk, "2026-11-12"]),
+                         {"planejar": "salvar", "p-horas": "8", "p-motivo": "Reposição"})
+        self.assertTrue(DiaPlanejado.objects.filter(estagio=self.est, data=date(2026, 11, 12), horas=8).exists())
+        self.assertLess(resumo_horas(self.est)["previsao_termino"], adiada)
+        dia = status_periodo(self.est, date(2026, 11, 12), date(2026, 11, 12))[0]
+        self.assertTrue(dia.previsto and dia.extra)
+        self.assertTrue(Notificacao.objects.filter(usuario=self.sup, texto__contains="12/11").exists())
+
+    def test_cancelar_ausencia_futura(self):
+        self.entrar(self.aluno)
+        self.client.post(reverse("informar_ausencia", args=[self.est.pk]), {"data": "2026-11-16", "motivo": "Prova"})
+        self.client.post(reverse("estagio_dia", args=[self.est.pk, "2026-11-16"]), {"planejar": "cancelar_ausencia"})
+        self.assertFalse(Registro.objects.filter(data=date(2026, 11, 16)).exists())
+
+    def test_nao_planeja_dia_passado(self):
+        self.entrar(self.aluno)
+        self.client.post(reverse("estagio_dia", args=[self.est.pk, "2026-11-05"]), {"planejar": "salvar", "p-horas": "4"})
+        self.assertFalse(DiaPlanejado.objects.exists())
+
+    def test_termo_nao_limita_e_calendario_para_no_fim_previsto(self):
+        self.est.data_fim = date(2026, 11, 20)
+        self.est.save()
+        h = resumo_horas(self.est)
+        self.assertTrue(h["apos_termo"])
+        self.assertGreater(h["dias_restantes"], 0)
+        depois = status_periodo(self.est, h["previsao_termino"] + timedelta(days=7), h["previsao_termino"] + timedelta(days=7),
+                                limite=h["previsao_termino"])[0]
+        self.assertEqual(depois.codigo, "fora")
+
+
+class FolhaFrequenciaTests(Base):
+    def test_abertura_impressao_e_quem_ve_o_registro(self):
+        self.entrar(self.aluno)
+        r = self.client.get(reverse("folha_frequencia", args=[self.est.pk]) + "?mes=2026-11")
+        self.assertContains(r, "FREQUÊNCIA DE ESTÁGIO")
+        log = ImpressaoFrequencia.objects.get()
+        self.assertEqual((log.usuario, log.mes), (self.aluno, date(2026, 11, 1)))
+        self.assertContains(r, log.codigo)
+        self.assertEqual(self.client.post(reverse("marcar_impressao"), {"codigo": log.codigo}).status_code, 204)
+        log.refresh_from_db()
+        self.assertEqual(log.impressoes, 1)
+        # o estagiário não vê o registro
+        self.assertNotContains(self.client.get(self.est.get_absolute_url()), "Folhas de frequência")
+        self.assertEqual(self.client.get(reverse("frequencias")).status_code, 403)
+
+        self.entrar(self.sup)
+        self.assertEqual(self.client.post(reverse("marcar_impressao"), {"codigo": log.codigo}).status_code, 400)
+        self.assertContains(self.client.get(self.est.get_absolute_url()), "Folhas de frequência")
+        r = self.client.get(reverse("frequencias") + "?mes=2026-11")
+        self.assertContains(r, "Imprimiu")
+        r = self.client.get(reverse("frequencias") + f"?codigo={log.codigo.lower()}")
+        self.assertContains(r, "Emitida por")
+
+    def test_linhas_com_feriado_e_fim_de_semana(self):
+        DiaSemEstagio.objects.create(data=date(2026, 11, 20), descricao="Consciência Negra", orientador=self.ori)
+        linhas = linhas_folha(self.est, 2026, 11)
+        self.assertEqual(len(linhas), 30)
+        self.assertEqual(linhas[19]["feriado"], "Consciência Negra")
+        self.assertTrue(linhas[19]["cinza"])
+        self.assertTrue(linhas[7]["cinza"])       # domingo 08/11
+        self.assertFalse(linhas[9]["cinza"])      # terça 10/11
+        self.assertEqual(linhas[9]["dia_semana"], "Terça")
+
+
+class ConcedenteEPerfilTests(Base):
+    def test_validadores(self):
+        self.assertTrue(cpf_valido("529.982.247-25"))
+        self.assertFalse(cpf_valido("111.111.111-11"))
+        self.assertTrue(cnpj_valido("11.222.333/0001-81"))
+        self.assertFalse(cnpj_valido("11.222.333/0001-80"))
+
+    def test_cadastro_de_concedente_com_supervisores(self):
+        self.entrar(self.ori)
+        dados = {"tipo_concedente": "PJ", "nome": "Clínica Vida", "razao_social": "Clínica Vida LTDA",
+                 "tipo_instituicao": "PRIVADA", "cnpj": "11222333000181", "cep": "60025100", "uf": "ce",
+                 "novos_supervisores": "Rita de Cássia Lopes; (85) 98888-1111"}
+        r = self.client.post(reverse("local_novo"), {**dados, "cnpj": "11222333000180"})
+        self.assertContains(r, "CNPJ inválido")
+        r = self.client.post(reverse("local_novo"), dados)
+        self.assertContains(r, "rita.lopes")
+        local = LocalEstagio.objects.get(nome="Clínica Vida")
+        self.assertEqual((local.cnpj, local.cep, local.uf), ("11.222.333/0001-81", "60025-100", "CE"))
+        self.assertEqual(Usuario.objects.get(username="rita.lopes").local, local)
+
+    @override_settings(MEDIA_ROOT=str(settings.DATA_DIR / "anexos-testes"))
+    def test_foto_de_perfil_recortada(self):
+        buf = io.BytesIO()
+        Image.new("RGB", (1200, 800), "red").save(buf, "PNG")
+        self.entrar(self.aluno)
+        r = self.client.post(reverse("perfil"), {"foto": SimpleUploadedFile("eu.png", buf.getvalue(), "image/png"),
+                                                 "email": "", "telefone": "", "cpf": "529.982.247-25"})
+        self.assertEqual(r.status_code, 302)
+        self.aluno.refresh_from_db()
+        with self.aluno.foto.open("rb") as f:
+            self.assertEqual(Image.open(f).size, (400, 400))
+        self.assertEqual(self.client.get(self.aluno.foto_url).status_code, 200)
+        self.aluno.foto.delete()
+
+    def test_cpf_invalido_no_perfil(self):
+        self.entrar(self.aluno)
+        r = self.client.post(reverse("perfil"), {"email": "", "telefone": "", "cpf": "123.456.789-00"})
+        self.assertContains(r, "CPF inválido")
+
+    def test_banco_de_talentos_liga_e_desliga(self):
+        outro_sup = _ativo(criar_usuario("Selma Duarte", Usuario.Papel.SUPERVISOR))
+        self.entrar(outro_sup)
+        self.assertEqual(self.client.get(reverse("banco_talentos")).status_code, 404)
+        cfg = Configuracao.atual()
+        cfg.banco_talentos_habilitado = cfg.curriculos_habilitados = True
+        cfg.save()
+        self.assertNotContains(self.client.get(reverse("banco_talentos")), self.aluno.nome_completo)
+        self.aluno.perfil_visivel, self.aluno.habilidades = True, "Excel, redes"
+        self.aluno.save()
+        r = self.client.get(reverse("banco_talentos") + "?q=excel")
+        self.assertContains(r, self.aluno.nome_completo)
+        self.entrar(self.aluno)
+        self.assertEqual(self.client.get(reverse("banco_talentos")).status_code, 403)
+        self.assertContains(self.client.get(reverse("perfil")), "Perfil profissional")
+
+
+class CoordenadorTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.enf = Curso.objects.create(nome="Enfermagem", carga_horaria=200)
+        self.coord = _ativo(criar_usuario("Paula Lins", Usuario.Papel.COORDENADOR))
+        self.coord.cursos_coordenados.set([self.curso])
+        aluna = _ativo(criar_usuario("Rita Enfermeira", Usuario.Papel.ESTAGIARIO))
+        self.outro = Estagio.objects.create(estagiario=aluna, orientador=self.ori, curso=self.enf, data_inicio=date(2026, 11, 2))
+
+    def test_ve_so_os_cursos_que_coordena(self):
+        self.entrar(self.coord)
+        self.assertEqual(self.client.get(reverse("painel")).status_code, 200)
+        r = self.client.get(reverse("estagios_lista"))
+        self.assertContains(r, self.aluno.nome_completo)
+        self.assertNotContains(r, "Rita Enfermeira")
+        self.assertEqual(self.client.get(self.est.get_absolute_url()).status_code, 200)
+        self.assertEqual(self.client.get(self.outro.get_absolute_url()).status_code, 403)
+
+    def test_nao_agenda_nem_muda_horarios(self):
+        self.entrar(self.coord)
+        for url in (reverse("agendamentos"), reverse("novo_agendamento"), reverse("escala_lote"),
+                    reverse("dias_sem_estagio"), reverse("documentos_gerais")):
+            self.assertEqual(self.client.get(url).status_code, 403, url)
+        r = self.client.post(reverse("nova_escala", args=[self.est.pk]),
+                             {"vigente_desde": "2026-11-16", "dias": ["0"], "horas_por_dia": "4"})
+        self.assertEqual(r.status_code, 403)
+        r = self.client.get(self.est.get_absolute_url() + "?aba=escalas")
+        self.assertNotContains(r, "Mudar dias a partir de uma data")
+        self.assertNotContains(self.client.get(reverse("painel")), "Agendar visita")
+
+    def test_cadastra_estagiarios_escolhendo_o_orientador(self):
+        self.entrar(self.coord)
+        r = self.client.post(reverse("criar_estagiarios"), {
+            "nomes": "Caio Prado", "curso": self.curso.pk, "orientador": self.ori.pk, "data_inicio": "2026-11-16",
+            "dias": ["0"], "horas_por_dia": "4"})
+        self.assertContains(r, "caio.prado")
+        self.assertEqual(Usuario.objects.get(username="caio.prado").estagios.get().orientador, self.ori)
+
+    def test_administrador_cria_coordenador(self):
+        self.ori.is_superuser = True
+        self.ori.save()
+        self.entrar(self.ori)
+        r = self.client.post(reverse("criar_coordenador"), {"nome": "Lia Moura", "cursos": [self.enf.pk]})
+        self.assertContains(r, "lia.moura")
+        lia = Usuario.objects.get(username="lia.moura")
+        self.assertTrue(lia.is_coordenador)
+        self.assertEqual(list(lia.cursos_coordenados.all()), [self.enf])
+
+
+class CaptacaoTests(Base):
+    def _dados(self, **kw):
+        d = {"tipo_concedente": "PJ", "razao_social": "Padaria Pão Quente LTDA", "nome": "Pão Quente", "uf": "CE",
+             "cnpj": "11.222.333/0001-81", "contato_nome": "Jorge Amaral", "contato_telefone": "(85) 99876-5432",
+             "contato_whatsapp": "on", "atividades": "Atendimento e caixa", "turnos": ["MANHA"],
+             f"vaga_{self.curso.pk}": "2", "supervisor_nome": "Marta Amaral", "supervisor_telefone": "(85) 98888-7777",
+             "consentimento": "on"}
+        d.update(kw)
+        return d
+
+    def abrir(self):
+        cfg = Configuracao.atual()
+        cfg.captacao_aberta, cfg.ano_captacao = True, 2027
+        cfg.save()
+
+    def test_pagina_publica_fechada_e_aberta(self):
+        r = self.client.get(reverse("candidatura_publica"))
+        self.assertContains(r, "não estão abertas")
+        self.abrir()
+        r = self.client.post(reverse("candidatura_publica"), self._dados(**{f"vaga_{self.curso.pk}": ""}))
+        self.assertContains(r, "pelo menos um curso")
+        r = self.client.post(reverse("candidatura_publica"), self._dados())
+        cand = Candidatura.objects.get()
+        self.assertContains(r, cand.protocolo)
+        self.assertEqual((cand.ano, cand.turnos, cand.total_vagas), (2027, "MANHA", 2))
+        self.assertTrue(Notificacao.objects.filter(usuario=self.ori, texto__contains="Pão Quente").exists())
+
+    def test_robo_preenchendo_campo_oculto_e_barrado(self):
+        self.abrir()
+        self.client.post(reverse("candidatura_publica"), self._dados(site="http://spam"))
+        self.assertFalse(Candidatura.objects.exists())
+
+    def test_aprovar_cria_concedente_supervisor_e_aviso(self):
+        self.abrir()
+        self.client.post(reverse("candidatura_publica"), self._dados())
+        cand = Candidatura.objects.get()
+        self.entrar(self.ori)
+        r = self.client.post(cand.get_absolute_url(), {"acao": "aprovar", "a-destino": "nova", "a-criar_supervisor": "on"},
+                             follow=True)
+        cand.refresh_from_db()
+        self.assertEqual(cand.status, Candidatura.Status.APROVADA)
+        self.assertEqual(cand.local.cnpj, "11.222.333/0001-81")
+        sup = Usuario.objects.get(username="marta.amaral")
+        self.assertEqual((sup.papel, sup.local), (Usuario.Papel.SUPERVISOR, cand.local))
+        aviso = AvisoExterno.objects.get()
+        self.assertIn("aprovado", aviso.mensagem)
+        self.assertIn("marta.amaral", aviso.mensagem)
+        self.assertTrue(aviso.whatsapp_url.startswith("https://wa.me/5585998765432?text="))
+        self.assertContains(r, "wa.me/5585998765432")
+        self.client.post(reverse("aviso_enviado", args=[aviso.pk]), {"canal": "WHATSAPP", "mensagem": "Texto final"})
+        aviso.refresh_from_db()
+        self.assertEqual((aviso.status, aviso.mensagem, aviso.enviado_por), ("ENVIADO", "Texto final", self.ori))
+
+    def test_aprovar_atualizando_concedente_existente(self):
+        existente = LocalEstagio.objects.create(nome="Pão Quente", cnpj="11.222.333/0001-81")
+        self.abrir()
+        self.client.post(reverse("candidatura_publica"), self._dados(bairro="Centro"))
+        cand = Candidatura.objects.get()
+        self.entrar(self.ori)
+        r = self.client.get(cand.get_absolute_url())
+        self.assertContains(r, "Já existe uma concedente parecida")
+        self.client.post(cand.get_absolute_url(), {"acao": "aprovar", "a-destino": str(existente.pk)})
+        existente.refresh_from_db()
+        self.assertEqual((existente.bairro, LocalEstagio.objects.filter(nome="Pão Quente").count()), ("Centro", 1))
+
+    def test_recusar_e_visao_do_coordenador(self):
+        self.abrir()
+        self.client.post(reverse("candidatura_publica"), self._dados())
+        cand = Candidatura.objects.get()
+        outro_curso = Curso.objects.create(nome="Enfermagem")
+        coord = _ativo(criar_usuario("Lia Moura", Usuario.Papel.COORDENADOR))
+        coord.cursos_coordenados.set([outro_curso])
+        self.entrar(coord)
+        self.assertEqual(self.client.get(cand.get_absolute_url()).status_code, 403)
+        self.assertNotContains(self.client.get(reverse("captacao") + "?ano=2027"), "Pão Quente")
+        coord.cursos_coordenados.add(self.curso)
+        coord = Usuario.objects.get(pk=coord.pk)
+        self.entrar(coord)
+        self.client.post(cand.get_absolute_url(), {"acao": "recusar", "r-parecer": "Sem vagas no curso este ano."})
+        cand.refresh_from_db()
+        self.assertEqual(cand.status, Candidatura.Status.RECUSADA)
+        self.assertIn("Sem vagas", AvisoExterno.objects.get().mensagem)
+        self.entrar(self.aluno)
+        self.assertEqual(self.client.get(reverse("captacao")).status_code, 403)

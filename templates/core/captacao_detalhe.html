@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}{{ c.nome }} · Captação{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><div class="migalha"><a href="{% url 'captacao' %}?ano={{ c.ano }}">← Captação {{ c.ano }}</a></div>
+    <h1>{{ c.nome }}</h1><p>{{ c.razao_social }}{% if c.cnpj %} · {{ c.cnpj }}{% endif %} · protocolo {{ c.protocolo }} · enviado em {{ c.criado_em|date:"d/m/Y H:i" }}</p></div>
+  <span class="selo {% if c.status == 'APROVADA' %}confirmado{% elif c.status == 'RECUSADA' %}falta{% else %}hoje{% endif %}">{{ c.get_status_display }}</span>
+</div>
+<div class="grade grade-lado">
+  <div>
+    <div class="card destaque">
+      <h2>Vagas desejadas</h2>
+      <div class="vagas-lista">{% for v in c.vagas.all %}<div><strong>{{ v.quantidade }}</strong><span>{{ v.curso.nome }}</span></div>{% endfor %}</div>
+      <h3 class="mt-1">Atividades que os estagiários vão realizar</h3>
+      <p class="quebra">{{ c.atividades }}</p>
+      <dl class="dl">
+        {% if c.turnos %}<dt>Turnos</dt><dd>{{ c.turnos_display }}</dd>{% endif %}
+        {% if c.horario %}<dt>Horário</dt><dd>{{ c.horario }}</dd>{% endif %}
+        {% if c.beneficios %}<dt>Benefícios</dt><dd>{{ c.beneficios }}</dd>{% endif %}
+        {% if c.observacoes %}<dt>Observações</dt><dd class="quebra">{{ c.observacoes }}</dd>{% endif %}
+      </dl>
+    </div>
+    <div class="card">
+      <h2>Dados da concedente</h2>
+      <dl class="dl">
+        <dt>Concedente</dt><dd>{{ c.get_tipo_concedente_display }}{% if c.tipo_instituicao %} · {{ c.get_tipo_instituicao_display }}{% endif %}{% if c.matriz_filial %} · {{ c.get_matriz_filial_display }}{% endif %}</dd>
+        <dt>Razão social</dt><dd>{{ c.razao_social }}</dd>
+        <dt>Nome fantasia</dt><dd>{{ c.nome }}</dd>
+        {% if c.atividade %}<dt>Atividade</dt><dd>{{ c.atividade }}</dd>{% endif %}
+        <dt>CNPJ/CPF</dt><dd>{{ c.cnpj|default:"—" }}</dd>
+        <dt>Endereço</dt><dd>{{ c.endereco_completo|default:"—" }}{% if c.cep %} · CEP {{ c.cep }}{% endif %}</dd>
+        {% if c.telefone %}<dt>Telefone</dt><dd>{{ c.telefone }}</dd>{% endif %}
+        <dt>Representante</dt><dd>{{ c.representante_nome|default:"—" }}{% if c.representante_email %} · {{ c.representante_email }}{% endif %}{% if c.representante_cpf %}<br><small>CPF {{ c.representante_cpf }}{% if c.representante_documento %} · {{ c.representante_documento }}{% endif %}</small>{% endif %}</dd>
+      </dl>
+      <hr>
+      <div class="grade grade-2">
+        <div><h3>Contato</h3><p class="mb-0"><strong>{{ c.contato_nome }}</strong>{% if c.contato_cargo %} · {{ c.contato_cargo }}{% endif %}<br>{{ c.contato_telefone }}{% if c.contato_whatsapp %} (WhatsApp){% endif %}{% if c.contato_email %}<br>{{ c.contato_email }}{% endif %}</p></div>
+        <div><h3>Supervisor indicado</h3>{% if c.supervisor_nome %}<p class="mb-0"><strong>{{ c.supervisor_nome }}</strong>{% if c.supervisor_cargo %} · {{ c.supervisor_cargo }}{% endif %}{% if c.supervisor_telefone %}<br>{{ c.supervisor_telefone }}{% endif %}{% if c.supervisor_email %}<br>{{ c.supervisor_email }}{% endif %}</p>{% else %}<p class="muted mb-0">Não informado.</p>{% endif %}</div>
+      </div>
+    </div>
+  </div>
+  <div>
+    {% if c.status == "PENDENTE" %}
+      <div class="card destaque">
+        <h3>{% icone "check" %} Aprovar</h3>
+        {% if sugestoes %}<div class="caixa-alerta" style="margin-bottom:.8rem">Já existe uma concedente parecida no sistema. Escolha se quer atualizá-la (só os campos vazios são preenchidos) ou criar uma nova.</div>{% endif %}
+        <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="aprovar">
+          {% with form=aprovar %}{% include "core/_form.html" %}{% endwith %}
+          <button class="btn bloco" type="submit">Aprovar e cadastrar a concedente</button>
+        </form>
+      </div>
+      <div class="card">
+        <details{% if recusar.errors %} open{% endif %}><summary><strong>Recusar</strong></summary>
+          <form method="post" class="mt-1">{% csrf_token %}<input type="hidden" name="acao" value="recusar">
+            {% with form=recusar %}{% include "core/_form.html" %}{% endwith %}
+            <button class="btn perigo bloco" type="submit">Recusar cadastro</button>
+          </form>
+        </details>
+      </div>
+    {% else %}
+      <div class="card">
+        <h3>Análise</h3>
+        <dl class="dl">
+          <dt>Situação</dt><dd>{{ c.get_status_display }}</dd>
+          <dt>Por</dt><dd>{{ c.analisado_por|default:"—" }} em {{ c.analisado_em|date:"d/m/Y H:i" }}</dd>
+          {% if c.parecer %}<dt>Parecer</dt><dd class="quebra">{{ c.parecer }}</dd>{% endif %}
+          {% if c.local %}<dt>Concedente</dt><dd><a href="{% url 'local_editar' c.local.pk %}">{{ c.local }}</a></dd>{% endif %}
+        </dl>
+      </div>
+    {% endif %}
+    {% for a in avisos %}
+      <div class="card {% if a.status == 'PENDENTE' %}laranja{% endif %}">
+        <div class="card-cab"><h3>{% icone "mensagem" %} Aviso para {{ a.destinatario.split.0 }}</h3><span class="selo {% if a.status == 'ENVIADO' %}confirmado{% elif a.status == 'PENDENTE' %}hoje{% else %}fora{% endif %}">{{ a.get_status_display }}</span></div>
+        {% if a.status == "PENDENTE" %}
+          <p class="muted" style="font-size:.85rem">O envio automático ainda não existe. Revise o texto e mande pelo canal que preferir; depois marque como enviado.</p>
+          <form method="post" action="{% url 'aviso_enviado' a.pk %}" class="aviso-externo" data-telefone="{{ a.telefone }}" data-email="{{ a.email }}" data-assunto="{{ a.assunto }}">{% csrf_token %}
+            <textarea name="mensagem" rows="9">{{ a.mensagem }}</textarea>
+            <div class="acoes mt-1">
+              {% if a.whatsapp_url %}<a class="btn" data-canal="whatsapp" href="{{ a.whatsapp_url }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}
+              {% if a.email_url %}<a class="btn sec" data-canal="email" href="{{ a.email_url }}">E-mail</a>{% endif %}
+              <button class="btn sec" type="button" data-copiar-texto data-sem-trava="1">Copiar texto</button>
+            </div>
+            <div class="acoes mt-1"><span class="muted" style="font-size:.85rem">Já avisou? Marque por onde:</span>
+              {% if a.telefone %}<button class="btn sec sm" name="canal" value="WHATSAPP">Enviei por WhatsApp</button><button class="btn sec sm" name="canal" value="TELEFONE">Liguei</button>{% endif %}
+              {% if a.email %}<button class="btn sec sm" name="canal" value="EMAIL">Enviei por e-mail</button>{% endif %}
+              <button class="btn perigo sm" name="canal" value="descartar" data-confirmar="Não avisar a concedente?">Não avisar</button>
+            </div>
+          </form>
+        {% else %}
+          <p class="quebra" style="font-size:.88rem">{{ a.mensagem }}</p>
+          {% if a.enviado_em %}<small>{{ a.get_canal_display }} · {{ a.enviado_por.primeiro_nome }} em {{ a.enviado_em|date:"d/m/Y H:i" }}</small>{% endif %}
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

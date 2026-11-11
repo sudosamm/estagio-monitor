@@ -4,7 +4,7 @@
 {% block conteudo %}
 {% if not e_estagiario %}<div class="migalha"><a href="{% if e_orientador %}{% url 'estagios_lista' %}{% else %}{% url 'painel_supervisor' %}{% endif %}">← Estagiários</a></div>{% endif %}
 <div class="est-cab">
-  <span class="avatar">{{ estagio.estagiario.iniciais }}</span>
+  {% avatar estagio.estagiario %}
   <div class="info">
     <h1>{% if e_estagiario %}Meu estágio{% else %}{{ estagio.estagiario.nome_completo }}{% endif %}</h1>
     <div class="est-meta">
@@ -19,11 +19,11 @@
   <div class="acoes">
     {% if e_orientador %}
       <a class="btn sec" href="{% url 'editar_estagio' estagio.pk %}">{% icone "editar" %} Editar</a>
-      <a class="btn" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "calendario" %} Agendar visita</a>
+      {% if pode_agenda %}<a class="btn" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "calendario" %} Agendar visita</a>{% endif %}
     {% else %}
       <a class="btn" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "mensagem" %} Pedir visita ou conversa</a>
     {% endif %}
-    <a class="btn sec" href="{% url 'folha_frequencia' estagio.pk %}" target="_blank">{% icone "impressora" %} Frequência</a>
+    <a class="btn sec" href="{% url 'folha_frequencia' estagio.pk %}?mes={{ nav.atual|default:'' }}" target="_blank" rel="noopener">{% icone "impressora" %} Folha de frequência</a>
   </div>
 </div>
 
@@ -52,19 +52,29 @@
         {% if horas.pendentes %}<span><i style="background:#8fb8ea"></i>{{ horas.pendentes|horas }} aguardando</span>{% endif %}
       </div>
       <hr>
+      <div class="previsao{% if horas.apos_termo %} atrasada{% endif %}">
+        {% icone "bandeira" %}
+        <div>
+          <small>Previsão de término</small>
+          <strong>{% if horas.previsao_termino %}{{ horas.previsao_termino|date:"d/m/Y" }}{% elif horas.faltam %}sem escala para calcular{% else %}Carga horária concluída 🎉{% endif %}</strong>
+          {% if horas.previsao_termino %}<small>{{ horas.dias_restantes }} dia{{ horas.dias_restantes|pluralize }} de estágio pela frente{% if horas.previsao_termino|date:"Y-m" != nav.atual %} · <a href="?aba=visao&mes={{ horas.previsao_termino|date:'Y-m' }}">ver no calendário</a>{% endif %}</small>{% endif %}
+          {% if horas.apos_termo %}<small class="alerta-txt">Passa do término do termo ({{ estagio.data_fim|date:"d/m/Y" }}).</small>{% endif %}
+        </div>
+      </div>
+      {% if e_estagiario and horas.previsao_termino %}<p class="muted" style="font-size:.8rem">A previsão muda conforme você marca no calendário os dias em que não vai (ausências, eventos) e os dias extras de reposição. Toque em um dia futuro para planejá-lo.</p>{% endif %}
       <dl class="dl">
         <dt>Faltam</dt><dd>{{ horas.faltam|horas }}</dd>
-        <dt>Previsão de término</dt><dd>{% if horas.previsao_termino %}{{ horas.previsao_termino|date:"d/m/Y" }}{% elif horas.faltam %}—{% else %}Concluído 🎉{% endif %}</dd>
         <dt>Presenças</dt><dd>{{ horas.presencas }}</dd>
         <dt>Ausências informadas</dt><dd>{{ horas.ausencias }}</dd>
         <dt>Faltas</dt><dd>{{ horas.faltas }}</dd>
-        <dt>Período</dt><dd>{{ estagio.data_inicio|date:"d/m/Y" }}{% if estagio.data_fim %} a {{ estagio.data_fim|date:"d/m/Y" }}{% endif %}</dd>
+        <dt>Início</dt><dd>{{ estagio.data_inicio|date:"d/m/Y" }}</dd>
+        {% if estagio.data_fim %}<dt>Término no termo</dt><dd>{{ estagio.data_fim|date:"d/m/Y" }}</dd>{% endif %}
       </dl>
     </div>
     <div class="card">
       <h3>Próximos dias de estágio</h3>
       <ul class="lista">
-        {% for d in proximos %}<li><span class="cresce"><strong>{{ d.data|date:"l" }}</strong>, {{ d.data|date:"d/m" }}</span><span class="muted">{{ d.escala.horario_display|default:d.escala.horas_por_dia|default:"" }}</span></li>
+        {% for d in proximos %}<li><span class="cresce"><strong>{{ d.data|date:"l" }}</strong>, {{ d.data|date:"d/m" }}</span><span class="muted">{% if d.extra %}<span class="etiqueta">extra</span> {% endif %}{% if d.plano %}{{ d.horas_previstas|horas }}{% else %}{{ d.escala.horario_display|default:"" }}{% endif %}</span></li>
         {% empty %}<li class="vazio">Nenhum dia previsto.</li>{% endfor %}
       </ul>
     </div>
@@ -74,10 +84,24 @@
       <ul class="lista">{% for v in proximas_visitas %}<li><a class="cresce" href="{{ v.get_absolute_url }}"><strong>{{ v.data_hora|date:"d/m H:i" }}</strong> — {{ v.assunto }}</a></li>{% endfor %}</ul>
     </div>
     {% endif %}
+    {% if e_orientador or e_supervisor %}
+    <div class="card">
+      <div class="card-cab"><h3>Folhas de frequência</h3><a class="btn sec sm" href="{% url 'frequencias' %}">Todas</a></div>
+      <ul class="lista compacta">
+      {% for i in impressoes %}
+        <li><span class="cresce"><strong>{{ i.mes|date:"M/Y" }}</strong> · {% if i.usuario_id == estagio.estagiario_id %}pelo estagiário{% else %}{{ i.usuario.primeiro_nome }}{% endif %}
+          <small style="display:block">{% if i.impressoes %}impressa {{ i.impressoes }}× · última {{ i.ultima_impressao|date:"d/m H:i" }}{% else %}aberta em {{ i.aberta_em|date:"d/m H:i" }}, sem imprimir{% endif %} · cód. {{ i.codigo }}</small></span>
+          {% if i.impressoes %}<span class="selo confirmado">{{ i.impressoes }}×</span>{% endif %}</li>
+      {% empty %}<li class="vazio">Ninguém abriu a folha ainda.</li>{% endfor %}
+      </ul>
+      <small>O estagiário não vê este quadro.</small>
+    </div>
+    {% endif %}
     {% if estagio.local %}
     <div class="card">
-      <h3>Local de estágio</h3>
+      <h3>Concedente</h3>
       <p class="mb-0"><strong>{{ estagio.local.nome }}</strong></p>
+      {% if estagio.local.razao_social and estagio.local.razao_social != estagio.local.nome %}<p class="muted mb-0" style="font-size:.85rem">{{ estagio.local.razao_social }}</p>{% endif %}
       {% if estagio.local.endereco_completo %}<p class="muted mb-0">{{ estagio.local.endereco_completo }}</p>{% endif %}
       {% if estagio.local.telefone %}<p class="mb-0">{% icone "telefone" %} {{ estagio.local.telefone }}</p>{% endif %}
       {% if estagio.local.link_mapa %}<p class="mt-1 mb-0"><a class="btn sec sm" href="{{ estagio.local.link_mapa }}" target="_blank" rel="noopener">{% icone "pin" %} Ver no mapa</a></p>{% endif %}
@@ -100,7 +124,7 @@
       <tr>
         <td><strong>{{ r.data|date:"d/m/Y" }}</strong><br><small>{{ r.data|date:"l" }}</small></td>
         <td>{{ r.get_situacao_display }}</td>
-        <td>{{ r.hora_chegada|time:"H:i"|default:"" }}{% if r.hora_saida %}–{{ r.hora_saida|time:"H:i" }}{% endif %}</td>
+        <td>{{ r.horario_display }}</td>
         <td>{{ r.horas|horas }}</td>
         <td>{% if r.confirmacao == "CONFIRMADA" %}<span class="selo confirmado">Confirmado</span>{% elif r.confirmacao == "CONTESTADA" %}<span class="selo contestado">Contestado</span>{% else %}<span class="selo aguardando">Pendente</span>{% endif %}{% if r.confirmado_por %}<br><small>{{ r.confirmado_por.primeiro_nome }}</small>{% endif %}</td>
         <td style="max-width:320px">{{ r.diario|default:r.motivo|truncatechars:110 }}{% if r.obs_supervisor %}<br><small><strong>Supervisor:</strong> {{ r.obs_supervisor|truncatechars:80 }}</small>{% endif %}</td>
@@ -117,7 +141,7 @@
   <div class="chat">
     {% for m in mensagens %}
       <div class="msg{% if m.autor == user %} minha{% endif %}">
-        <span class="avatar sm verde" title="{{ m.autor }}">{{ m.autor.iniciais }}</span>
+        {% avatar m.autor "sm verde" %}
         <div>
           <div class="meta">{{ m.autor.primeiro_nome }} · {{ m.autor.get_papel_display }} · {{ m.criado_em|date:"d/m H:i" }}{% if m.privada_orientador %} · <span class="privada">privada</span>{% endif %}</div>
           <div class="bolha-msg">{{ m.texto }}</div>
@@ -165,7 +189,7 @@
 
 {% elif aba == "agenda" %}
 <div class="card">
-  <div class="card-cab"><h2>Visitas e conversas</h2><a class="btn sm" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "mais" %} {% if e_orientador %}Agendar{% else %}Solicitar{% endif %}</a></div>
+  <div class="card-cab"><h2>Visitas e conversas</h2>{% if pode_agenda %}<a class="btn sm" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "mais" %} {% if e_orientador %}Agendar{% else %}Solicitar{% endif %}</a>{% endif %}</div>
   {% include "core/_lista_agendamentos.html" with itens=agendamentos %}
 </div>
 
@@ -177,14 +201,14 @@
     <ul class="lista">
     {% for e in escalas %}
       <li>
-        <span class="cresce"><strong>{{ e.dias_display }}</strong>{% if e.horario_display %} · {{ e.horario_display }}{% endif %} · {{ e.horas_por_dia|horas }}/dia
+        <span class="cresce"><strong>{{ e.dias_display }}</strong> · {{ e.horas_por_dia|horas }}/dia{% if e.horario_display %}<br><small>{{ e.horario_display }}{% if e.tem_intervalo %} (com intervalo){% endif %}</small>{% endif %}
           <small style="display:block">a partir de {{ e.vigente_desde|date:"d/m/Y" }}{% if e == escala_atual %} · <strong style="color:var(--verde)">vigente</strong>{% elif e.vigente_desde > escala_atual.vigente_desde or not escala_atual %} · <strong style="color:var(--laranja)">futura</strong>{% endif %}{% if e.criado_por %} · por {{ e.criado_por.primeiro_nome }}{% endif %}</small></span>
-        {% if e_orientador %}<form method="post" action="{% url 'excluir_escala' e.pk %}" data-confirmar="Remover esta escala?">{% csrf_token %}<button class="btn perigo sm" type="submit">{% icone "lixo" %}</button></form>{% endif %}
+        {% if pode_escalas %}<form method="post" action="{% url 'excluir_escala' e.pk %}" data-confirmar="Remover esta escala?">{% csrf_token %}<button class="btn perigo sm" type="submit">{% icone "lixo" %}</button></form>{% endif %}
       </li>
     {% endfor %}
     </ul>
   </div>
-  {% if e_orientador %}
+  {% if pode_escalas %}
   <div class="card destaque">
     <h3>Mudar dias a partir de uma data</h3>
     <form method="post" action="{% url 'nova_escala' estagio.pk %}">{% csrf_token %}
