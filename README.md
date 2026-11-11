@@ -64,13 +64,15 @@ O serviço sobe com **Gunicorn na porta 8000** dentro do container. O banco (SQL
 
 1. Suba este projeto para um repositório Git (privado).
 2. No Coolify: **New Resource → Docker Compose** (ou *Dockerfile*) apontando para o repositório.
-3. Em *Environment Variables*, cadastre as variáveis do `.env.example`. As principais:
+3. Em *Environment Variables* (no modo Compose elas já aparecem listadas), preencha:
    - `SECRET_KEY`: uma chave longa e aleatória
-   - `ALLOWED_HOSTS` e `CSRF_TRUSTED_ORIGINS`: o domínio que você vai usar no túnel
+   - `ALLOWED_HOSTS`: o domínio do túnel, sem `https://` (ex.: `estagio.seudominio.com.br`)
+   - `CSRF_TRUSTED_ORIGINS`: o mesmo domínio, com `https://`
    - `SENHA_PADRAO`: a senha inicial das contas
    - `ADMIN_NOME`: seu nome completo, que cria o primeiro orientador administrador
+   - `PORTA`: a porta livre do servidor que o túnel vai usar (ex.: `8010`)
 4. Garanta que o volume `/data` é persistente. No modo Compose isso já vem configurado.
-5. Faça o deploy. No Cloudflare Tunnel, aponte o hostname para `http://<host>:8000` (ou para a porta definida em `PORTA`).
+5. Faça o deploy. No Cloudflare Tunnel, aponte o hostname para `http://localhost:<PORTA>` (ou o IP da VPS, se o cloudflared rodar em outra máquina).
 6. Entre com o usuário gerado a partir de `ADMIN_NOME` (aparece no log do container) e a senha padrão. O sistema vai pedir para trocar a senha.
 
 Para criar outros orientadores depois: entre como administrador → *Contas* → *+ Orientador*, ou pelo terminal do container:
