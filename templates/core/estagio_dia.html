@@ -15,10 +15,11 @@
     <div class="card">
       <h2>Situação do dia</h2>
       <dl class="dl">
-        <dt>Previsto na escala</dt><dd>{% if status.previsto %}Sim{% if status.escala.horario_display %} · {{ status.escala.horario_display }}{% endif %} · {{ status.escala.horas_por_dia|horas }}{% elif status.motivo_sem_estagio %}Não — {{ status.motivo_sem_estagio }}{% else %}Não{% endif %}</dd>
+        <dt>Previsto</dt><dd>{% if status.plano %}Sim, planejado · {{ status.plano.horas|horas }}{% if status.plano.motivo %} · {{ status.plano.motivo }}{% endif %}{% elif status.previsto %}Sim{% if status.escala.horario_display %} · {{ status.escala.horario_display }}{% endif %} · {{ status.escala.horas_por_dia|horas }}{% elif status.motivo_sem_estagio %}Não — {{ status.motivo_sem_estagio }}{% else %}Não{% endif %}</dd>
         {% if registro %}
           <dt>Registro</dt><dd>{{ registro.get_situacao_display }}</dd>
-          {% if registro.hora_chegada %}<dt>Chegada</dt><dd>{{ registro.hora_chegada|time:"H:i" }}</dd>{% endif %}
+          {% if registro.hora_chegada %}<dt>Entrada</dt><dd>{{ registro.hora_chegada|time:"H:i" }}</dd>{% endif %}
+          {% if registro.saida_intervalo %}<dt>Intervalo</dt><dd>{{ registro.saida_intervalo|time:"H:i" }}{% if registro.volta_intervalo %} às {{ registro.volta_intervalo|time:"H:i" }}{% endif %}</dd>{% endif %}
           {% if registro.hora_saida %}<dt>Saída</dt><dd>{{ registro.hora_saida|time:"H:i" }}</dd>{% endif %}
           <dt>Horas</dt><dd>{{ registro.horas|horas }}</dd>
           <dt>Validação</dt><dd>{{ registro.get_confirmacao_display }}{% if registro.confirmado_por %} — {{ registro.confirmado_por }} em {{ registro.confirmado_em|date:"d/m H:i" }}{% endif %}</dd>
@@ -54,6 +55,37 @@
     </div>
   </div>
   <div>
+    {% if pode_planejar %}
+    <div class="card laranja">
+      <h3>{% icone "bandeira" %} Planejar este dia</h3>
+      <p class="muted" style="font-size:.88rem">Previsão de término agora: <strong>{{ previsao|date:"d/m/Y"|default:"—" }}</strong>. O que for marcado aqui muda a previsão.</p>
+      {% if registro and registro.situacao == "AUSENCIA" %}
+        <div class="caixa-alerta">Ausência informada{% if registro.motivo %}: {{ registro.motivo }}{% endif %}</div>
+        <form method="post" class="mt-1">{% csrf_token %}<button class="btn sec bloco" name="planejar" value="cancelar_ausencia" type="submit">Cancelar a ausência — vou estagiar</button></form>
+      {% elif not registro %}
+        {% if status.plano %}
+          <div class="caixa-info">Planejado: <strong>{{ status.plano.horas|horas }}</strong>{% if status.plano.motivo %} · {{ status.plano.motivo }}{% endif %}</div>
+        {% endif %}
+        <form method="post" class="mt-1">{% csrf_token %}
+          {% with form=plano_form %}{% include "core/_form.html" %}{% endwith %}
+          <div class="acoes">
+            <button class="btn" name="planejar" value="salvar" type="submit">{% if status.previsto and not status.extra %}Salvar carga deste dia{% else %}Vou estagiar neste dia{% endif %}</button>
+            {% if status.plano %}<button class="btn perigo" name="planejar" value="remover" type="submit">Remover planejamento</button>{% endif %}
+          </div>
+        </form>
+        {% if e_estagiario and status.previsto and not status.extra %}
+        <details class="mt-1">
+          <summary><strong>Não vou estagiar neste dia</strong></summary>
+          <form method="post" action="{% url 'informar_ausencia' estagio.pk %}" class="mt-1">{% csrf_token %}
+            <input type="hidden" name="data" value="{{ dia|date:'Y-m-d' }}"><input type="hidden" name="next" value="{{ request.path }}">
+            <div class="campo"><label>Motivo</label><textarea name="motivo" rows="2" required placeholder="Ex.: evento da escola, prova, consulta…"></textarea></div>
+            <button class="btn sec" type="submit">Avisar supervisor e orientador</button>
+          </form>
+        </details>
+        {% endif %}
+      {% endif %}
+    </div>
+    {% endif %}
     {% if lancamento_form %}
     <div class="card destaque">
       <h3>{% if registro %}Ajustar registro{% else %}Lançar registro{% endif %}</h3>

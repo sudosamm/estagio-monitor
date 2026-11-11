@@ -1,5 +1,5 @@
 <a class="aluno-card {{ e.st.codigo }}" href="{{ e.get_absolute_url }}">
-  <span class="avatar sm verde">{{ e.estagiario.iniciais }}</span>
+  {% load ui %}{% avatar e.estagiario "sm verde" %}
   <span class="cresce"><strong>{{ e.estagiario }}</strong><small>{{ e.local|default:"sem local" }}{% if e.st.registro.hora_chegada %} · {{ e.st.registro.hora_chegada|time:"H:i" }}{% endif %}{% if e.st.registro.motivo %} · {{ e.st.registro.motivo|truncatechars:40 }}{% endif %}</small></span>
   {% if e.st.codigo == "aguardando" %}<span class="selo aguardando" title="Aguardando supervisor">aguard.</span>{% endif %}
 </a>

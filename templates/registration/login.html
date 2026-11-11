@@ -26,6 +26,7 @@
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn grande bloco" type="submit">Entrar</button>
       <p class="muted mt-1" style="font-size:.85rem">Esqueceu a senha? Peça ao seu orientador para redefini-la.</p>
+      {% if CAPTACAO_ABERTA %}<div class="caixa-info mt-1">Sua empresa ou órgão quer receber estagiários? <a href="{% url 'candidatura_publica' %}"><strong>Cadastre-se como concedente</strong></a>.</div>{% endif %}
     </form>
   </section>
 </div>

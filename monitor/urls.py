@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
-from core.views import agenda, comum, estagio, orientador, supervisor
+from core.views import agenda, captacao, comum, estagio, frequencia, orientador, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
@@ -14,6 +14,10 @@ urlpatterns = [
     path("notificacoes/", comum.notificacoes, name="notificacoes"),
     path("notificacoes/lidas/", comum.notificacoes_marcar_lidas, name="notificacoes_lidas"),
     path("notificacoes/<int:pk>/", comum.notificacao_abrir, name="notificacao_abrir"),
+    path("usuarios/<int:pk>/foto/", comum.foto_usuario, name="foto_usuario"),
+    path("usuarios/<int:pk>/curriculo/", comum.curriculo_usuario, name="curriculo_usuario"),
+    path("talentos/", comum.banco_talentos, name="banco_talentos"),
+    path("folha/logo/", comum.logo_folha, name="logo_folha"),
     path("arquivos/<int:pk>/", comum.baixar_documento, name="baixar_documento"),
     path("arquivos/<int:pk>/excluir/", comum.excluir_documento, name="excluir_documento"),
     # estágio (todos os papéis)
@@ -24,7 +28,9 @@ urlpatterns = [
     path("estagios/<int:pk>/dia/<str:data>/", estagio.estagio_dia, name="estagio_dia"),
     path("estagios/<int:pk>/mensagens/", estagio.enviar_mensagem, name="enviar_mensagem"),
     path("estagios/<int:pk>/arquivos/", estagio.enviar_documento, name="enviar_documento"),
-    path("estagios/<int:pk>/frequencia/", estagio.folha_frequencia, name="folha_frequencia"),
+    path("estagios/<int:pk>/frequencia/", frequencia.folha_frequencia, name="folha_frequencia"),
+    path("frequencia/impressa/", frequencia.marcar_impressao, name="marcar_impressao"),
+    path("frequencias/", frequencia.frequencias_painel, name="frequencias"),
     path("estagios/<int:pk>/editar/", estagio.editar_estagio, name="editar_estagio"),
     path("estagios/<int:pk>/escalas/", estagio.nova_escala, name="nova_escala"),
     path("escalas/<int:pk>/excluir/", estagio.excluir_escala, name="excluir_escala"),
@@ -37,12 +43,20 @@ urlpatterns = [
     path("contas/", orientador.usuarios, name="usuarios"),
     path("contas/supervisores/novos/", orientador.criar_supervisores, name="criar_supervisores"),
     path("contas/orientadores/novo/", orientador.criar_orientador, name="criar_orientador"),
+    path("contas/coordenadores/novo/", orientador.criar_coordenador, name="criar_coordenador"),
     path("contas/<int:pk>/", orientador.editar_usuario, name="editar_usuario"),
     path("contas/<int:pk>/senha-padrao/", orientador.redefinir_senha, name="redefinir_senha"),
     path("cursos/", orientador.cursos, name="cursos"),
     path("cursos/<int:pk>/", orientador.cursos, name="curso_editar"),
-    path("locais/", orientador.locais, name="locais"),
-    path("locais/<int:pk>/", orientador.locais, name="local_editar"),
+    path("concedentes/", orientador.locais, name="locais"),
+    path("concedentes/nova/", orientador.local_editar, name="local_novo"),
+    path("concedentes/<int:pk>/", orientador.local_editar, name="local_editar"),
+    path("configuracoes/", orientador.configuracoes, name="configuracoes"),
+    # captação de concedentes
+    path("seja-concedente/", captacao.candidatura_publica, name="candidatura_publica"),
+    path("captacao/", captacao.captacao_lista, name="captacao"),
+    path("captacao/<int:pk>/", captacao.captacao_detalhe, name="captacao_detalhe"),
+    path("avisos/<int:pk>/enviado/", captacao.aviso_enviado, name="aviso_enviado"),
     path("dias-sem-estagio/", orientador.dias_sem_estagio, name="dias_sem_estagio"),
     path("documentos/", orientador.documentos_gerais, name="documentos_gerais"),
     # supervisor

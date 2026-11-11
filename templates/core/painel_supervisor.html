@@ -10,7 +10,7 @@
     <div class="quadro">
     {% for e in estagios %}
       <a class="aluno-card {{ e.st.codigo }}" href="{{ e.get_absolute_url }}">
-        <span class="avatar sm verde">{{ e.estagiario.iniciais }}</span>
+        {% avatar e.estagiario "sm verde" %}
         <span class="cresce"><strong>{{ e.estagiario }}</strong><small>{% if e.st.registro.hora_chegada %}chegou {{ e.st.registro.hora_chegada|time:"H:i" }} · {% endif %}{{ e.st.rotulo|default:"sem estágio hoje" }}</small></span>
       </a>
     {% empty %}<p class="vazio">Nenhum estagiário vinculado a você ainda.</p>{% endfor %}

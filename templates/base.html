@@ -30,12 +30,12 @@
       <div class="usuario-menu">
         <a class="sino" href="{% url 'notificacoes' %}" title="Notificações">{% icone "sino" %}{% if notificacoes_nao_lidas %}<span class="bolha">{{ notificacoes_nao_lidas }}</span>{% endif %}</a>
         <details class="drop">
-          <summary><span class="avatar">{{ user.iniciais }}</span></summary>
+          <summary>{% avatar user %}</summary>
           <div class="drop-menu">
             <div class="info"><strong>{{ user.nome_completo }}</strong><small>{{ user.username }} · {{ user.get_papel_display }}</small></div>
             <a href="{% url 'perfil' %}">Meus dados</a>
             <a href="{% url 'trocar_senha' %}">Alterar senha</a>
-            {% if user.is_superuser %}<a href="{% url 'admin:index' %}">Administração</a>{% endif %}
+            {% if user.is_superuser %}<a href="{% url 'configuracoes' %}">Configurações</a><a href="{% url 'admin:index' %}">Administração</a>{% endif %}
             <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
           </div>
         </details>
@@ -48,19 +48,24 @@
   {% with n=request.resolver_match.url_name %}
   <nav class="navegacao">
     <div class="container">
-      {% if user.is_orientador or user.is_superuser %}
+      {% if user.is_gestor %}
         <a href="{% url 'painel' %}" class="{% if n == 'painel' %}ativo{% endif %}">Painel</a>
         <a href="{% url 'estagios_lista' %}" class="{% if n in 'estagios_lista,estagio_detalhe,estagio_dia,criar_estagiarios,editar_estagio' %}ativo{% endif %}">Estagiários</a>
-        <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Agenda</a>
-        <a href="{% url 'escala_lote' %}" class="{% if n == 'escala_lote' %}ativo{% endif %}">Alterar dias</a>
-        <a href="{% url 'documentos_gerais' %}" class="{% if n == 'documentos_gerais' %}ativo{% endif %}">Arquivos</a>
-        <a href="{% url 'usuarios' %}" class="{% if n in 'usuarios,editar_usuario,criar_supervisores,criar_orientador' %}ativo{% endif %}">Contas</a>
-        <a href="{% url 'locais' %}" class="{% if n in 'locais,local_editar' %}ativo{% endif %}">Locais</a>
+        {% if user|pode:"agenda" %}<a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Agenda</a>{% endif %}
+        {% if user|pode:"escalas" %}<a href="{% url 'escala_lote' %}" class="{% if n == 'escala_lote' %}ativo{% endif %}">Alterar dias</a>{% endif %}
+        {% if user|pode:"candidaturas" %}<a href="{% url 'captacao' %}" class="{% if n in 'captacao,captacao_detalhe' %}ativo{% endif %}">Captação{% if candidaturas_pendentes %} <span class="contador">{{ candidaturas_pendentes }}</span>{% endif %}</a>{% endif %}
+        <a href="{% url 'frequencias' %}" class="{% if n == 'frequencias' %}ativo{% endif %}">Frequências</a>
+        {% if user|pode:"arquivos" %}<a href="{% url 'documentos_gerais' %}" class="{% if n == 'documentos_gerais' %}ativo{% endif %}">Arquivos</a>{% endif %}
+        <a href="{% url 'usuarios' %}" class="{% if n in 'usuarios,editar_usuario,criar_supervisores,criar_orientador,criar_coordenador' %}ativo{% endif %}">Contas</a>
+        <a href="{% url 'locais' %}" class="{% if n in 'locais,local_editar,local_novo' %}ativo{% endif %}">Concedentes</a>
         <a href="{% url 'cursos' %}" class="{% if n in 'cursos,curso_editar' %}ativo{% endif %}">Cursos</a>
-        <a href="{% url 'dias_sem_estagio' %}" class="{% if n == 'dias_sem_estagio' %}ativo{% endif %}">Feriados</a>
+        {% if user|pode:"feriados" %}<a href="{% url 'dias_sem_estagio' %}" class="{% if n == 'dias_sem_estagio' %}ativo{% endif %}">Feriados</a>{% endif %}
+        {% if CONFIG.banco_talentos_habilitado or CONFIG.curriculos_habilitados %}<a href="{% url 'banco_talentos' %}" class="{% if n == 'banco_talentos' %}ativo{% endif %}">Talentos</a>{% endif %}
       {% elif user.is_supervisor %}
         <a href="{% url 'painel_supervisor' %}" class="{% if n in 'painel_supervisor,estagio_detalhe,estagio_dia' %}ativo{% endif %}">Meus estagiários</a>
         <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Visitas e conversas</a>
+        <a href="{% url 'frequencias' %}" class="{% if n == 'frequencias' %}ativo{% endif %}">Frequências</a>
+        {% if CONFIG.banco_talentos_habilitado %}<a href="{% url 'banco_talentos' %}" class="{% if n == 'banco_talentos' %}ativo{% endif %}">Banco de talentos</a>{% endif %}
       {% else %}
         <a href="{% url 'inicio' %}" class="{% if n in 'inicio,estagio_detalhe,estagio_dia' %}ativo{% endif %}">Meu estágio</a>
         <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Visitas e conversas</a>

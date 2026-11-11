@@ -10,17 +10,17 @@
   <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ f.q }}" placeholder="Nome ou usuário"></div>
   <div><label class="rotulo">Curso</label><select name="curso"><option value="">Todos</option>{% for c in cursos %}<option value="{{ c.pk }}"{% if f.curso == c.pk|stringformat:"s" %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
   <div><label class="rotulo">Turma</label><select name="turma"><option value="">Todas</option>{% for t in turmas %}<option{% if f.turma == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
-  <div><label class="rotulo">Local</label><select name="local"><option value="">Todos</option>{% for l in locais %}<option value="{{ l.pk }}"{% if f.local == l.pk|stringformat:"s" %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+  <div><label class="rotulo">Concedente</label><select name="local"><option value="">Todos</option>{% for l in locais %}<option value="{{ l.pk }}"{% if f.local == l.pk|stringformat:"s" %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
   <div><label class="rotulo">Situação</label><select name="situacao"><option value="">Ativos</option><option value="inativos"{% if f.situacao == "inativos" %} selected{% endif %}>Encerrados</option></select></div>
   <button class="btn" type="submit">Filtrar</button>
 </form>
 <div class="card">
   <div class="tabela-wrap"><table class="tabela">
-    <thead><tr><th>Estagiário</th><th>Local / supervisor</th><th>Dias</th><th>Hoje</th><th style="min-width:180px">Horas</th></tr></thead>
+    <thead><tr><th>Estagiário</th><th>Concedente / supervisor</th><th>Dias</th><th>Hoje</th><th style="min-width:180px">Horas</th></tr></thead>
     <tbody>
     {% for e in estagios %}
       <tr>
-        <td><a class="pessoa" href="{{ e.get_absolute_url }}"><span class="avatar sm verde">{{ e.estagiario.iniciais }}</span><span><strong>{{ e.estagiario }}</strong><small>{{ e.estagiario.username }} · {{ e.curso }}{% if e.turma %} · {{ e.turma }}{% endif %}</small></span></a></td>
+        <td><a class="pessoa" href="{{ e.get_absolute_url }}">{% avatar e.estagiario "sm verde" %}<span><strong>{{ e.estagiario }}</strong><small>{{ e.estagiario.username }} · {{ e.curso }}{% if e.turma %} · {{ e.turma }}{% endif %}</small></span></a></td>
         <td>{{ e.local|default:"—" }}<br><small>{{ e.supervisor|default:"sem supervisor" }}</small></td>
         <td><small>{% with esc=e.st.escala %}{{ esc.dias_display|default:"—" }}{% endwith %}</small></td>
         <td>{% selo e.st.codigo e.st.rotulo|default:"—" %}</td>

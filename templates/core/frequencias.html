@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Folhas de frequência{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><h1>Folhas de frequência</h1><p>Quem já abriu e imprimiu a folha de {{ nav.titulo|lower }}. Os estagiários não veem esta página.</p></div>
+  <div class="acoes">
+    <a class="btn sec sm" href="?mes={{ nav.anterior }}" aria-label="Mês anterior">{% icone "esq" %}</a>
+    <strong>{{ nav.titulo }}</strong>
+    <a class="btn sec sm" href="?mes={{ nav.proximo }}" aria-label="Próximo mês">{% icone "dir" %}</a>
+  </div>
+</div>
+<div class="kpis">
+  <div class="kpi vermelho"><div class="valor">{{ contagem.nao }}</div><div class="rotulo">não abriram</div></div>
+  <div class="kpi amarelo"><div class="valor">{{ contagem.aberta }}</div><div class="rotulo">abriram sem imprimir</div></div>
+  <div class="kpi"><div class="valor">{{ contagem.impressa }}</div><div class="rotulo">imprimiram</div></div>
+</div>
+<div class="grade grade-lado">
+  <div class="card">
+    <div class="tabela-wrap"><table class="tabela">
+      <thead><tr><th>Estagiário</th><th>Situação</th><th>Impressões</th><th>Última impressão</th></tr></thead>
+      <tbody>
+      {% for e in estagios %}
+        <tr>
+          <td><a class="pessoa" href="{{ e.get_absolute_url }}">{% avatar e.estagiario "sm verde" %}<span><strong>{{ e.estagiario }}</strong><small>{{ e.local|default:"sem concedente" }}</small></span></a></td>
+          <td>{% if e.situacao_folha == "impressa" %}<span class="selo confirmado">Imprimiu</span>{% elif e.situacao_folha == "aberta" %}<span class="selo hoje">Abriu ({{ e.aberturas_aluno }}×), não imprimiu</span>{% else %}<span class="selo falta">Não abriu</span>{% endif %}</td>
+          <td>{{ e.impressoes_aluno }}{% if e.impressoes_outros %} <small>+ {{ e.impressoes_outros }} por orientador/supervisor</small>{% endif %}</td>
+          <td>{{ e.ultima_aluno|date:"d/m H:i"|default:"—" }}</td>
+        </tr>
+      {% empty %}<tr><td colspan="4" class="vazio">Nenhum estágio ativo.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  <div>
+    <div class="card destaque">
+      <h3>Conferir uma folha impressa</h3>
+      <p class="muted" style="font-size:.85rem">Toda folha sai com um código no rodapé. Digite-o para saber quem a emitiu e quando.</p>
+      <form method="get" class="flex"><input type="hidden" name="mes" value="{{ nav.atual }}"><input type="search" name="codigo" value="{{ busca }}" placeholder="Ex.: K7QW2M9A" maxlength="8" style="text-transform:uppercase"><button class="btn" type="submit">Buscar</button></form>
+      {% if busca %}
+        {% if encontrado %}
+          <dl class="dl mt-1">
+            <dt>Estagiário</dt><dd>{{ encontrado.estagio.estagiario }}</dd>
+            <dt>Mês da folha</dt><dd>{{ encontrado.mes|date:"F/Y" }}</dd>
+            <dt>Emitida por</dt><dd>{{ encontrado.usuario }} ({{ encontrado.usuario.get_papel_display|lower }})</dd>
+            <dt>Aberta em</dt><dd>{{ encontrado.aberta_em|date:"d/m/Y H:i" }}</dd>
+            <dt>Impressões</dt><dd>{{ encontrado.impressoes }}{% if encontrado.ultima_impressao %} · última {{ encontrado.ultima_impressao|date:"d/m/Y H:i" }}{% endif %}</dd>
+          </dl>
+        {% else %}<p class="caixa-alerta mt-1">Código não encontrado entre os seus estagiários.</p>{% endif %}
+      {% endif %}
+    </div>
+    <div class="card">
+      <h3>Histórico do mês</h3>
+      <ul class="lista compacta">
+      {% for i in detalhes %}
+        <li><span class="cresce"><strong>{{ i.estagio.estagiario.primeiro_nome }}</strong>{% if i.usuario_id != i.estagio.estagiario_id %} <small>(por {{ i.usuario.primeiro_nome }})</small>{% endif %}
+          <small style="display:block">{{ i.aberta_em|date:"d/m H:i" }} · {% if i.impressoes %}impressa {{ i.impressoes }}×{% else %}só abriu{% endif %} · {{ i.codigo }}</small></span></li>
+      {% empty %}<li class="vazio">Nada neste mês.</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

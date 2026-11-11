@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Banco de talentos{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><h1>Banco de talentos</h1><p>Estagiários que autorizaram mostrar o perfil às concedentes.</p></div>
+</div>
+{% if not config.banco_talentos_habilitado %}
+<div class="caixa-alerta" style="margin-bottom:1rem">O banco de talentos está <strong>fechado</strong>: só orientadores veem esta página.{% if user.is_superuser %} Abra para as concedentes em <a href="{% url 'configuracoes' %}">Configurações</a>.{% endif %}</div>
+{% endif %}
+<form class="filtros card" method="get">
+  <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ q }}" placeholder="Nome ou habilidade (ex.: Excel)"></div>
+  <div><label class="rotulo">Curso</label><select name="curso"><option value="">Todos</option>{% for c in cursos %}<option value="{{ c.pk }}"{% if curso == c.pk|stringformat:"s" %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+  <button class="btn" type="submit">Filtrar</button>
+</form>
+<div class="talentos">
+{% for p in pessoas %}
+  <article class="card talento">
+    <div class="talento-cab">{% avatar p "lg" %}<div><h3>{{ p.nome_completo }}</h3><small>{{ p.curso_atual|default:"" }}{% if p.turma_atual %} · {{ p.turma_atual }}{% endif %}</small></div></div>
+    {% if p.habilidades_lista %}<div class="tags">{% for h in p.habilidades_lista %}<span class="etiqueta">{{ h }}</span>{% endfor %}</div>{% endif %}
+    {% if p.apresentacao %}<p class="quebra">{{ p.apresentacao|truncatechars:280 }}</p>{% else %}<p class="muted">Sem apresentação.</p>{% endif %}
+    {% if p.curriculo %}<a class="btn sec sm" href="{% url 'curriculo_usuario' p.pk %}" target="_blank" rel="noopener">{% icone "arquivo" %} Ver currículo</a>{% endif %}
+  </article>
+{% empty %}
+  <div class="card vazio">Nenhum perfil {% if q or curso %}encontrado com esses filtros{% else %}disponível ainda. Os estagiários precisam marcar “Mostrar meu perfil às concedentes” em Meus dados{% endif %}.</div>
+{% endfor %}
+</div>
+{% if user.is_supervisor %}<p class="muted mt-1" style="font-size:.85rem">Gostou de algum perfil? Fale com o orientador de estágio da escola.</p>{% endif %}
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Captação de concedentes{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><h1>Captação de concedentes</h1><p>Empresas e órgãos que se cadastraram para receber estagiários em {{ ano }}.</p></div>
+  <form method="get" class="flex"><select name="ano" onchange="this.form.submit()">{% for a in anos %}<option{% if a == ano %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></form>
+</div>
+<div class="card {% if config.captacao_disponivel %}destaque{% else %}laranja{% endif %}">
+  {% if config.captacao_disponivel %}
+    <p class="mb-0"><strong>Inscrições abertas</strong> para {{ config.ano_captacao_efetivo }}{% if config.captacao_prazo %} até {{ config.captacao_prazo|date:"d/m/Y" }}{% endif %}. Divulgue este link para as concedentes:</p>
+    <div class="flex mt-1"><input type="text" readonly value="{{ link_publico }}" id="link-publico" onclick="this.select()"><button class="btn sec" type="button" data-copiar="#link-publico" data-sem-trava="1">Copiar</button></div>
+  {% else %}
+    <p class="mb-0"><strong>Inscrições fechadas.</strong> {% if user.is_superuser %}Abra a captação em <a href="{% url 'configuracoes' %}">Configurações</a> para liberar a página pública.{% else %}O administrador pode abrir a captação nas configurações.{% endif %}</p>
+  {% endif %}
+</div>
+<div class="grade grade-lado">
+  <div>
+    <nav class="abas" style="margin-top:0">
+      <a href="?ano={{ ano }}" class="{% if not status %}ativo{% endif %}">Todas</a>
+      {% for v, r in status_choices %}<a href="?ano={{ ano }}&status={{ v }}" class="{% if status == v %}ativo{% endif %}">{{ r }} ({{ contagem|get_item:v }})</a>{% endfor %}
+    </nav>
+    <div class="card">
+      <ul class="lista">
+      {% for c in candidaturas %}
+        <li><span class="avatar sm verde">{% icone "predio" %}</span>
+          <a class="cresce" href="{{ c.get_absolute_url }}" style="text-decoration:none;color:inherit"><strong>{{ c.nome }}</strong>
+            <small style="display:block">{{ c.cidade|default:"" }}{% if c.cidade %} · {% endif %}{% for v in c.vagas.all %}{{ v.quantidade }} {{ v.curso.nome }}{% if not forloop.last %}, {% endif %}{% endfor %}</small>
+            <small style="display:block">Enviado em {{ c.criado_em|date:"d/m/Y" }} por {{ c.contato_nome }}{% if c.analisado_por %} · analisado por {{ c.analisado_por.primeiro_nome }}{% endif %}</small></a>
+          <span class="selo {% if c.status == 'APROVADA' %}confirmado{% elif c.status == 'RECUSADA' %}falta{% else %}hoje{% endif %}">{{ c.get_status_display }}</span></li>
+      {% empty %}<li class="vazio">Nenhum cadastro{% if status %} nesta situação{% endif %} para {{ ano }}.</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="card destaque">
+    <h3>Vagas por curso em {{ ano }}</h3>
+    <div class="tabela-wrap"><table class="tabela">
+      <thead><tr><th>Curso</th><th title="De concedentes aprovadas">Aprovadas</th><th title="Aguardando análise">Em análise</th></tr></thead>
+      <tbody>{% for r in resumo %}
+        <tr><td>{{ r.curso }}<br><small>{{ r.concedentes }} concedente{{ r.concedentes|pluralize }}</small></td><td><strong>{{ r.aprovadas }}</strong></td><td>{{ r.pendentes }}</td></tr>
+      {% empty %}<tr><td colspan="3" class="vazio">Cadastre os cursos primeiro.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}
