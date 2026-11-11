@@ -34,6 +34,9 @@ ICONES = {
     "editar": '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
     "lixo": '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
     "escola": '<path d="M2 9 12 4l10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
+    "bandeira": '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+    "estrela": '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+    "predio": '<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1M10 21v-3h4v3"/>',
 }
 
 
@@ -54,6 +57,34 @@ def horas(valor):
     v = Decimal(valor).normalize()
     texto = f"{v:f}".replace(".", ",")
     return f"{texto}h"
+
+
+@register.simple_tag
+def avatar(usuario, classes=""):
+    """Foto de perfil, ou as iniciais quando não há foto."""
+    if usuario and getattr(usuario, "foto", None):
+        return format_html('<img class="avatar {}" src="{}" alt="Foto de {}" loading="lazy">',
+                           classes, usuario.foto_url, usuario.primeiro_nome)
+    return format_html('<span class="avatar {}">{}</span>', classes, usuario.iniciais if usuario else "?")
+
+
+@register.filter
+def horas_txt(valor):
+    """Decimal('8.00') -> '8'"""
+    if valor in (None, ""):
+        return ""
+    return f"{Decimal(valor).normalize():f}".replace(".", ",")
+
+
+@register.filter
+def get_item(dicionario, chave):
+    return dicionario.get(chave) if dicionario else None
+
+
+@register.filter
+def pode(usuario, permissao):
+    """{% if user|pode:"agenda" %}"""
+    return bool(usuario and usuario.is_authenticated and usuario.pode(permissao))
 
 
 @register.simple_tag

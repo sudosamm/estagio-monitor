@@ -12,6 +12,11 @@ from ..models import Agendamento
 from ..services import estagios_visiveis, notificar
 
 
+def _sem_agenda(user):
+    """Gestores sem a permissão “agenda” (ex.: coordenador de curso) não usam a agenda."""
+    return user.is_gestor and not user.pode("agenda")
+
+
 def _agendamentos_de(user):
     qs = Agendamento.objects.select_related("solicitante", "local", "orientador").prefetch_related("estagios__estagiario")
     if user.is_superuser:
@@ -23,6 +28,8 @@ def _agendamentos_de(user):
 
 @login_required
 def agendamentos(request):
+    if _sem_agenda(request.user):
+        raise PermissionDenied
     qs = _agendamentos_de(request.user)
     agora = timezone.now()
     return render(request, "core/agendamentos.html", {
@@ -38,6 +45,8 @@ def agendamentos(request):
 @login_required
 def novo_agendamento(request):
     user = request.user
+    if _sem_agenda(user):
+        raise PermissionDenied
     estagios = estagios_visiveis(user).filter(ativo=True)
     inicial = {}
     if request.GET.get("estagio"):
@@ -79,6 +88,8 @@ def novo_agendamento(request):
 
 @login_required
 def agendamento_detalhe(request, pk):
+    if _sem_agenda(request.user):
+        raise PermissionDenied
     ag = get_object_or_404(_agendamentos_de(request.user), pk=pk)
     user = request.user
     e_orientador = user.is_superuser or ag.orientador_id == user.pk

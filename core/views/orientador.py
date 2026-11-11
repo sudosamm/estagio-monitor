@@ -11,14 +11,16 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..forms import (
-    CursoForm, DiaSemEstagioForm, DocumentoGeralForm, EscalaLoteForm, EstagiariosLoteForm, LocalForm,
+    ConfiguracaoForm, CoordenadorForm, CursoForm, DiaSemEstagioForm, DocumentoGeralForm, EscalaLoteForm, EstagiariosLoteForm, LocalForm,
     OrientadorForm, SupervisoresLoteForm, UsuarioEditForm,
 )
-from ..models import Agendamento, Curso, DiaSemEstagio, Documento, Escala, Estagio, LocalEstagio, Registro, Usuario
+from ..models import (
+    Agendamento, Configuracao, Curso, DiaSemEstagio, Documento, Escala, Estagio, LocalEstagio, Registro, Usuario,
+)
 from ..services import (
     criar_usuario, estagios_visiveis, notificar, redefinir_senha_padrao, resumo_horas, status_hoje, status_periodo,
 )
-from .base import orientador_requerido
+from .base import orientador_requerido, permissao
 
 
 def _meus_estagios(request, ativos=True):
@@ -94,9 +96,11 @@ def estagios_lista(request):
 # ----------------------------------------------------------------- contas
 
 
-@orientador_requerido
+@permissao("estagiarios")
 def criar_estagiarios(request):
-    form = EstagiariosLoteForm(request.POST or None, initial={"data_inicio": timezone.localdate()})
+    form = EstagiariosLoteForm(request.POST or None, usuario=request.user, initial={"data_inicio": timezone.localdate(), "dias": [0, 1, 2, 3, 4],
+                                                              "horario_entrada": "07:00", "saida_intervalo": "11:00",
+                                                              "volta_intervalo": "13:00", "horario_saida": "17:00"})
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         criados = []
@@ -104,7 +108,8 @@ def criar_estagiarios(request):
             for nome, matricula in d["nomes"]:
                 user = criar_usuario(nome, Usuario.Papel.ESTAGIARIO, request.user, matricula=matricula)
                 estagio = Estagio.objects.create(
-                    estagiario=user, orientador=request.user, supervisor=d["supervisor"], curso=d["curso"],
+                    estagiario=user, orientador=d.get("orientador") or request.user, supervisor=d["supervisor"],
+                    curso=d["curso"],
                     turma=d["turma"], local=d["local"], setor=d["setor"], data_inicio=d["data_inicio"],
                     data_fim=d["data_fim"],
                 )
@@ -123,9 +128,9 @@ def criar_estagiarios(request):
     })
 
 
-@orientador_requerido
+@permissao("contas")
 def criar_supervisores(request):
-    form = SupervisoresLoteForm(request.POST or None)
+    form = SupervisoresLoteForm(request.POST or None, initial={"local": request.GET.get("local")})
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         with transaction.atomic():
@@ -134,12 +139,13 @@ def criar_supervisores(request):
         return _resultado_contas(request, criados, "Supervisores criados")
     return render(request, "core/form_pagina.html", {
         "form": form, "titulo": "Cadastrar supervisores", "voltar": reverse("usuarios"),
-        "ajuda": "Depois, vincule o supervisor aos estagiários na edição de cada estágio ou no cadastro em lote.",
+        "ajuda": "Basta o nome completo e o telefone: o próprio supervisor completa o resto no perfil. "
+                 "Depois, vincule o supervisor aos estagiários na edição de cada estágio ou no cadastro em lote.",
         "botao": "Criar contas",
     })
 
 
-@orientador_requerido
+@permissao("contas")
 def criar_orientador(request):
     if not request.user.is_superuser:
         raise PermissionDenied
@@ -153,6 +159,23 @@ def criar_orientador(request):
     })
 
 
+@permissao("contas")
+def criar_coordenador(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    form = CoordenadorForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        d = form.cleaned_data
+        user = criar_usuario(d["nome"], Usuario.Papel.COORDENADOR, request.user, email=d["email"], telefone=d["telefone"])
+        user.cursos_coordenados.set(d["cursos"])
+        return _resultado_contas(request, [user], "Coordenador(a) criado(a)")
+    return render(request, "core/form_pagina.html", {
+        "form": form, "titulo": "Cadastrar coordenador(a) de curso", "voltar": reverse("usuarios"), "botao": "Criar conta",
+        "ajuda": "O coordenador acompanha os estágios dos seus cursos e analisa a captação de concedentes. "
+                 "Não agenda visitas nem muda dias e horários de estágio.",
+    })
+
+
 def _resultado_contas(request, usuarios, titulo):
     from django.conf import settings
 
@@ -163,14 +186,14 @@ def _resultado_contas(request, usuarios, titulo):
     })
 
 
-@orientador_requerido
+@permissao("contas")
 def usuarios(request):
     papel = request.GET.get("papel", "")
     q = request.GET.get("q", "")
     if request.user.is_superuser:
         qs = Usuario.objects.all()
     else:
-        meus = Estagio.objects.filter(orientador=request.user)
+        meus = estagios_visiveis(request.user)
         qs = Usuario.objects.filter(
             Q(pk__in=meus.values("estagiario")) | Q(pk__in=meus.values("supervisor"))
             | Q(criado_por=request.user) | Q(papel=Usuario.Papel.SUPERVISOR) | Q(pk=request.user.pk)
@@ -188,14 +211,14 @@ def usuarios(request):
 def _pode_gerir(request, alvo):
     if request.user.is_superuser or alvo.pk == request.user.pk:
         return True
-    if alvo.is_superuser or (alvo.is_orientador and alvo.pk != request.user.pk):
+    if alvo.is_superuser or alvo.is_gestor:
         return False
     if alvo.is_supervisor:
         return True
-    return Estagio.objects.filter(orientador=request.user, estagiario=alvo).exists() or alvo.criado_por_id == request.user.pk
+    return estagios_visiveis(request.user).filter(estagiario=alvo).exists() or alvo.criado_por_id == request.user.pk
 
 
-@orientador_requerido
+@permissao("contas")
 def editar_usuario(request, pk):
     alvo = get_object_or_404(Usuario, pk=pk)
     if not _pode_gerir(request, alvo):
@@ -203,6 +226,10 @@ def editar_usuario(request, pk):
     form = UsuarioEditForm(request.POST or None, instance=alvo)
     if not alvo.is_supervisor:
         del form.fields["local"], form.fields["cargo"]
+    if not alvo.is_estagiario:
+        del form.fields["cpf"]
+    if not (alvo.is_coordenador and request.user.is_superuser):
+        del form.fields["cursos_coordenados"]
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Usuário atualizado.")
@@ -213,7 +240,7 @@ def editar_usuario(request, pk):
     })
 
 
-@orientador_requerido
+@permissao("contas")
 @require_POST
 def redefinir_senha(request, pk):
     from django.conf import settings
@@ -241,24 +268,66 @@ def _crud_simples(request, modelo, form_cls, titulo, template, pk=None, extra=No
     return render(request, template, ctx)
 
 
-@orientador_requerido
+@permissao("cadastros")
 def cursos(request, pk=None):
     return _crud_simples(request, Curso, CursoForm, "Curso", "core/cursos.html", pk, {
         "itens": Curso.objects.annotate(n=Count("estagios", filter=Q(estagios__ativo=True)))
     })
 
 
+@permissao("cadastros")
+def locais(request):
+    q = request.GET.get("q", "").strip()
+    itens = LocalEstagio.objects.annotate(
+        n=Count("estagios", filter=Q(estagios__ativo=True), distinct=True),
+        n_sup=Count("supervisores", distinct=True),
+    )
+    if q:
+        itens = itens.filter(Q(nome__icontains=q) | Q(razao_social__icontains=q) | Q(cnpj__icontains=q)
+                             | Q(cidade__icontains=q))
+    return render(request, "core/locais.html", {"itens": itens, "q": q})
+
+
+@permissao("cadastros")
+def local_editar(request, pk=None):
+    """Ficha da concedente (dados gerais, endereço, representante legal) + cadastro rápido de supervisores."""
+    obj = get_object_or_404(LocalEstagio, pk=pk) if pk else None
+    form = LocalForm(request.POST or None, instance=obj)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            local = form.save()
+            criados = [criar_usuario(nome, Usuario.Papel.SUPERVISOR, request.user, telefone=tel, local=local)
+                       for nome, tel in form.cleaned_data["novos_supervisores"]]
+        messages.success(request, f"Concedente “{local}” salva.")
+        if criados:
+            return _resultado_contas(request, criados, f"Supervisores de {local}")
+        return redirect("locais")
+    supervisores = obj.supervisores.order_by("nome_completo") if obj else []
+    return render(request, "core/concedente_form.html", {"form": form, "obj": obj, "supervisores": supervisores})
+
+
 @orientador_requerido
-def locais(request, pk=None):
-    return _crud_simples(request, LocalEstagio, LocalForm, "Local", "core/locais.html", pk, {
-        "itens": LocalEstagio.objects.annotate(
-            n=Count("estagios", filter=Q(estagios__ativo=True), distinct=True),
-            n_sup=Count("supervisores", distinct=True),
-        )
+def configuracoes(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    config = Configuracao.atual()
+    logo_antigo = config.logo_folha.name if config.logo_folha else ""
+    form = ConfiguracaoForm(request.POST or None, request.FILES or None, instance=config)
+    if request.method == "POST" and form.is_valid():
+        config = form.save()
+        if logo_antigo and (not config.logo_folha or config.logo_folha.name != logo_antigo):
+            config.logo_folha.storage.delete(logo_antigo)
+        messages.success(request, "Configurações salvas.")
+        return redirect("configuracoes")
+    return render(request, "core/form_pagina.html", {
+        "form": form, "titulo": "Configurações do sistema", "voltar": reverse("painel"),
+        "ajuda": "Os dados da escola e o logotipo aparecem no cabeçalho da folha de frequência de todos os estagiários. "
+                 "O banco de talentos só mostra estagiários que autorizarem no próprio perfil.",
     })
 
 
-@orientador_requerido
+
+@permissao("feriados")
 def dias_sem_estagio(request):
     form = DiaSemEstagioForm(request.POST or None)
     if request.method == "POST":
@@ -294,7 +363,7 @@ def dias_sem_estagio(request):
 # ----------------------------------------------------------------- alterações em lote
 
 
-@orientador_requerido
+@permissao("escalas")
 def escala_lote(request):
     qs = _meus_estagios(request)
     filtro_curso = request.GET.get("curso", "")
@@ -326,7 +395,7 @@ def escala_lote(request):
     })
 
 
-@orientador_requerido
+@permissao("arquivos")
 def documentos_gerais(request):
     estagios = _meus_estagios(request)
     form = DocumentoGeralForm(request.POST or None, request.FILES or None, estagios_qs=estagios)

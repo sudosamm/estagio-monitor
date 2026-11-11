@@ -24,7 +24,24 @@ def papel(*papeis):
     return deco
 
 
-orientador_requerido = papel(Usuario.Papel.ORIENTADOR)
+def permissao(nome):
+    """Restringe a view a quem tem a permissão (ver PERMISSOES_POR_PAPEL em models.py)."""
+
+    def deco(view):
+        @wraps(view)
+        @login_required
+        def inner(request, *a, **kw):
+            if not request.user.pode(nome):
+                raise PermissionDenied
+            return view(request, *a, **kw)
+
+        return inner
+
+    return deco
+
+
+# área de gestão (orientador, coordenador de curso e administrador)
+orientador_requerido = permissao("painel")
 
 
 def pegar_estagio(request, pk):
@@ -37,7 +54,8 @@ def pegar_estagio(request, pk):
 
 
 def eh_orientador_do(user, estagio):
-    return user.is_superuser or estagio.orientador_id == user.pk
+    """Gestor do estágio: o orientador dele, o coordenador do curso ou o administrador."""
+    return user.is_superuser or estagio.orientador_id == user.pk or user.coordena(estagio.curso_id)
 
 
 def eh_supervisor_do(user, estagio):

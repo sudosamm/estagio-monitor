@@ -9,15 +9,17 @@ from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from django.db.models import Q
+
 from ..forms import PerfilForm
-from ..models import Documento, Notificacao
+from ..models import Configuracao, Documento, Estagio, Notificacao, Usuario
 from ..services import estagios_visiveis
 
 
 @login_required
 def inicio(request):
     user = request.user
-    if user.is_orientador or user.is_superuser:
+    if user.is_gestor:
         return redirect("painel")
     if user.is_supervisor:
         return redirect("painel_supervisor")
@@ -45,12 +47,88 @@ def trocar_senha(request):
 
 @login_required
 def perfil(request):
-    form = PerfilForm(request.POST or None, instance=request.user)
+    config = Configuracao.atual()
+    form = PerfilForm(request.POST or None, request.FILES or None, instance=request.user,
+                      curriculos=config.curriculos_habilitados)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Dados atualizados.")
         return redirect("perfil")
-    return render(request, "core/perfil.html", {"form": form})
+    return render(request, "core/perfil.html", {"form": form, "config": config})
+
+
+def _servir(arquivo, nome, inline=True):
+    try:
+        f = arquivo.open("rb")
+    except FileNotFoundError as exc:
+        raise Http404 from exc
+    tipo = mimetypes.guess_type(arquivo.name)[0] or "application/octet-stream"
+    resposta = FileResponse(f, as_attachment=not inline, filename=nome, content_type=tipo)
+    resposta["Cache-Control"] = "private, max-age=86400"
+    return resposta
+
+
+@login_required
+def foto_usuario(request, pk):
+    """Fotos de perfil só para quem está logado (nunca públicas)."""
+    alvo = get_object_or_404(Usuario, pk=pk)
+    if not alvo.foto:
+        raise Http404
+    return _servir(alvo.foto, f"{alvo.username}.jpg")
+
+
+@login_required
+def logo_folha(request):
+    config = Configuracao.atual()
+    if not config.logo_folha:
+        raise Http404
+    return _servir(config.logo_folha, config.logo_folha.name.rsplit("/", 1)[-1])
+
+
+def pode_ver_perfil_profissional(user, alvo):
+    """Dono, orientadores, supervisor do próprio estágio e — com o banco de talentos aberto — supervisores."""
+    if user.pk == alvo.pk or user.is_gestor:
+        return True
+    if not user.is_supervisor:
+        return False
+    if Estagio.objects.filter(estagiario=alvo, supervisor=user).exists():
+        return True
+    return alvo.perfil_visivel and Configuracao.atual().banco_talentos_habilitado
+
+
+@login_required
+def curriculo_usuario(request, pk):
+    alvo = get_object_or_404(Usuario, pk=pk, papel=Usuario.Papel.ESTAGIARIO)
+    if not alvo.curriculo or not pode_ver_perfil_profissional(request.user, alvo):
+        raise Http404
+    return _servir(alvo.curriculo, f"curriculo-{alvo.username}.pdf")
+
+
+@login_required
+def banco_talentos(request):
+    """Perfis dos estagiários que autorizaram a exibição, para as concedentes escolherem."""
+    config = Configuracao.atual()
+    user = request.user
+    if not (user.is_gestor or user.is_supervisor):
+        raise PermissionDenied
+    if not config.banco_talentos_habilitado and not user.is_gestor:
+        raise Http404
+    qs = Usuario.objects.filter(papel=Usuario.Papel.ESTAGIARIO, is_active=True, perfil_visivel=True)
+    q, curso = request.GET.get("q", "").strip(), request.GET.get("curso", "")
+    if q:
+        qs = qs.filter(Q(nome_completo__icontains=q) | Q(habilidades__icontains=q) | Q(apresentacao__icontains=q))
+    if curso:
+        qs = qs.filter(estagios__curso_id=curso)
+    pessoas = list(qs.distinct().prefetch_related("estagios__curso"))
+    for p in pessoas:
+        ultimo = max(p.estagios.all(), key=lambda e: e.data_inicio, default=None)
+        p.curso_atual = ultimo.curso if ultimo else None
+        p.turma_atual = ultimo.turma if ultimo else ""
+    from ..models import Curso
+
+    return render(request, "core/talentos.html", {
+        "pessoas": pessoas, "q": q, "curso": curso, "cursos": Curso.objects.all(), "config": config,
+    })
 
 
 @login_required
