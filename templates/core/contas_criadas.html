@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>{{ titulo }}</h1><p>Repasse estes dados. No primeiro acesso, cada pessoa cria a própria senha.</p></div>
+  <div class="acoes"><button class="btn sec" onclick="window.print()">Imprimir</button><a class="btn" href="{% url 'estagios_lista' %}">Concluir</a></div></div>
+<div class="card destaque">
+  <p>Endereço: <strong>{{ endereco }}</strong> · Senha inicial: <strong>{{ senha }}</strong></p>
+  <div class="tabela-wrap"><table class="tabela">
+    <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th></tr></thead>
+    <tbody>{% for u in usuarios %}<tr><td>{{ u.nome_completo }}</td><td><strong>{{ u.username }}</strong></td><td>{{ u.get_papel_display }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}

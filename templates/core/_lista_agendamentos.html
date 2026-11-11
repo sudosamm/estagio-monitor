@@ -1,0 +1,14 @@
+{% load ui %}
+<ul class="lista">
+{% for a in itens %}
+  <li>
+    <span class="avatar sm verde">{% if a.tipo == "VISITA" %}{% icone "pin" %}{% else %}{% icone "mensagem" %}{% endif %}</span>
+    <a class="cresce pessoa" href="{{ a.get_absolute_url }}">
+      <span><strong>{{ a.assunto }}</strong>
+      <small>{{ a.get_tipo_display }} · {{ a.get_modalidade_display }} · {% if a.data_hora %}{{ a.data_hora|date:"D, d/m/Y H:i" }}{% elif a.data_sugerida %}sugestão: {{ a.data_sugerida }}{% else %}sem data{% endif %}
+      · {% for e in a.estagios.all %}{{ e.estagiario.primeiro_nome }}{% if not forloop.last %}, {% endif %}{% endfor %}</small></span>
+    </a>
+    {% selo a.status a.get_status_display %}
+  </li>
+{% empty %}<li class="vazio">Nada por aqui.</li>{% endfor %}
+</ul>

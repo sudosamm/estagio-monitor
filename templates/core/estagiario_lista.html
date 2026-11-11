@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<div class="titulo-pagina"><h1>Meus estágios</h1></div>
+<div class="card"><ul class="lista">
+{% for e in estagios %}<li><a class="pessoa" href="{{ e.get_absolute_url }}"><span><strong>{{ e.local|default:"Local a definir" }}</strong><small>{{ e.curso }} · início {{ e.data_inicio|date:"d/m/Y" }}{% if not e.ativo %} · encerrado{% endif %}</small></span></a></li>
+{% empty %}<li class="vazio">Seu orientador ainda não cadastrou seu estágio.</li>{% endfor %}
+</ul></div>
+{% endblock %}

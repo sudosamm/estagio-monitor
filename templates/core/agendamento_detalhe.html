@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}{{ ag.assunto }}{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><div class="migalha"><a href="{% url 'agendamentos' %}">← Agenda</a></div><h1>{{ ag.assunto }}</h1><p>{{ ag.get_tipo_display }} · {{ ag.get_modalidade_display }}</p></div>
+  {% selo ag.status ag.get_status_display %}
+</div>
+<div class="grade grade-lado">
+  <div>
+    <div class="card">
+      <dl class="dl">
+        <dt>Quando</dt><dd>{% if ag.data_hora %}{{ ag.data_hora|date:"l, d/m/Y \à\s H:i" }}{% else %}A definir{% endif %}</dd>
+        {% if ag.data_sugerida %}<dt>Sugestão</dt><dd>{{ ag.data_sugerida }}</dd>{% endif %}
+        <dt>Local</dt><dd>{{ ag.local|default:"—" }}</dd>
+        <dt>Solicitado por</dt><dd>{{ ag.solicitante }} ({{ ag.solicitante.get_papel_display }}) em {{ ag.criado_em|date:"d/m/Y H:i" }}</dd>
+        <dt>Orientador</dt><dd>{{ ag.orientador }}</dd>
+        <dt>Estagiários</dt><dd>{% for e in ag.estagios.all %}<a href="{{ e.get_absolute_url }}">{{ e.estagiario }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</dd>
+      </dl>
+      {% if ag.detalhes %}<hr><h3>Detalhes</h3><p class="quebra">{{ ag.detalhes }}</p>{% endif %}
+      {% if ag.relato %}<hr><h3>Relato</h3><p class="quebra">{{ ag.relato }}</p>{% endif %}
+      {% if ag.status != "CANCELADO" and ag.status != "REALIZADO" %}{% if ag.solicitante == user or e_orientador %}
+      <hr><form method="post" action="{% url 'cancelar_agendamento' ag.pk %}" data-confirmar="Cancelar este agendamento?">{% csrf_token %}<button class="btn perigo" type="submit">Cancelar</button></form>
+      {% endif %}{% endif %}
+    </div>
+  </div>
+  {% if form %}
+  <div class="card destaque">
+    <h3>Gerenciar</h3>
+    <p class="muted" style="font-size:.85rem">Defina data e hora e mude para “Agendado” para avisar todos. Depois da visita, registre o relato e marque “Realizado”.</p>
+    <form method="post">{% csrf_token %}{% include "core/_form.html" %}<button class="btn bloco" type="submit">Salvar</button></form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

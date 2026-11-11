@@ -1,0 +1,10 @@
+<div class="card laranja">
+  <h3>Senha</h3>
+  <p class="muted">Usuário: <strong>{{ alvo.username }}</strong>{% if alvo.deve_trocar_senha %} · ainda usa a senha padrão{% endif %}</p>
+  {% if alvo != user %}
+  <form method="post" action="{% url 'redefinir_senha' alvo.pk %}" data-confirmar="Voltar a senha de {{ alvo.username }} para a senha padrão?">
+    {% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
+    <button class="btn laranja" type="submit">Redefinir para a senha padrão</button>
+  </form>
+  {% endif %}
+</div>

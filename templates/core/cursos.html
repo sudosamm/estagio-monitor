@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block titulo %}Cursos{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Cursos e carga horária</h1><p>A carga horária do curso vale para todos os estagiários dele (pode ser ajustada por estágio).</p></div></div>
+<div class="grade grade-lado">
+  <div class="card"><div class="tabela-wrap"><table class="tabela">
+    <thead><tr><th>Curso</th><th>Carga horária</th><th>Horas/dia padrão</th><th>Estagiários ativos</th><th></th></tr></thead>
+    <tbody>{% for c in itens %}<tr><td><strong>{{ c.nome }}</strong></td><td>{{ c.carga_horaria }}h</td><td>{{ c.horas_por_dia_padrao|floatformat:"-2" }}h</td><td>{{ c.n }}</td><td><a class="btn sec sm" href="{% url 'curso_editar' c.pk %}">Editar</a></td></tr>
+    {% empty %}<tr><td colspan="5" class="vazio">Cadastre o primeiro curso ao lado.</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+  <div class="card destaque"><h3>{% if editando %}Editar {{ editando }}{% else %}Novo curso{% endif %}</h3>
+    <form method="post">{% csrf_token %}{% include "core/_form.html" %}<div class="acoes"><button class="btn" type="submit">Salvar</button>{% if editando %}<a class="btn sec" href="{% url 'cursos' %}">Cancelar</a>{% endif %}</div></form></div>
+</div>
+{% endblock %}

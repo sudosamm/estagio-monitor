@@ -1,0 +1,57 @@
+{% load ui %}
+{% with st=hoje reg=hoje.registro %}
+<div class="hoje-card {{ st.codigo }}">
+{% if e_estagiario %}
+  {% if st.codigo == "hoje" or st.codigo == "sem_registro" %}
+    <h2>Hoje é dia de estágio</h2>
+    <p>{% now "l, d \d\e F" %}{% if escala_atual.horario_display %} · {{ escala_atual.horario_display }}{% endif %} · {{ estagio.local|default:"local a definir" }}</p>
+    <form method="post" action="{% url 'marcar_presenca' estagio.pk %}">{% csrf_token %}
+      <details><summary>Adicionar anotação (opcional)</summary><textarea name="diario" rows="3" placeholder="Como está sendo o dia?"></textarea></details>
+      <div class="acoes mt-1"><button class="btn grande" type="submit">{% icone "check" %} Estou no estágio</button></div>
+    </form>
+  {% elif st.codigo == "aguardando" or st.codigo == "confirmado" or st.codigo == "contestado" %}
+    <h2>{% if st.codigo == "confirmado" %}Presença confirmada{% elif st.codigo == "contestado" %}Presença contestada pelo supervisor{% else %}Presença marcada{% endif %}</h2>
+    <p>Chegada {{ reg.hora_chegada|time:"H:i"|default:"—" }}{% if reg.hora_saida %} · saída {{ reg.hora_saida|time:"H:i" }}{% endif %} · {{ reg.horas|horas }}
+      {% if st.codigo == "aguardando" %} · aguardando confirmação do supervisor{% endif %}
+      {% if reg.confirmado_por %} · por {{ reg.confirmado_por.primeiro_nome }}{% endif %}</p>
+    {% if reg.obs_supervisor %}<p><strong>Supervisor:</strong> {{ reg.obs_supervisor }}</p>{% endif %}
+    <div class="acoes">
+      {% if not reg.hora_saida %}<form method="post" action="{% url 'registrar_saida' estagio.pk %}">{% csrf_token %}<button class="btn" type="submit">{% icone "relogio" %} Registrar saída</button></form>{% endif %}
+      <a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">{% icone "livro" %} {% if reg.diario %}Ver anotação do dia{% else %}Anotar como foi o dia{% endif %}</a>
+    </div>
+  {% elif st.codigo == "ausencia" or st.codigo == "ausencia_ok" %}
+    <h2>Ausência informada para hoje</h2>
+    <p>{{ reg.motivo|truncatechars:140 }}</p>
+    <form method="post" action="{% url 'marcar_presenca' estagio.pk %}">{% csrf_token %}<button class="btn sec" type="submit">Mudou de ideia? Marcar presença</button></form>
+  {% else %}
+    <h2>{% if st.codigo == "sem_estagio" %}Sem estágio hoje — {{ st.motivo_sem_estagio }}{% elif st.codigo == "fora" %}Fora do período do estágio{% else %}Hoje não é dia de estágio{% endif %}</h2>
+    <p>{% if proximos %}Próximo dia: <strong>{{ proximos.0.data|date:"l, d/m" }}</strong>{% else %}Nenhum dia previsto nas próximas semanas.{% endif %}</p>
+    <form method="post" action="{% url 'marcar_presenca' estagio.pk %}" data-confirmar="Hoje não está na sua escala. Marcar presença mesmo assim?">{% csrf_token %}<button class="btn sec sm" type="submit">Fui ao estágio hoje mesmo assim</button></form>
+  {% endif %}
+  <details>
+    <summary>Não vou poder ir / informar ausência</summary>
+    <form method="post" action="{% url 'informar_ausencia' estagio.pk %}" class="mt-1">{% csrf_token %}
+      <div class="form-linha">
+        <div class="campo"><label style="color:inherit">Dia</label>{{ ausencia_form.data }}</div>
+      </div>
+      <div class="campo"><label style="color:inherit">Motivo</label><textarea name="motivo" rows="2" required placeholder="Ex.: consulta médica, prova na escola…"></textarea></div>
+      <button class="btn sec" type="submit">Avisar supervisor e orientador</button>
+    </form>
+  </details>
+{% else %}
+  <h2>{{ estagio.estagiario.primeiro_nome }} hoje: {{ st.rotulo|default:"sem estágio previsto" }}</h2>
+  <p>
+    {% if reg %}{% if reg.hora_chegada %}Chegada {{ reg.hora_chegada|time:"H:i" }}{% endif %}{% if reg.hora_saida %} · saída {{ reg.hora_saida|time:"H:i" }}{% endif %}{% if reg.motivo %} · {{ reg.motivo|truncatechars:120 }}{% endif %}
+    {% elif st.previsto %}Previsto{% if escala_atual.horario_display %} das {{ escala_atual.horario_display }}{% endif %} — ainda não marcou presença.
+    {% elif proximos %}Próximo dia de estágio: {{ proximos.0.data|date:"l, d/m" }}.{% endif %}
+  </p>
+  <div class="acoes">
+    {% if reg and reg.confirmacao == "PENDENTE" and e_supervisor or reg and reg.confirmacao == "PENDENTE" and e_orientador %}
+      <form method="post" action="{% url 'validar_registro' reg.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="acao" value="confirmar"><button class="btn" type="submit">{% icone "check" %} Confirmar {% if reg.situacao == "PRESENTE" %}presença{% else %}ausência justificada{% endif %}</button></form>
+      <form method="post" action="{% url 'validar_registro' reg.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="acao" value="contestar"><button class="btn sec" type="submit">{% icone "x" %} Não está aqui</button></form>
+    {% endif %}
+    {% if e_supervisor or e_orientador %}<a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">Lançar / ajustar o dia</a>{% endif %}
+  </div>
+{% endif %}
+</div>
+{% endwith %}

@@ -1,0 +1,21 @@
+{% for campo in form.hidden_fields %}{{ campo }}{% endfor %}
+{% if form.non_field_errors %}<div class="aviso error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+{% for campo in form.visible_fields %}
+  {% with tipo=campo.widget_type %}
+  <div class="campo{% if tipo == 'checkbox' %} check{% endif %}{% if campo.errors %} erro-campo{% endif %}">
+    {% if tipo == 'checkbox' %}
+      <label>{{ campo }} {{ campo.label }}</label>
+    {% elif tipo == 'checkboxselectmultiple' or tipo == 'radioselect' %}
+      <span class="rotulo">{{ campo.label }}</span>
+      <div class="opcoes{% if campo.name == 'estagios' %} lista{% endif %}"{% if campo.name == 'estagios' %} id="lista-{{ campo.name }}"{% endif %}>
+        {% for op in campo %}<label>{{ op.tag }} {{ op.choice_label }}</label>{% endfor %}
+      </div>
+    {% else %}
+      {% if campo.label %}<label for="{{ campo.id_for_label }}">{{ campo.label }}</label>{% endif %}
+      {{ campo }}
+    {% endif %}
+    {% if campo.help_text %}<div class="ajuda">{{ campo.help_text|safe }}</div>{% endif %}
+    {% for e in campo.errors %}<div class="erro">{{ e }}</div>{% endfor %}
+  </div>
+  {% endwith %}
+{% endfor %}

@@ -1,0 +1,89 @@
+{% load static ui %}<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}{{ NOME_SISTEMA }}{% endblock %} · {{ NOME_SISTEMA }}</title>
+  <meta name="theme-color" content="#005a2b">
+  <link rel="icon" href="{% static 'img/icone.svg' %}" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+{% block corpo %}
+  <div class="barra-gov">
+    <div class="container">
+      <span>{{ NOME_INSTITUICAO }}</span>
+      <span class="oculto-mobile">Acompanhamento de estágio supervisionado</span>
+    </div>
+  </div>
+  <header class="cabecalho">
+    <div class="container">
+      <a class="marca" href="{% url 'inicio' %}">
+        <span class="marca-icone">{% include "core/_logo.svg" %}</span>
+        <span class="marca-texto"><strong>{{ NOME_SISTEMA }}</strong><span>Estagiários · Supervisores · Orientadores</span></span>
+      </a>
+      {% if user.is_authenticated %}
+      <div class="usuario-menu">
+        <a class="sino" href="{% url 'notificacoes' %}" title="Notificações">{% icone "sino" %}{% if notificacoes_nao_lidas %}<span class="bolha">{{ notificacoes_nao_lidas }}</span>{% endif %}</a>
+        <details class="drop">
+          <summary><span class="avatar">{{ user.iniciais }}</span></summary>
+          <div class="drop-menu">
+            <div class="info"><strong>{{ user.nome_completo }}</strong><small>{{ user.username }} · {{ user.get_papel_display }}</small></div>
+            <a href="{% url 'perfil' %}">Meus dados</a>
+            <a href="{% url 'trocar_senha' %}">Alterar senha</a>
+            {% if user.is_superuser %}<a href="{% url 'admin:index' %}">Administração</a>{% endif %}
+            <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
+          </div>
+        </details>
+      </div>
+      {% endif %}
+    </div>
+  </header>
+  <div class="faixa"></div>
+  {% if user.is_authenticated and not user.deve_trocar_senha %}
+  {% with n=request.resolver_match.url_name %}
+  <nav class="navegacao">
+    <div class="container">
+      {% if user.is_orientador or user.is_superuser %}
+        <a href="{% url 'painel' %}" class="{% if n == 'painel' %}ativo{% endif %}">Painel</a>
+        <a href="{% url 'estagios_lista' %}" class="{% if n in 'estagios_lista,estagio_detalhe,estagio_dia,criar_estagiarios,editar_estagio' %}ativo{% endif %}">Estagiários</a>
+        <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Agenda</a>
+        <a href="{% url 'escala_lote' %}" class="{% if n == 'escala_lote' %}ativo{% endif %}">Alterar dias</a>
+        <a href="{% url 'documentos_gerais' %}" class="{% if n == 'documentos_gerais' %}ativo{% endif %}">Arquivos</a>
+        <a href="{% url 'usuarios' %}" class="{% if n in 'usuarios,editar_usuario,criar_supervisores,criar_orientador' %}ativo{% endif %}">Contas</a>
+        <a href="{% url 'locais' %}" class="{% if n in 'locais,local_editar' %}ativo{% endif %}">Locais</a>
+        <a href="{% url 'cursos' %}" class="{% if n in 'cursos,curso_editar' %}ativo{% endif %}">Cursos</a>
+        <a href="{% url 'dias_sem_estagio' %}" class="{% if n == 'dias_sem_estagio' %}ativo{% endif %}">Feriados</a>
+      {% elif user.is_supervisor %}
+        <a href="{% url 'painel_supervisor' %}" class="{% if n in 'painel_supervisor,estagio_detalhe,estagio_dia' %}ativo{% endif %}">Meus estagiários</a>
+        <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Visitas e conversas</a>
+      {% else %}
+        <a href="{% url 'inicio' %}" class="{% if n in 'inicio,estagio_detalhe,estagio_dia' %}ativo{% endif %}">Meu estágio</a>
+        <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Visitas e conversas</a>
+      {% endif %}
+    </div>
+  </nav>
+  {% endwith %}
+  {% endif %}
+  <main>
+    <div class="container">
+      {% if messages %}
+      <div class="avisos">{% for m in messages %}<div class="aviso {{ m.tags }}">{{ m }}</div>{% endfor %}</div>
+      {% endif %}
+      {% block conteudo %}{% endblock %}
+    </div>
+  </main>
+  <footer class="rodape">
+    <div class="container">
+      <span>{{ NOME_SISTEMA }} — ferramenta de apoio ao acompanhamento de estágio</span>
+      <span>Os registros oficiais continuam no SICE</span>
+    </div>
+  </footer>
+{% endblock %}
+<script src="{% static 'js/app.js' %}" defer></script>
+</body>
+</html>
