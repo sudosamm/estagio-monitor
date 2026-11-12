@@ -4,7 +4,8 @@
 {% block conteudo %}
 <div class="titulo-pagina">
   <div><h1>Visitas e conversas</h1><p>{% if user.is_orientador %}Solicitações recebidas e visitas agendadas.{% else %}Peça uma visita do orientador ou uma conversa quando precisar.{% endif %}</p></div>
-  <a class="btn" href="{% url 'novo_agendamento' %}">{% icone "mais" %} {% if user.is_orientador or user.is_superuser %}Agendar{% else %}Solicitar{% endif %}</a>
+  <div class="acoes"><a class="btn sec" href="{% url 'assinar_agenda' %}">{% icone "calendario" %} No meu calendário</a>
+  <a class="btn" href="{% url 'novo_agendamento' %}">{% icone "mais" %} {% if user.is_orientador or user.is_superuser %}Agendar{% else %}Solicitar{% endif %}</a></div>
 </div>
 <div class="grade grade-2">
   <div class="card laranja"><div class="card-cab"><h2>Solicitações aguardando</h2><span class="selo SOLICITADO">{{ solicitados|length }}</span></div>{% include "core/_lista_agendamentos.html" with itens=solicitados %}</div>

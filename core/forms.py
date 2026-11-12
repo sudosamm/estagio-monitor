@@ -348,8 +348,8 @@ class PerfilForm(FormularioModelo):
 
     class Meta:
         model = Usuario
-        fields = ["foto", "email", "telefone", "cpf", "cargo", "avisos_email", "apresentacao", "habilidades", "curriculo",
-                  "perfil_visivel"]
+        fields = ["foto", "email", "telefone", "cpf", "cargo", "avisos_email", "resumo_semanal", "apresentacao",
+                  "habilidades", "curriculo", "perfil_visivel"]
         labels = {"foto": "Foto de perfil", "telefone": "Telefone / WhatsApp", "cargo": "Cargo/Função"}
         widgets = {"foto": forms.ClearableFileInput(attrs={"accept": "image/*"}),
                    "curriculo": forms.ClearableFileInput(attrs={"accept": "application/pdf,.pdf"}),
@@ -362,6 +362,8 @@ class PerfilForm(FormularioModelo):
         self.fields["foto"].help_text = f"JPG ou PNG, até {MAX_FOTO_MB} MB. A foto é recortada em quadrado."
         if not u.is_supervisor:
             del self.fields["cargo"]
+        if not u.is_gestor:
+            del self.fields["resumo_semanal"]
         if not u.is_estagiario:
             del self.fields["cpf"]
         else:
@@ -423,7 +425,7 @@ class ConfiguracaoForm(FormularioModelo):
     class Meta:
         model = Configuracao
         fields = ["nome_escola", "municipio_escola", "ano_referencia", "cabecalho_folha", "logo_folha",
-                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "avisos_email", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
+                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
                   "curriculos_habilitados", "banco_talentos_habilitado"]
         widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(),
                    "texto_captacao": forms.Textarea(attrs={"rows": 3})}

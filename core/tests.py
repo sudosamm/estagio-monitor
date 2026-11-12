@@ -1351,3 +1351,203 @@ class AvisosEmailTests(Base):
         r = self.client.post(reverse("configuracoes"), {"acao": "teste_email"}, follow=True)
         self.assertContains(r, "E-mail de teste enviado")
         self.assertEqual(mail.outbox[0].to, ["ori@exemplo.br"])
+
+
+@override_settings(EMAIL_ATIVO=True, SITE_URL="https://estagio.exemplo.br")
+class ResumoSemanalTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.ori.email = "ori@exemplo.br"
+        self.ori.save()
+
+    def test_resumo_lista_dias_sem_registro_e_faltas(self):
+        from .acompanhamento import resumo_semanal
+
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 9), situacao=Registro.Situacao.FALTA)
+        d = resumo_semanal(self.ori)
+        self.assertTrue(d["tem_algo"])
+        self.assertEqual(d["secoes"]["sem_registro"], [(self.est, [date(2026, 11, 10)])])
+        self.assertEqual(d["secoes"]["faltas"], [(self.est, [date(2026, 11, 9)])])
+
+    def test_envia_so_para_gestores_com_algo_a_relatar(self):
+        from django.core import mail
+
+        from .acompanhamento import enviar_resumos
+
+        outro = _ativo(criar_usuario("Otávio Sem Turma", Usuario.Papel.ORIENTADOR, email="otavio@exemplo.br"))
+        desligou = _ativo(criar_usuario("Dora Desligada", Usuario.Papel.ORIENTADOR, email="dora@exemplo.br"))
+        desligou.resumo_semanal = False
+        desligou.save()
+        self.aluno.email = "maria@exemplo.br"
+        self.aluno.save()
+        self.assertEqual(enviar_resumos(), 1)
+        self.assertEqual(mail.outbox[0].to, ["ori@exemplo.br"])
+        self.assertIn("SEM REGISTRO DE PRESENÇA", mail.outbox[0].body)
+        self.assertIn("Maria da Silva Souza", mail.outbox[0].body)
+        self.assertIn("https://estagio.exemplo.br/resumo/", mail.outbox[0].body)
+        self.assertNotIn(outro.email, [m.to[0] for m in mail.outbox])
+
+    def test_disparo_automatico_uma_vez_por_semana(self):
+        from datetime import datetime
+
+        from django.core import mail
+
+        from .acompanhamento import disparar_resumo_se_preciso
+
+        tz = timezone.get_current_timezone()
+        segunda_cedo = datetime(2026, 11, 9, 5, 0, tzinfo=tz)
+        segunda = datetime(2026, 11, 9, 8, 0, tzinfo=tz)
+        Configuracao.atual()
+        Configuracao.objects.filter(pk=1).update(resumo_enviado_em=datetime(2026, 11, 3, 9, 0, tzinfo=tz))
+        self.assertFalse(disparar_resumo_se_preciso(segunda_cedo))  # antes das 6h vale a semana anterior
+        self.assertTrue(disparar_resumo_se_preciso(segunda))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertFalse(disparar_resumo_se_preciso(segunda + timedelta(hours=3)))
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_desligado_nas_configuracoes(self):
+        from .acompanhamento import disparar_resumo_se_preciso
+
+        c = Configuracao.atual()
+        c.resumo_semanal = False
+        c.save()
+        self.assertFalse(disparar_resumo_se_preciso())
+
+    def test_pagina_do_resumo(self):
+        from django.core import mail
+
+        self.entrar(self.ori)
+        r = self.client.get(reverse("resumo_semanal"))
+        self.assertContains(r, "Sem registro de presença")
+        self.assertContains(r, "Enviar para meu e-mail")
+        self.client.post(reverse("resumo_semanal"), {"acao": "enviar"})
+        self.assertEqual(mail.outbox[0].to, ["ori@exemplo.br"])
+        self.entrar(self.aluno)
+        self.assertEqual(self.client.get(reverse("resumo_semanal")).status_code, 403)
+
+    def test_comando_mostrar(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        saida = StringIO()
+        call_command("enviar_resumo_semanal", "--mostrar", stdout=saida)
+        self.assertIn("Resumo da semana", saida.getvalue())
+        self.assertIn("Maria da Silva Souza", saida.getvalue())
+
+
+class ExportacaoTests(Base):
+    def test_planilha_com_os_estagiarios_filtrados(self):
+        from openpyxl import load_workbook
+
+        outro = _ativo(criar_usuario("Encerrado da Silva", Usuario.Papel.ESTAGIARIO))
+        Estagio.objects.create(estagiario=outro, orientador=self.ori, curso=self.curso, turma=self.turma,
+                               data_inicio=date(2026, 3, 2), ativo=False)
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 2), situacao=Registro.Situacao.PRESENTE,
+                                horas=4, confirmacao=Registro.Confirmacao.CONFIRMADA)
+        self.entrar(self.ori)
+        r = self.client.get(reverse("exportar_estagios"), {"turma": self.turma.pk, "formato": "xlsx"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("spreadsheetml", r["Content-Type"])
+        self.assertIn(".xlsx", r["Content-Disposition"])
+        wb = load_workbook(io.BytesIO(r.content))
+        self.assertEqual(wb.sheetnames, ["Resumo", "Estagiários", "Horas por mês", "Visitas e conversas"])
+        nomes = [c.value for c in wb["Estagiários"]["A"][1:]]
+        self.assertEqual(nomes, ["Maria da Silva Souza"])  # só os ativos, como na lista
+        horas = wb["Horas por mês"]
+        self.assertEqual(horas["C1"].value, "nov/2026")
+        self.assertEqual(horas["C2"].value, 4.0)
+        r = self.client.get(reverse("exportar_estagios"), {"situacao": "todos", "formato": "xlsx"})
+        self.assertEqual(load_workbook(io.BytesIO(r.content))["Estagiários"].max_row, 3)
+
+    def test_pdf_usa_o_mesmo_relatorio(self):
+        self.entrar(self.ori)
+        r = self.client.get(reverse("exportar_estagios"), {"curso": self.curso.pk, "formato": "pdf"})
+        self.assertContains(r, "RELATÓRIO GERAL DE ESTÁGIO — INFORMÁTICA")
+        self.assertContains(r, "Maria da Silva Souza")
+        self.assertContains(r, "formato=xlsx")
+        self.assertContains(self.client.get(reverse("estagios_lista")), "Planilha (.xlsx)")
+
+    def test_so_gestor_exporta(self):
+        self.entrar(self.aluno)
+        self.assertEqual(self.client.get(reverse("exportar_estagios"), {"formato": "xlsx"}).status_code, 403)
+
+
+class AgendaCalendarioTests(Base):
+    def _agendar(self, status=Agendamento.Status.AGENDADO, assunto="Visita de acompanhamento"):
+        a = Agendamento.objects.create(orientador=self.ori, solicitante=self.ori, local=self.local, status=status,
+                                       data_hora=timezone.now() + timedelta(days=2), assunto=assunto)
+        a.estagios.add(self.est)
+        return a
+
+    def test_link_secreto_traz_as_visitas(self):
+        self._agendar()
+        self._agendar(Agendamento.Status.SOLICITADO, "Pedido ainda sem data")
+        self.entrar(self.ori)
+        self.client.post(reverse("assinar_agenda"))
+        self.ori.refresh_from_db()
+        self.assertEqual(len(self.ori.token_agenda), 32)
+        self.assertContains(self.client.get(reverse("assinar_agenda")), "Abrir no Google Agenda")
+        self.client.logout()
+        r = self.client.get(reverse("agenda_ics", args=[self.ori.token_agenda]))
+        self.assertEqual(r["Content-Type"], "text/calendar; charset=utf-8")
+        corpo = r.content.decode().replace("\r\n ", "")
+        self.assertIn("SUMMARY:Visita de acompanhamento", corpo)
+        self.assertIn("Maria da Silva Souza", corpo)
+        self.assertIn("LOCATION:Empresa X", corpo)
+        self.assertNotIn("Pedido ainda sem data", corpo)
+
+    def test_supervisor_ve_as_visitas_dele(self):
+        self._agendar()
+        self.sup.token_agenda = "s" * 32
+        self.sup.save()
+        self.assertIn("Visita de acompanhamento", self.client.get(reverse("agenda_ics", args=["s" * 32])).content.decode())
+
+    def test_novo_link_invalida_o_antigo(self):
+        self.entrar(self.ori)
+        self.client.post(reverse("assinar_agenda"))
+        self.ori.refresh_from_db()
+        antigo = self.ori.token_agenda
+        self.client.post(reverse("assinar_agenda"), {"acao": "novo"})
+        self.ori.refresh_from_db()
+        self.assertNotEqual(antigo, self.ori.token_agenda)
+        self.assertEqual(self.client.get(reverse("agenda_ics", args=[antigo])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("agenda_ics", args=["curto"])).status_code, 404)
+
+
+class DeclaracaoTests(Base):
+    def test_sem_horas_nao_emite(self):
+        self.entrar(self.ori)
+        r = self.client.get(reverse("declaracao_estagio", args=[self.est.pk]), follow=True)
+        self.assertContains(r, "Ainda não há horas validadas")
+
+    def test_declaracao_de_conclusao(self):
+        self.est.horas_anteriores = 96
+        self.est.save()
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 3), situacao=Registro.Situacao.PRESENTE,
+                                horas=4, confirmacao=Registro.Confirmacao.CONFIRMADA)
+        self.aluno.cpf = "001.000.000-37"
+        self.aluno.save()
+        self.entrar(self.ori)
+        r = self.client.get(reverse("declaracao_estagio", args=[self.est.pk]))
+        self.assertContains(r, "DECLARAÇÃO DE CONCLUSÃO DE ESTÁGIO")
+        self.assertContains(r, "MARIA DA SILVA SOUZA")
+        self.assertContains(r, "001.000.000-37")
+        self.assertContains(r, "no período de 02/11/2026 a 03/11/2026")
+        self.assertContains(r, "carga horária total de <strong>100 horas</strong>", html=False)
+
+    def test_declaracao_em_andamento(self):
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 3), situacao=Registro.Situacao.PRESENTE,
+                                horas=4, confirmacao=Registro.Confirmacao.CONFIRMADA)
+        self.entrar(self.ori)
+        r = self.client.get(reverse("declaracao_estagio", args=[self.est.pk]))
+        self.assertContains(r, "realiza estágio curricular supervisionado")
+        self.assertContains(r, "tendo cumprido até esta data <strong>4 horas</strong>", html=False)
+        self.assertContains(self.client.get(reverse("estagio_detalhe", args=[self.est.pk])), "Declaração")
+
+    def test_so_gestor_emite(self):
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 3), situacao=Registro.Situacao.PRESENTE,
+                                horas=4, confirmacao=Registro.Confirmacao.CONFIRMADA)
+        for u in (self.aluno, self.sup):
+            self.entrar(u)
+            self.assertEqual(self.client.get(reverse("declaracao_estagio", args=[self.est.pk])).status_code, 403)

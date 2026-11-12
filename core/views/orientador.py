@@ -93,6 +93,20 @@ def painel(request):
 @orientador_requerido
 def estagios_lista(request):
     ano = ano_em_uso(request)
+    qs, f = filtrar_lista(request, ano)
+    estagios = list(qs)
+    for e in estagios:
+        e.st = status_hoje(e)
+        e.h = resumo_horas(e)
+    return render(request, "core/estagios_lista.html", {
+        **contexto_ano(request, ano),
+        "estagios": estagios, "f": f, "cursos": Curso.objects.all(), "locais": LocalEstagio.objects.all(),
+        "turmas": turmas_do_ano(request.user, ano), "filtros_url": request.GET.urlencode(),
+    })
+
+
+def filtrar_lista(request, ano):
+    """Filtros da lista de estagiários (também usados para exportar exatamente o que está na tela)."""
     qs = filtrar_ano(_meus_estagios(request, ativos=False), ano)
     f = {k: request.GET.get(k, "") for k in ("q", "curso", "local", "turma", "situacao")}
     if f["q"]:
@@ -103,16 +117,9 @@ def estagios_lista(request):
         qs = qs.filter(local_id=f["local"])
     if f["turma"].isdigit():
         qs = qs.filter(turma_id=f["turma"])
-    qs = qs.filter(ativo=f["situacao"] != "inativos")
-    estagios = list(qs)
-    for e in estagios:
-        e.st = status_hoje(e)
-        e.h = resumo_horas(e)
-    return render(request, "core/estagios_lista.html", {
-        **contexto_ano(request, ano),
-        "estagios": estagios, "f": f, "cursos": Curso.objects.all(), "locais": LocalEstagio.objects.all(),
-        "turmas": turmas_do_ano(request.user, ano),
-    })
+    if f["situacao"] != "todos":
+        qs = qs.filter(ativo=f["situacao"] != "inativos")
+    return qs, f
 
 
 # ----------------------------------------------------------------- contas

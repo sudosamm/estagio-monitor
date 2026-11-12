@@ -1,14 +1,21 @@
 """Visitas, conversas e reuniões."""
+from datetime import timedelta
+from datetime import timezone as dt_timezone
+
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.crypto import get_random_string
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..forms import AgendamentoForm, SolicitacaoForm
-from ..models import Agendamento
+from ..models import Agendamento, Usuario
 from ..services import estagios_visiveis, notificar
 
 
@@ -124,3 +131,103 @@ def cancelar_agendamento(request, pk):
               ag.get_absolute_url(), exceto=request.user)
     messages.success(request, "Agendamento cancelado.")
     return redirect("agendamentos")
+
+
+# ---------------------------------------------------------------- calendário (Google Agenda, celular)
+
+DURACAO_PADRAO = {Agendamento.Tipo.VISITA: 90, Agendamento.Tipo.CONVERSA: 30, Agendamento.Tipo.REUNIAO: 60}
+
+
+@login_required
+def assinar_agenda(request):
+    """Mostra o link secreto da agenda e permite gerar um novo (o antigo para de funcionar)."""
+    user = request.user
+    if _sem_agenda(user):
+        raise PermissionDenied
+    if request.method == "POST":
+        user.token_agenda = get_random_string(32)
+        user.save(update_fields=["token_agenda"])
+        if request.POST.get("acao") == "novo":
+            messages.success(request, "Novo link gerado. O link antigo deixou de funcionar: assine de novo no calendário.")
+        return redirect("assinar_agenda")
+    url = ""
+    if user.token_agenda:
+        url = request.build_absolute_uri(reverse("agenda_ics", args=[user.token_agenda]))
+    return render(request, "core/assinar_agenda.html", {
+        "url": url, "webcal": url.replace("https://", "webcal://").replace("http://", "webcal://"),
+    })
+
+
+def _ics_texto(valor):
+    texto = str(valor or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,")
+    return texto.replace("\r\n", "\\n").replace("\n", "\\n")
+
+
+def _ics_dobrar(linha):
+    """Linhas de no máximo 75 bytes (RFC 5545), continuadas com espaço."""
+    dados = linha.encode()
+    if len(dados) <= 75:
+        return linha
+    partes, atual = [], b""
+    for ch in linha:
+        b = ch.encode()
+        if len(atual) + len(b) > (75 if not partes else 74):
+            partes.append(atual.decode())
+            atual = b""
+        atual += b
+    partes.append(atual.decode())
+    return "\r\n ".join(partes)
+
+
+def agenda_ics(request, token):
+    """Calendário .ics das visitas e conversas, sem login: o link secreto identifica a pessoa."""
+    user = Usuario.objects.filter(token_agenda=token, is_active=True).first() if len(token) >= 20 else None
+    if not user or _sem_agenda(user):
+        raise Http404
+    desde = timezone.now() - timedelta(days=120)
+    qs = (_agendamentos_de(user).filter(data_hora__isnull=False, data_hora__gte=desde)
+          .exclude(status=Agendamento.Status.SOLICITADO).order_by("data_hora"))
+    host = request.get_host().split(":")[0]
+    agora = timezone.now().strftime("%Y%m%dT%H%M%SZ")
+    site = settings.SITE_URL or f"{request.scheme}://{request.get_host()}"
+    linhas = ["BEGIN:VCALENDAR", "VERSION:2.0", f"PRODID:-//{_ics_texto(settings.NOME_SISTEMA)}//Agenda//PT-BR",
+              "CALSCALE:GREGORIAN", "METHOD:PUBLISH", f"X-WR-CALNAME:{_ics_texto(settings.NOME_SISTEMA)} — visitas",
+              f"X-WR-TIMEZONE:{settings.TIME_ZONE}", "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
+              "X-PUBLISHED-TTL:PT1H"]
+    for a in qs:
+        inicio = a.data_hora.astimezone(dt_timezone.utc)
+        fim = inicio + timedelta(minutes=DURACAO_PADRAO.get(a.tipo, 60))
+        nomes = ", ".join(e.estagiario.nome_completo for e in a.estagios.all())
+        descricao = [f"{a.get_tipo_display()} ({a.get_modalidade_display().lower()})"]
+        if nomes:
+            descricao.append(f"Estagiários: {nomes}")
+        if a.detalhes:
+            descricao.append(a.detalhes)
+        descricao.append(f"{site}{a.get_absolute_url()}")
+        local = ""
+        if a.local:
+            endereco = ", ".join(p for p in [a.local.endereco, a.local.numero, a.local.bairro, a.local.cidade] if p)
+            local = a.local.nome + (f" — {endereco}" if endereco else "")
+        elif a.modalidade != Agendamento.Modalidade.PRESENCIAL:
+            local = a.get_modalidade_display()
+        rotulo = "Visita" if a.tipo == Agendamento.Tipo.VISITA else a.get_tipo_display().split(" /")[0]
+        resumo = a.assunto if a.assunto.lower().startswith(rotulo.lower()) else f"{rotulo}: {a.assunto}"
+        status = {Agendamento.Status.CANCELADO: "CANCELLED"}.get(a.status, "CONFIRMED")
+        if a.status == Agendamento.Status.CANCELADO:
+            resumo = f"[Cancelado] {resumo}"
+        linhas += ["BEGIN:VEVENT", f"UID:agendamento-{a.pk}@{host}", f"DTSTAMP:{agora}",
+                   f"LAST-MODIFIED:{a.atualizado_em.astimezone(dt_timezone.utc):%Y%m%dT%H%M%SZ}",
+                   f"DTSTART:{inicio:%Y%m%dT%H%M%SZ}", f"DTEND:{fim:%Y%m%dT%H%M%SZ}",
+                   f"SUMMARY:{_ics_texto(resumo)}", f"DESCRIPTION:{_ics_texto(chr(10).join(descricao))}",
+                   f"URL:{site}{a.get_absolute_url()}", f"STATUS:{status}"]
+        if local:
+            linhas.append(f"LOCATION:{_ics_texto(local)}")
+        if a.status == Agendamento.Status.AGENDADO:
+            linhas += ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Lembrete", "TRIGGER:-PT1H", "END:VALARM"]
+        linhas.append("END:VEVENT")
+    linhas.append("END:VCALENDAR")
+    corpo = "\r\n".join(_ics_dobrar(l) for l in linhas) + "\r\n"
+    resp = HttpResponse(corpo, content_type="text/calendar; charset=utf-8")
+    resp["Content-Disposition"] = 'inline; filename="agenda.ics"'
+    resp["Cache-Control"] = "private, max-age=900"
+    return resp

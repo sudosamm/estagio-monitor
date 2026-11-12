@@ -4,14 +4,17 @@
 {% block conteudo %}
 <div class="titulo-pagina">
   <div><h1>Estagiários</h1><p>{{ estagios|length }} encontrado(s){% if ano %} · turmas que estagiam em {{ ano }}{% endif %}</p></div>
-  <div class="acoes">{% include "core/_seletor_ano.html" %}{% if f.turma.isdigit %}<a class="btn sec" href="{% url 'relatorio_turma' f.turma %}" target="_blank" rel="noopener">{% icone "impressora" %} Relatório da turma</a>{% endif %}<a class="btn sec" href="{% url 'escala_lote' %}">{% icone "calendario" %} Alterar dias</a><a class="btn" href="{% url 'criar_estagiarios' %}">{% icone "mais" %} Cadastrar estagiários</a></div>
+  <div class="acoes">{% include "core/_seletor_ano.html" %}<details class="drop"><summary class="btn sec">{% icone "download" %} Exportar</summary><div class="drop-menu">
+    <a href="{% url 'exportar_estagios' %}?{{ filtros_url }}{% if filtros_url %}&amp;{% endif %}formato=pdf" target="_blank" rel="noopener">Relatório em PDF</a>
+    <a href="{% url 'exportar_estagios' %}?{{ filtros_url }}{% if filtros_url %}&amp;{% endif %}formato=xlsx">Planilha (.xlsx)</a>
+    <small class="muted">Exporta os estagiários filtrados abaixo{% if ano %} ({{ ano }}){% endif %}.</small></div></details><a class="btn sec" href="{% url 'escala_lote' %}">{% icone "calendario" %} Alterar dias</a><a class="btn" href="{% url 'criar_estagiarios' %}">{% icone "mais" %} Cadastrar estagiários</a></div>
 </div>
 <form class="filtros card" method="get">{% if ano %}<input type="hidden" name="ano" value="{{ ano }}">{% endif %}
   <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ f.q }}" placeholder="Nome ou usuário"></div>
   <div><label class="rotulo">Curso</label><select name="curso"><option value="">Todos</option>{% for c in cursos %}<option value="{{ c.pk }}"{% if f.curso == c.pk|stringformat:"s" %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
   <div><label class="rotulo">Turma</label><select name="turma"><option value="">Todas</option>{% for t in turmas %}<option value="{{ t.pk }}"{% if f.turma == t.pk|stringformat:"s" %} selected{% endif %}>{% if ano %}{{ t.nome|default:t.curso.nome }} · {{ t.curso }}{% else %}{{ t }}{% endif %}</option>{% endfor %}</select></div>
   <div><label class="rotulo">Concedente</label><select name="local"><option value="">Todos</option>{% for l in locais %}<option value="{{ l.pk }}"{% if f.local == l.pk|stringformat:"s" %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
-  <div><label class="rotulo">Situação</label><select name="situacao"><option value="">Ativos</option><option value="inativos"{% if f.situacao == "inativos" %} selected{% endif %}>Encerrados</option></select></div>
+  <div><label class="rotulo">Situação</label><select name="situacao"><option value="">Ativos</option><option value="inativos"{% if f.situacao == "inativos" %} selected{% endif %}>Encerrados</option><option value="todos"{% if f.situacao == "todos" %} selected{% endif %}>Todos</option></select></div>
   <button class="btn" type="submit">Filtrar</button>
 </form>
 <div class="card">

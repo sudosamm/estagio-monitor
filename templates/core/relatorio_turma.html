@@ -1,7 +1,7 @@
 {% load static ui %}<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Relatório {{ turma.rotulo }} — {{ hoje|date:"d-m-Y" }}</title>
+<title>{{ nome }}</title>
 <style>
   @page { size: A4 landscape; margin: 10mm 10mm 12mm; }
   * { box-sizing: border-box; }
@@ -61,8 +61,8 @@
 </style></head>
 <body>
 <div class="barra">
-  <span>Relatório geral · {{ turma.rotulo }} · {{ linhas|length }} estagiário{{ linhas|length|pluralize }}</span>
-  <span><a href="{% url 'turmas' %}">Voltar</a> <button class="imprimir" type="button" id="imprimir">Salvar PDF / imprimir</button></span>
+  <span>Relatório geral · {{ titulo|title }} · {{ linhas|length }} estagiário{{ linhas|length|pluralize }}</span>
+  <span><a href="{{ voltar }}">Voltar</a> <a href="{{ xlsx }}">Baixar planilha</a> <button class="imprimir" type="button" id="imprimir">Salvar PDF / imprimir</button></span>
 </div>
 <p class="dica">Para gerar o PDF, toque em “Salvar PDF / imprimir” e escolha <strong>Salvar como PDF</strong> no destino. Use folha A4 na horizontal e desmarque “cabeçalhos e rodapés”.</p>
 
@@ -71,16 +71,12 @@
     <img src="{% if config.logo_folha %}{% url 'logo_folha' %}{% else %}{% static 'img/brasao-ceara-seduc.png' %}{% endif %}" alt="">
     <div class="txt">
       {% for linha in config.cabecalho_folha.splitlines %}{% if linha.strip %}<div>{{ linha }}</div>{% endif %}{% endfor %}
-      <h1>RELATÓRIO GERAL DE ESTÁGIO — {{ turma.nome|default:turma.curso.nome|upper }}</h1>
+      <h1>RELATÓRIO GERAL DE ESTÁGIO — {{ titulo }}</h1>
     </div>
     <div class="emissao">Posição em {{ hoje|date:"d/m/Y" }}<br>Emitido em {{ agora|date:"d/m/Y H:i" }}<br>por {{ user.nome_completo }}</div>
   </div>
   <div class="dados">
-    <span><b>Curso:</b> {{ turma.curso.nome }}</span>
-    <span><b>Turma:</b> {{ turma.nome|default:"—" }} (ingresso {{ turma.ano_ingresso }}, estágio em {{ turma.ano_estagio }})</span>
-    {% if config.nome_escola %}<span><b>Escola:</b> {{ config.nome_escola }}{% if config.municipio_escola %} — {{ config.municipio_escola }}{% endif %}</span>{% endif %}
-    <span><b>Orientação:</b> {{ orientadores|join:", "|default:"—" }}</span>
-    <span><b>Carga horária do curso:</b> {{ turma.curso.carga_horaria }} h</span>
+    {% for rotulo, valor in dados %}<span><b>{{ rotulo }}:</b> {{ valor }}</span>{% endfor %}
   </div>
 
   <div class="kpis">
@@ -103,7 +99,7 @@
     <tbody>{% for l in linhas %}{% with e=l.e r=l.r %}
       <tr{% if not e.ativo %} class="inativo"{% endif %}>
         <td>{{ forloop.counter }}</td>
-        <td><strong>{{ e.estagiario.nome_completo }}</strong>{% if e.estagiario.matricula %}<small>Matrícula {{ e.estagiario.matricula }}</small>{% endif %}</td>
+        <td><strong>{{ e.estagiario.nome_completo }}</strong>{% if e.estagiario.matricula %}<small>Matrícula {{ e.estagiario.matricula }}</small>{% endif %}{% if varias_turmas %}<small>{% if e.turma %}{{ e.turma.rotulo }}{% else %}{{ e.curso }} · sem turma{% endif %}</small>{% endif %}</td>
         <td>{{ e.local.nome|default:"— sem concedente —" }}{% if e.local.cidade %} <small>{{ e.local.cidade }}</small>{% endif %}<small>Sup.: {{ e.supervisor.nome_completo|default:"—" }}</small></td>
         <td>{{ e.data_inicio|date:"d/m/Y" }}</td>
         <td>{{ e.data_fim|date:"d/m/Y"|default:"—" }}</td>
@@ -115,7 +111,7 @@
         <td class="num">{{ e.n_visitas }}</td>
         <td><span class="sit {% if l.situacao == 'Termina após o termo' %}atraso{% elif l.situacao == 'Carga cumprida' %}ok{% elif l.situacao == 'Encerrado' %}fim{% endif %}">{{ l.situacao }}</span></td>
       </tr>{% endwith %}
-    {% empty %}<tr><td colspan="12" class="vazio">Nenhum estagiário nesta turma.</td></tr>{% endfor %}</tbody>
+    {% empty %}<tr><td colspan="12" class="vazio">Nenhum estagiário.</td></tr>{% endfor %}</tbody>
   </table>
   <p class="legenda">Horas cumpridas = presenças validadas pelo supervisor + horas anteriores ao sistema. “Sem registro”: dias de estágio já passados sem presença, ausência ou falta lançada. “A validar”: presenças que o supervisor ainda não confirmou. A previsão de término considera a escala atual, feriados e recessos.</p>
 

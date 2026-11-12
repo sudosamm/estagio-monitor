@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Agenda no calendário{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><h1>Visitas no seu calendário</h1><p>As visitas e conversas agendadas aparecem no Google Agenda, no calendário do iPhone ou no Outlook, e se atualizam sozinhas.</p></div>
+  <a class="btn sec" href="{% url 'agendamentos' %}">{% icone "esq" %} Voltar à agenda</a>
+</div>
+<div class="grade grade-lado">
+  <div>
+    {% if not url %}
+    <div class="card destaque"><h2>Gerar meu link</h2>
+      <p>O sistema cria um endereço só seu. O calendário consulta esse endereço de tempos em tempos para buscar as visitas novas, remarcadas ou canceladas.</p>
+      <form method="post">{% csrf_token %}<button class="btn" type="submit">{% icone "calendario" %} Gerar link da agenda</button></form>
+    </div>
+    {% else %}
+    <div class="card destaque"><h2>Seu link</h2>
+      <div class="flex mt-1"><input type="text" readonly value="{{ url }}" id="link-agenda" onclick="this.select()"><button class="btn sec" type="button" data-copiar="#link-agenda" data-sem-trava="1">Copiar</button></div>
+      <p class="flex mt-1" style="gap:.5rem;flex-wrap:wrap">
+        <a class="btn" href="https://calendar.google.com/calendar/r?cid={{ webcal|urlencode }}" target="_blank" rel="noopener">Abrir no Google Agenda</a>
+        <a class="btn sec" href="{{ webcal }}">Abrir no calendário do celular</a>
+      </p>
+    </div>
+    <div class="card"><h3>Como assinar</h3>
+      <ul class="lista compacta">
+        <li><span><strong>Google Agenda (computador):</strong> toque em “Abrir no Google Agenda” e confirme. Ou, em Outras agendas → “+” → “Do URL”, cole o link. Depois de assinada no computador, a agenda aparece também no app do celular.</span></li>
+        <li><span><strong>iPhone:</strong> toque em “Abrir no calendário do celular” e confirme a assinatura. Ou, em Ajustes → Calendário → Contas → Adicionar conta → Outra → Adicionar calendário assinado, cole o link.</span></li>
+        <li><span><strong>Outlook:</strong> Adicionar calendário → Assinar da Web, e cole o link.</span></li>
+      </ul>
+      <p class="muted" style="font-size:.85rem">O Google Agenda atualiza calendários assinados a cada algumas horas. Para conferir na hora, veja a Agenda do sistema.</p>
+    </div>
+    {% endif %}
+  </div>
+  <div class="card"><h3>{% icone "chave" %} Privacidade</h3>
+    <p style="font-size:.9rem">Quem tiver o link vê as suas visitas (datas, assuntos, nomes dos estagiários e concedentes), sem precisar de senha. Não compartilhe.</p>
+    {% if url %}<p style="font-size:.9rem">Se o link vazou ou você trocou de celular, gere um novo: o antigo para de funcionar na hora.</p>
+    <form method="post" onsubmit="return confirm('Gerar um novo link? O atual deixa de funcionar e será preciso assinar de novo.')">{% csrf_token %}<button class="btn perigo sm" name="acao" value="novo" type="submit">Gerar novo link</button></form>{% endif %}
+  </div>
+</div>
+{% endblock %}

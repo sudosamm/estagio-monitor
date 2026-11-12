@@ -5,6 +5,7 @@
 <div class="titulo-pagina">
   <div><h1>Olá, {{ user.primeiro_nome }}</h1><p>{% now "l, d \d\e F \d\e Y" %}{% if ano %} · turmas que estagiam em {{ ano }}{% endif %}{% if outros_anos %} · <a href="?ano=todos">+ {{ outros_anos }} estágio{{ outros_anos|pluralize }} ativo{{ outros_anos|pluralize }} de outros anos</a>{% endif %}</p></div>
   <div class="acoes">{% include "core/_seletor_ano.html" %}
+    <a class="btn sec" href="{% url 'resumo_semanal' %}">{% icone "livro" %} Resumo da semana</a>
     {% if user|pode:"estagiarios" %}<a class="btn sec" href="{% url 'criar_estagiarios' %}">{% icone "mais" %} Estagiários</a>{% endif %}
     {% if user|pode:"agenda" %}<a class="btn" href="{% url 'novo_agendamento' %}">{% icone "calendario" %} Agendar visita</a>{% endif %}
   </div>

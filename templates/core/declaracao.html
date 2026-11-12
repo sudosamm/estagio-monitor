@@ -1,0 +1,87 @@
+{% load static ui %}<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Declaração de estágio — {{ e.estagiario.nome_completo }}</title>
+<style>
+  @page { size: A4 portrait; margin: 18mm 20mm 16mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9ecea; color: #111; font: 11.5pt/1.6 "Open Sans", Arial, "Liberation Sans", sans-serif; }
+  .barra { position: sticky; top: 0; z-index: 2; background: #005a2b; color: #fff; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; font: 14px Arial, sans-serif; }
+  .barra a, .barra button { font: inherit; color: #fff; text-decoration: none; padding: 7px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.5); background: transparent; cursor: pointer; white-space: nowrap; }
+  .barra button.imprimir { background: #ffcc29; color: #222; border-color: #ffcc29; font-weight: 700; }
+  .dica { max-width: 210mm; margin: 12px auto 0; padding: 0 16px; font: 13px/1.5 Arial, sans-serif; color: #444; }
+  .dica.aviso { color: #8a4b00; }
+  .papel-wrap { overflow-x: auto; padding: 12px 16px 32px; }
+  .papel { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; padding: 18mm 20mm 16mm; box-shadow: 0 2px 12px rgba(0,0,0,.15); display: flex; flex-direction: column; }
+
+  .cab { display: flex; gap: 6mm; align-items: center; border-bottom: 2px solid #005a2b; padding-bottom: 4mm; }
+  .cab img { height: 18mm; width: auto; }
+  .cab div { font-size: 9.5pt; line-height: 1.4; color: #333; }
+  .cab strong { display: block; font-size: 10.5pt; color: #111; }
+  h1 { text-align: center; font-size: 15pt; letter-spacing: .08em; margin: 16mm 0 10mm; }
+  .texto { text-align: justify; text-indent: 12mm; margin: 0; outline: none; }
+  .texto[contenteditable]:hover { background: #fffbe6; }
+  .texto[contenteditable]:focus { background: #fff7cc; }
+  table { border-collapse: collapse; margin: 9mm auto 0; font-size: 10pt; min-width: 110mm; }
+  th, td { border: .5pt solid #9aa7a0; padding: 1.6mm 4mm; text-align: left; }
+  th { background: #eef3f0; font-weight: 600; width: 60%; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  td { text-align: right; }
+  .local-data { text-align: right; margin: 14mm 0 0; }
+  .assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 16mm; margin-top: auto; padding-top: 26mm; }
+  .assinaturas div { border-top: .6pt solid #000; text-align: center; padding-top: 1.5mm; font-size: 10pt; line-height: 1.35; }
+  .assinaturas small { display: block; color: #444; font-size: 8.5pt; }
+  .rodape { margin-top: 10mm; font-size: 7.5pt; color: #666; border-top: .3pt solid #ccc; padding-top: 2mm; }
+
+  @media print {
+    body { background: #fff; }
+    .barra, .dica { display: none !important; }
+    .papel-wrap { padding: 0; overflow: visible; }
+    .papel { width: auto; min-height: calc(297mm - 34mm); padding: 0; box-shadow: none; }
+    .texto[contenteditable]:hover, .texto[contenteditable]:focus { background: none; }
+  }
+</style></head>
+<body>
+<div class="barra">
+  <span>Declaração de {% if concluido %}conclusão de estágio{% else %}estágio{% endif %} · {{ e.estagiario.nome_completo }}</span>
+  <span><a href="{{ e.get_absolute_url }}">Voltar</a> <button class="imprimir" type="button" id="imprimir">Salvar PDF / imprimir</button></span>
+</div>
+<p class="dica">Confira os dados. Se precisar, clique no texto da declaração para ajustar antes de imprimir (a alteração não fica salva). Para o PDF, escolha <strong>Salvar como PDF</strong> e desmarque “cabeçalhos e rodapés”.</p>
+{% if not concluido %}<p class="dica aviso">A carga horária ainda não foi cumprida ({{ r.cumpridas|horas }} de {{ r.total|horas }}): a declaração informa as horas feitas até agora{% if e.ativo %} e que o estágio está em andamento{% endif %}.</p>{% endif %}
+{% if not e.estagiario.cpf %}<p class="dica aviso">O CPF do estagiário não está cadastrado. Preencha em Contas para que apareça na declaração.</p>{% endif %}
+
+<div class="papel-wrap"><div class="papel">
+  <div class="cab">
+    <img src="{% if config.logo_folha %}{% url 'logo_folha' %}{% else %}{% static 'img/brasao-ceara-seduc.png' %}{% endif %}" alt="">
+    <div>{% for linha in config.cabecalho_folha.splitlines %}{% if linha.strip %}{{ linha }}<br>{% endif %}{% endfor %}
+      {% if config.nome_escola %}<strong>{{ config.nome_escola }}</strong>{% endif %}</div>
+  </div>
+
+  <h1>DECLARAÇÃO{% if concluido %} DE CONCLUSÃO DE ESTÁGIO{% endif %}</h1>
+
+  {% with est=e.estagiario local=e.local %}
+  <p class="texto" contenteditable="true" spellcheck="false">Declaramos, para os devidos fins, que <strong>{{ est.nome_completo|upper }}</strong>{% if est.cpf %}, inscrito(a) no CPF sob o nº {{ est.cpf }}{% endif %}{% if est.matricula %}, matrícula nº {{ est.matricula }}{% endif %}, aluno(a) do curso <strong>{{ e.curso.nome }}</strong>{% if config.nome_escola %} da {{ config.nome_escola }}{% endif %}{% if e.turma %}, turma {{ e.turma.nome|default:e.turma.ano_ingresso }}{% endif %},
+  {% if concluido %}realizou estágio curricular supervisionado{% elif e.ativo %}realiza estágio curricular supervisionado{% else %}realizou estágio curricular supervisionado{% endif %}
+  {% if local %}na concedente <strong>{{ local.razao_social|default:local.nome }}</strong>{% if local.razao_social and local.nome != local.razao_social %} ({{ local.nome }}){% endif %}{% if local.cnpj %}, inscrita no {% if local.tipo_concedente == 'PL' %}CPF{% else %}CNPJ{% endif %} sob o nº {{ local.cnpj }}{% endif %}{% if local.cidade %}, situada no município de {{ local.cidade }}{% if local.uf %}/{{ local.uf }}{% endif %}{% endif %}{% endif %}{% if e.setor %}, no setor {{ e.setor }}{% endif %},
+  {% if concluido or not e.ativo %}no período de {{ e.data_inicio|date:"d/m/Y" }} a {{ ultimo_dia|default:e.data_fim|date:"d/m/Y" }}, {% if concluido %}cumprindo a carga horária total de <strong>{{ r.cumpridas|horas_txt }} horas</strong>{% else %}cumprindo <strong>{{ r.cumpridas|horas_txt }} horas</strong> da carga horária de {{ r.total|horas_txt }} horas exigida{% endif %}{% else %}desde {{ e.data_inicio|date:"d/m/Y" }}{% if e.data_fim %}, com término previsto no termo de compromisso para {{ e.data_fim|date:"d/m/Y" }}{% endif %}, tendo cumprido até esta data <strong>{{ r.cumpridas|horas_txt }} horas</strong> da carga horária de {{ r.total|horas_txt }} horas exigida{% endif %}{% if e.supervisor %}, sob a supervisão de {{ e.supervisor.nome_completo }}{% if e.supervisor.cargo %} ({{ e.supervisor.cargo }}){% endif %}{% endif %} e a orientação de {{ e.orientador.nome_completo }}.</p>
+  {% endwith %}
+
+  <table>
+    <tr><th>Carga horária exigida</th><td>{{ r.total|horas }}</td></tr>
+    <tr><th>Horas cumpridas{% if e.horas_anteriores %} (inclui {{ e.horas_anteriores|horas }} anteriores ao sistema){% endif %}</th><td><strong>{{ r.cumpridas|horas }}</strong></td></tr>
+    <tr><th>Dias de presença</th><td>{{ r.presencas }}</td></tr>
+    <tr><th>Ausências justificadas</th><td>{{ r.ausencias }}</td></tr>
+    <tr><th>Faltas</th><td>{{ r.faltas }}</td></tr>
+  </table>
+
+  <p class="local-data">{% if config.municipio_escola %}{{ config.municipio_escola }}, {% endif %}{{ hoje|date:"j" }} de {{ hoje|date:"F"|lower }} de {{ hoje|date:"Y" }}.</p>
+
+  <div class="assinaturas">
+    <div>{{ e.orientador.nome_completo }}<small>Orientador(a) de estágio</small></div>
+    <div>&nbsp;<small>Direção escolar</small></div>
+  </div>
+  <p class="rodape">Horas cumpridas = presenças validadas pelo supervisor da concedente{% if e.horas_anteriores %} + horas anteriores ao sistema{% endif %}. Emitida pelo {{ NOME_SISTEMA }} em {% now "d/m/Y H:i" %} por {{ user.nome_completo }}.</p>
+</div></div>
+<script>
+  document.getElementById("imprimir").addEventListener("click", function () { window.print(); });
+</script>
+</body></html>

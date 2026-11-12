@@ -93,6 +93,7 @@ details.drop > summary::-webkit-details-marker { display: none; }
 .drop-menu .info { padding: .5rem .75rem; border-bottom: 1px solid var(--cinza-200); margin-bottom: .3rem; }
 .drop-menu .info small { display: block; }
 .drop-menu [hidden] { display: none; }
+.drop-menu > small { display: block; padding: .4rem .75rem .2rem; font-size: .78rem; }
 
 .navegacao { background: #fff; border-bottom: 1px solid var(--cinza-200); }
 .navegacao .container { display: flex; gap: .25rem; overflow-x: auto; scrollbar-width: none; }

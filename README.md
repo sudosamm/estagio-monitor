@@ -128,14 +128,38 @@ Também dá para enviar um CSV com **uma linha por estagiário**: dados do estag
 
 O arquivo gerado a partir dos TCEs fica em `importacao/`, pasta que não vai para o Git porque tem dados pessoais. A planilha preenchida também tem dados pessoais: guarde-a em local seguro.
 
-### Relatório geral da turma (PDF)
-Em **Turmas e cursos**, o botão *Relatório* de cada turma (ou *Relatório da turma* na lista de estagiários filtrada por turma) abre uma página A4 deitada com:
+### Relatório geral e exportação (PDF e planilha)
+Em **Turmas e cursos**, o botão *Relatório* de cada turma abre o relatório daquela turma. Na lista de **Estagiários**, o botão *Exportar* gera o mesmo relatório para **o que estiver filtrado** (curso, turma, concedente, busca, ativos/encerrados/todos e ano), em PDF ou em planilha. O relatório é uma página A4 deitada com:
 - **Resumo:** estagiários ativos, média da carga cumprida, quem já cumpriu, quem termina depois do fim do termo, faltas, dias sem registro e visitas realizadas.
 - **Uma linha por estagiário:** concedente, supervisor, início, fim do termo, horas cumpridas (com barra), faltas, dias sem registro, presenças a validar, previsão de término, visitas e situação.
 - **Pontos de atenção:** sem supervisor, previsão depois do termo, 3 ou mais faltas, 3 ou mais dias sem registro, presenças aguardando o supervisor, nenhuma visita.
 - Espaço para assinatura do orientador e da coordenação.
 
 Clique em *Salvar PDF / imprimir* e escolha **Salvar como PDF** (funciona também no celular).
+
+A **planilha (.xlsx)**, também disponível pelo botão *Baixar planilha* do relatório, traz quatro abas: *Resumo*, *Estagiários* (uma linha por estágio, com horas, faltas, dias sem registro, visitas, previsão, situação e pontos de atenção), *Horas por mês* (horas validadas em cada mês) e *Visitas e conversas* (com o relato). Serve para prestar contas à escola, à CREDE ou à SEDUC sem redigitar. O CPF não vai para a planilha.
+
+### Resumo semanal
+No **Painel**, o botão *Resumo da semana* mostra os pontos de atenção dos últimos 7 dias: quem ficou sem registro de presença, faltas, presenças há mais de 2 dias sem validação do supervisor, termos que vencem nos próximos 30 dias, previsões de término depois do termo, quem está perto de cumprir (90% ou mais) ou já cumpriu a carga, visitas dos próximos 7 dias e pedidos de agendamento sem resposta.
+
+Com o e-mail configurado, esse resumo chega **toda segunda-feira** a cada orientador e coordenador (só dos estagiários que cada um acompanha). Não é preciso agendador: o envio sai no primeiro acesso ao sistema depois de segunda, 6h, uma única vez. Semanas sem nada a relatar não geram e-mail. Cada pessoa pode desligar em **Meus dados**, e o administrador pode desligar para todos em **Configurações**. Também dá para enviar pelo terminal:
+
+```bash
+python manage.py enviar_resumo_semanal --mostrar      # só mostra o texto
+python manage.py enviar_resumo_semanal --forcar       # reenvia o desta semana
+```
+
+Para preferir um horário fixo, desligue o disparo automático com `RESUMO_AUTOMATICO=0` e agende `python manage.py enviar_resumo_semanal` em *Scheduled Tasks* do Coolify (ex.: `0 7 * * 1`).
+
+### Declaração de estágio
+Na página do estágio, o botão *Declaração* (para o orientador, o coordenador e o administrador) gera uma declaração A4 com o cabeçalho e o brasão da folha, pronta para imprimir e assinar:
+- **Carga cumprida:** “Declaração de conclusão de estágio”, com período (do início ao último dia validado), concedente, CNPJ, supervisor, orientador e total de horas.
+- **Ainda em andamento:** declaração de que o estudante realiza o estágio, com as horas cumpridas até a data.
+
+Abaixo do texto vai um quadro com carga exigida, horas cumpridas, presenças, ausências justificadas e faltas. Antes de imprimir, dá para clicar no texto e ajustar a redação (a alteração não fica salva). A declaração é um documento da escola. Quando houver uma API da SEDUC, o ideal é que o certificado oficial venha do próprio SICE.
+
+### Agenda no calendário do celular
+Em **Agenda → No meu calendário**, cada pessoa gera um link secreto (.ics) para assinar no Google Agenda, no calendário do iPhone ou no Outlook. As visitas e conversas agendadas aparecem lá com local, estagiários e lembrete 1 hora antes. Remarcações e cancelamentos se atualizam sozinhos (o Google Agenda leva algumas horas). Vale para orientadores, supervisores e estagiários, cada um com as visitas que lhe dizem respeito. Quem tem o link vê a agenda sem senha: se ele vazar, *Gerar novo link* invalida o antigo.
 
 ### Check-in com localização
 Em **Configurações → Localização ao marcar presença**:
@@ -175,7 +199,7 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Contas, concedentes, cursos e turmas (inclui desativar/reativar) | ✔ | ✔ |
 | Captação de concedentes | ✔ | ✔ |
 | Frequências impressas | ✔ | ✔ |
-| Relatório geral da turma (PDF) | ✔ | ✔ (cursos que coordena) |
+| Relatório e exportação (PDF e planilha), resumo semanal, declaração de estágio | ✔ | ✔ (cursos que coordena) |
 | Agendar visitas | ✔ | — |
 | Mudar dias em lote (cada um mantém seus horários) | ✔ | — |
 | Mudar o ano de referência | ✔ | — |
@@ -234,7 +258,7 @@ O serviço sobe com **Gunicorn na porta 8000** dentro do container. O banco (SQL
    - `SENHA_PADRAO`: a senha inicial das contas
    - `ADMIN_NOME`: seu nome completo, que cria o primeiro orientador administrador
    - `PORTA`: a porta livre do servidor que o túnel vai usar (ex.: `8010`)
-   - *(opcional, avisos por e-mail)* `EMAIL_HOST` (ex.: `smtp.gmail.com`), `EMAIL_PORT` (`587`), `EMAIL_HOST_USER` (o e-mail remetente), `EMAIL_HOST_PASSWORD` (no Gmail, uma “senha de app”, não a senha normal) e `SITE_URL` (ex.: `https://estagio.seudominio.com.br`, para os links dos e-mails; vazio = o de `CSRF_TRUSTED_ORIGINS`)
+   - *(opcional, avisos por e-mail)* `EMAIL_HOST` (ex.: `smtp.gmail.com`), `EMAIL_PORT` (`587`), `EMAIL_HOST_USER` (o e-mail remetente), `EMAIL_HOST_PASSWORD` (no Gmail, uma “senha de app”, não a senha normal) e `SITE_URL` (ex.: `https://estagio.seudominio.com.br`, para os links dos e-mails; vazio = o de `CSRF_TRUSTED_ORIGINS`). O resumo semanal sai sozinho às segundas; `RESUMO_AUTOMATICO=0` desliga esse disparo, se preferir agendar o comando.
 4. Garanta que o volume `/data` é persistente. No modo Compose isso já vem configurado.
 5. Faça o deploy. No Cloudflare Tunnel, aponte o hostname para `http://localhost:<PORTA>` (ou o IP da VPS, se o cloudflared rodar em outra máquina).
 6. Entre com o usuário gerado a partir de `ADMIN_NOME` (aparece no log do container) e a senha padrão. O sistema vai pedir para trocar a senha.
@@ -262,11 +286,20 @@ core/models.py      Usuários, cursos, locais, estágios, escalas, registros, ag
 core/services.py    Regras: geração de usuário, status de cada dia, horas e previsão, notificações
 core/views/         Telas por área (comum, estágio, orientador, supervisor, agenda, relatórios, app/PWA)
 core/planilha.py    Planilha modelo (Excel) de importação: gerar e ler
+core/acompanhamento.py  Situação de cada estágio (relatório, exportação) e resumo semanal por e-mail
+core/exportacao.py  Planilha (.xlsx) com a situação dos estagiários
 templates/          HTML (visual inspirado no portal ce.gov.br)
 static/             CSS e JS próprios, sem frameworks
 ```
 
 ## Ideias para as próximas versões
+- Faltas justificadas com atestado (foto), aceitas pelo supervisor ou orientador
+- Pasta de documentos por estagiário (TCE, plano de atividades, relatório final), com o que está faltando
+- Notificações no celular pelo app (Web Push), inclusive avisos do orientador para a turma
+- Painel de indicadores por curso e turma, e área de feedback do supervisor
+- Check-in por QR code mostrado pelo supervisor (confirma a chegada na hora)
+- Encerramento do ano letivo: fechar turmas, arquivar estágios e anonimizar dados após o prazo (LGPD)
+- Integração com o SICE por API oficial da SEDUC (dados dos estagiários, avaliações e certificado)
 - Avaliação do estagiário pelo supervisor (formulário periódico)
 - Autoavaliação do estagiário e avaliação do orientador, com texto pronto para copiar no SICE
 - WhatsApp automático pela API oficial do WhatsApp Business

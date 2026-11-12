@@ -55,6 +55,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.TrocaSenhaObrigatoriaMiddleware",
+    "core.middleware.ResumoSemanalMiddleware",
 ]
 
 ROOT_URLCONF = "monitor.urls"
@@ -147,6 +148,9 @@ if env_bool("EMAIL_CONSOLE", False):
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 EMAIL_ATIVO = bool(EMAIL_HOST) or env_bool("EMAIL_CONSOLE", False)
 EMAIL_ASSINCRONO = "test" not in sys.argv  # envia em segundo plano para não atrasar a página
+# Resumo semanal: sai sozinho no primeiro acesso depois de segunda, 6h. RESUMO_AUTOMATICO=0 desliga esse
+# disparo (por exemplo, se preferir agendar  python manage.py enviar_resumo_semanal  no cron/Coolify).
+RESUMO_AUTOMATICO = env_bool("RESUMO_AUTOMATICO", "test" not in sys.argv)
 # Endereço público do sistema, usado nos links dos e-mails. Vazio = o primeiro de CSRF_TRUSTED_ORIGINS.
 SITE_URL = (os.environ.get("SITE_URL") or (CSRF_TRUSTED_ORIGINS[0] if CSRF_TRUSTED_ORIGINS else "")).rstrip("/")
 

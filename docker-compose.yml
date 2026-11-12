@@ -25,6 +25,7 @@ services:
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
       EMAIL_REMETENTE: ${EMAIL_REMETENTE:-}
       SITE_URL: ${SITE_URL:-}
+      RESUMO_AUTOMATICO: ${RESUMO_AUTOMATICO:-1}
       DEBUG: ${DEBUG:-0}
     volumes:
       - estagio-dados:/data

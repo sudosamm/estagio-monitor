@@ -1,0 +1,37 @@
+{% autoescape off %}{% load ui %}Olá, {{ u.primeiro_nome }}.
+
+Resumo da semana dos seus {{ d.total }} estagiário{{ d.total|pluralize }} ativo{{ d.total|pluralize }} ({{ d.desde|date:"d/m" }} a {{ d.ate|date:"d/m" }}).
+{% if s.sem_registro %}
+SEM REGISTRO DE PRESENÇA ({{ s.sem_registro|length }})
+{% for e, dias in s.sem_registro %}- {{ e.estagiario.nome_completo }}{% if e.local %} ({{ e.local.nome }}){% endif %}: {% for dia in dias %}{{ dia|date:"D d/m" }}{% if not forloop.last %}, {% endif %}{% endfor %}
+{% endfor %}{% endif %}{% if s.faltas %}
+FALTAS NA SEMANA ({{ s.faltas|length }})
+{% for e, dias in s.faltas %}- {{ e.estagiario.nome_completo }}: {% for dia in dias %}{{ dia|date:"d/m" }}{% if not forloop.last %}, {% endif %}{% endfor %}
+{% endfor %}{% endif %}{% if s.a_validar %}
+PRESENÇAS HÁ MAIS DE 2 DIAS SEM VALIDAÇÃO DO SUPERVISOR ({{ s.a_validar|length }})
+{% for e, n in s.a_validar %}- {{ e.estagiario.nome_completo }}: {{ n }} dia{{ n|pluralize }} · supervisor(a) {{ e.supervisor.nome_completo|default:"não definido" }}
+{% endfor %}{% endif %}{% if s.termo_vencendo %}
+TERMO DE COMPROMISSO VENCE NOS PRÓXIMOS 30 DIAS ({{ s.termo_vencendo|length }})
+{% for e, r in s.termo_vencendo %}- {{ e.estagiario.nome_completo }}: termo até {{ e.data_fim|date:"d/m/Y" }}, faltam {{ r.faltam|horas }}{% if r.previsao_termino %} (previsão {{ r.previsao_termino|date:"d/m/Y" }}){% endif %}
+{% endfor %}{% endif %}{% if s.apos_termo %}
+PREVISÃO DE TÉRMINO DEPOIS DO FIM DO TERMO ({{ s.apos_termo|length }})
+{% for e, r in s.apos_termo %}- {{ e.estagiario.nome_completo }}: previsão {{ r.previsao_termino|date:"d/m/Y" }}, termo até {{ e.data_fim|date:"d/m/Y" }}
+{% endfor %}{% endif %}{% if s.quase %}
+PERTO DE CUMPRIR A CARGA ({{ s.quase|length }})
+{% for e, r in s.quase %}- {{ e.estagiario.nome_completo }}: {{ r.pct|floatformat:0 }}%, faltam {{ r.faltam|horas }}
+{% endfor %}{% endif %}{% if s.concluidos %}
+JÁ CUMPRIRAM A CARGA, AINDA ATIVOS ({{ s.concluidos|length }})
+{% for e, r in s.concluidos %}- {{ e.estagiario.nome_completo }}: {{ r.cumpridas|horas }} de {{ r.total|horas }}. Emita a declaração e encerre o estágio.
+{% endfor %}{% endif %}{% if s.visitas %}
+VISITAS E CONVERSAS NOS PRÓXIMOS 7 DIAS ({{ s.visitas|length }})
+{% for a in s.visitas %}- {{ a.data_hora|date:"D d/m H:i" }} · {{ a.get_tipo_display }}: {{ a.assunto }}{% if a.local %} ({{ a.local.nome }}){% endif %}
+{% endfor %}{% endif %}{% if s.solicitacoes %}
+PEDIDOS DE AGENDAMENTO AGUARDANDO RESPOSTA ({{ s.solicitacoes|length }})
+{% for a in s.solicitacoes %}- {{ a.assunto }}, pedido de {{ a.solicitante.nome_completo }} em {{ a.criado_em|date:"d/m" }}
+{% endfor %}{% endif %}
+{% if site %}Ver no sistema: {{ site }}{{ link_resumo }}
+{% endif %}
+—
+Resumo automático do {{ NOME_SISTEMA }}, enviado às segundas-feiras. Não responda este e-mail.
+{% if site %}Para não receber, desmarque “Receber o resumo semanal” em Meus dados: {{ site }}/perfil/{% endif %}
+{% endautoescape %}

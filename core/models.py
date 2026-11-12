@@ -72,6 +72,13 @@ class Usuario(AbstractUser):
         "Receber os avisos também por e-mail", default=True,
         help_text="Os mesmos avisos do sino (presenças, visitas, folhas, feriados), no e-mail cadastrado acima.",
     )
+    resumo_semanal = models.BooleanField(
+        "Receber o resumo semanal por e-mail", default=True,
+        help_text="Para orientadores e coordenadores: toda segunda-feira, quem está sem registro, faltas, presenças a "
+                  "validar, termos vencendo e visitas da semana.",
+    )
+    token_agenda = models.CharField(max_length=40, blank=True, editable=False,
+                                    help_text="Chave do link da agenda para Google Agenda / celular.")
     cursos_coordenados = models.ManyToManyField(
         "Curso", blank=True, related_name="coordenadores", verbose_name="Cursos que coordena",
         help_text="Vazio = todos os cursos.",
@@ -898,6 +905,12 @@ class Configuracao(models.Model):
         help_text="Para quem tem e-mail cadastrado e não desligou no perfil. Precisa do servidor de e-mail configurado "
                   "(variáveis EMAIL_HOST etc.).",
     )
+    resumo_semanal = models.BooleanField(
+        "Enviar o resumo semanal aos orientadores", default=True,
+        help_text="Toda segunda-feira, a partir das 6h, cada orientador e coordenador recebe por e-mail os pontos de "
+                  "atenção dos seus estagiários. Quem não quiser pode desligar em Meus dados.",
+    )
+    resumo_enviado_em = models.DateTimeField(null=True, blank=True, editable=False)
     estagiarios_emitem_folha = models.BooleanField(
         "Estagiários emitem a própria folha de frequência", default=True,
         help_text="Desligado: o estagiário só baixa a folha que o orientador enviar para o mês.",

@@ -26,6 +26,7 @@
     {% endif %}
     {% if e_estagiario %}<a class="btn sec" href="{% url 'minhas_folhas' estagio.pk %}?mes={{ nav.atual|default:'' }}">{% icone "impressora" %} Folha de frequência</a>
     {% else %}<a class="btn sec" href="{% url 'folha_frequencia' estagio.pk %}?mes={{ nav.atual|default:'' }}" target="_blank" rel="noopener">{% icone "impressora" %} Folha de frequência</a>{% endif %}
+    {% if e_orientador and horas.cumpridas %}<a class="btn {% if horas.pct < 100 %}sec{% endif %}" href="{% url 'declaracao_estagio' estagio.pk %}" target="_blank" rel="noopener" title="{% if horas.pct >= 100 %}Declaração de conclusão do estágio{% else %}Declaração de estágio em andamento{% endif %}">{% icone "arquivo" %} Declaração</a>{% endif %}
   </div>
 </div>
 
