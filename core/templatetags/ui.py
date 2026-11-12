@@ -96,3 +96,20 @@ def pode(usuario, permissao):
 @register.simple_tag
 def selo(codigo, rotulo):
     return format_html('<span class="selo {}">{}</span>', codigo, rotulo)
+
+
+@register.filter
+def rotulo_linha(n):
+    """Linha do CSV (número) ou da planilha (“Aba, linha N”)."""
+    return f"linha {n}" if isinstance(n, int) else n
+
+
+@register.filter
+def whatsapp(telefone):
+    """Link do WhatsApp (wa.me) para um telefone brasileiro; vazio se o número não servir."""
+    from ..validators import so_digitos
+
+    d = so_digitos(telefone or "")
+    if len(d) in (10, 11):
+        d = "55" + d
+    return f"https://wa.me/{d}" if len(d) >= 12 else ""

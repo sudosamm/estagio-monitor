@@ -1,0 +1,19 @@
+{% load static %}<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sem conexão · {{ NOME_SISTEMA }}</title>
+  <meta name="theme-color" content="#005a2b">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+  <div class="faixa"></div>
+  <main><div class="container" style="max-width:32rem;text-align:center;padding-top:3rem">
+    <img src="{% static 'img/app-192.png' %}" alt="" width="96" height="96">
+    <h1>Sem conexão</h1>
+    <p>Não foi possível falar com o {{ NOME_SISTEMA }}. Confira a internet do celular e tente de novo.</p>
+    <p class="muted" style="font-size:.9rem">A presença só é registrada com conexão: o horário vem do servidor, não do celular.</p>
+    <p><button class="btn" type="button" onclick="location.reload()">Tentar de novo</button></p>
+  </div></main>
+</body>
+</html>

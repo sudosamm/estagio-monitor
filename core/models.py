@@ -68,6 +68,10 @@ class Usuario(AbstractUser):
         "Mostrar meu perfil às concedentes", default=False,
         help_text="Quando o banco de talentos estiver aberto, supervisores das concedentes poderão ver seu perfil e currículo.",
     )
+    avisos_email = models.BooleanField(
+        "Receber os avisos também por e-mail", default=True,
+        help_text="Os mesmos avisos do sino (presenças, visitas, folhas, feriados), no e-mail cadastrado acima.",
+    )
     cursos_coordenados = models.ManyToManyField(
         "Curso", blank=True, related_name="coordenadores", verbose_name="Cursos que coordena",
         help_text="Vazio = todos os cursos.",
@@ -270,6 +274,13 @@ class LocalEstagio(DadosConcedente):
 
     ativa = models.BooleanField("Ativa", default=True,
                                 help_text="Concedentes inativas não aparecem nos cadastros de estágio e supervisores.")
+    # check-in com localização: ponto da concedente e distância aceita
+    latitude = models.DecimalField("Latitude", max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField("Longitude", max_digits=9, decimal_places=6, null=True, blank=True)
+    raio_checkin = models.PositiveIntegerField(
+        "Distância aceita (metros)", default=300,
+        help_text="Até quantos metros do ponto da concedente a marcação de presença é considerada “no local”.",
+    )
 
     class Meta:
         ordering = ["nome"]
@@ -500,6 +511,25 @@ class DiaSemEstagio(models.Model):
         return datas
 
 
+def _metros_txt(m):
+    return f"{m} m" if m < 1000 else f"{m / 1000:.1f} km".replace(".", ",")
+
+
+def descrever_geo(geo, local):
+    """Resumo da localização de uma marcação: {"texto", "longe", "mapa"} (ou None se não foi pedida)."""
+    if not geo:
+        return None
+    if geo.get("erro"):
+        return {"texto": f"localização não informada ({geo['erro']})", "longe": None, "mapa": ""}
+    mapa = f"https://www.google.com/maps?q={geo['lat']},{geo['lng']}"
+    dist = geo.get("distancia")
+    if dist is None:
+        return {"texto": "localização registrada (concedente sem ponto no mapa)", "longe": None, "mapa": mapa}
+    raio = geo.get("raio") or (local.raio_checkin if local else 300)
+    longe = dist - min(geo.get("precisao") or 0, 150) > raio
+    return {"texto": f"a {_metros_txt(dist)} da concedente", "longe": longe, "mapa": mapa}
+
+
 class Registro(models.Model):
     """O que aconteceu em um dia de estágio."""
 
@@ -528,6 +558,9 @@ class Registro(models.Model):
     confirmado_em = models.DateTimeField(null=True, blank=True)
     obs_supervisor = models.TextField("Observação do supervisor", blank=True)
     registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    # localização no momento da marcação: {"lat", "lng", "precisao", "distancia"} ou {"erro": "..."}
+    geo_entrada = models.JSONField("Localização da entrada", null=True, blank=True)
+    geo_saida = models.JSONField("Localização da saída", null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
@@ -541,6 +574,14 @@ class Registro(models.Model):
     @property
     def horario_display(self):
         return formatar_horario(self.hora_chegada, self.saida_intervalo, self.volta_intervalo, self.hora_saida)
+
+    @property
+    def local_entrada(self):
+        return descrever_geo(self.geo_entrada, self.estagio.local)
+
+    @property
+    def local_saida(self):
+        return descrever_geo(self.geo_saida, self.estagio.local)
 
     def calcular_horas(self):
         """Horas trabalhadas pelos horários (entrada até saída, menos o intervalo). None se faltar entrada/saída."""
@@ -841,6 +882,21 @@ class Configuracao(models.Model):
     ano_referencia = models.PositiveIntegerField(
         "Ano de referência", null=True, blank=True,
         help_text="As listas mostram os estagiários das turmas que estagiam neste ano. Vazio = ano atual.",
+    )
+    class Localizacao(models.TextChoices):
+        DESLIGADO = "DESLIGADO", "Não pedir a localização"
+        REGISTRAR = "REGISTRAR", "Registrar e avisar quando estiver longe da concedente"
+        EXIGIR = "EXIGIR", "Exigir estar perto da concedente para marcar presença"
+
+    checkin_localizacao = models.CharField(
+        "Localização ao marcar presença", max_length=10, choices=Localizacao.choices, default=Localizacao.DESLIGADO,
+        help_text="O celular do estagiário pede permissão de localização só na hora de marcar entrada e saída. "
+                  "Para comparar, cadastre o ponto de cada concedente (ficha da concedente → Localização).",
+    )
+    avisos_email = models.BooleanField(
+        "Enviar os avisos também por e-mail", default=True,
+        help_text="Para quem tem e-mail cadastrado e não desligou no perfil. Precisa do servidor de e-mail configurado "
+                  "(variáveis EMAIL_HOST etc.).",
     )
     estagiarios_emitem_folha = models.BooleanField(
         "Estagiários emitem a própria folha de frequência", default=True,

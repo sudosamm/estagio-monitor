@@ -27,7 +27,7 @@
       <ul class="lista">
       {% for r in pendentes %}
         <li><input type="checkbox" class="chk-reg" name="registros" value="{{ r.pk }}" id="r{{ r.pk }}">
-          <label for="r{{ r.pk }}" class="cresce"><strong>{{ r.estagio.estagiario.primeiro_nome }}</strong> · {{ r.data|date:"d/m" }}<small style="display:block">{{ r.get_situacao_display }}{% if r.situacao == "PRESENTE" %}{% if r.horario_display %} · {{ r.horario_display }}{% endif %} · {{ r.horas|horas }}{% endif %}{% if r.motivo %} — {{ r.motivo|truncatechars:50 }}{% endif %}</small></label>
+          <label for="r{{ r.pk }}" class="cresce"><strong>{{ r.estagio.estagiario.primeiro_nome }}</strong> · {{ r.data|date:"d/m" }}<small style="display:block">{{ r.get_situacao_display }}{% if r.situacao == "PRESENTE" %}{% if r.horario_display %} · {{ r.horario_display }}{% endif %} · {{ r.horas|horas }}{% endif %}{% if r.motivo %} — {{ r.motivo|truncatechars:50 }}{% endif %}</small>{% with reg=r %}{% include "core/_geo.html" %}{% endwith %}</label>
           <a class="btn sec sm" href="{% url 'estagio_dia' r.estagio_id r.data|date:'Y-m-d' %}">Ver</a></li>
       {% endfor %}
       </ul>

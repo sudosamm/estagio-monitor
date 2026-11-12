@@ -6,6 +6,11 @@
   <title>{% block titulo %}{{ NOME_SISTEMA }}{% endblock %} · {{ NOME_SISTEMA }}</title>
   <meta name="theme-color" content="#005a2b">
   <link rel="icon" href="{% static 'img/icone.svg' %}" type="image/svg+xml">
+  <link rel="manifest" href="{% url 'manifesto' %}">
+  <link rel="apple-touch-icon" href="{% static 'img/apple-touch-icon.png' %}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="{{ NOME_SISTEMA }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -35,6 +40,7 @@
             <div class="info"><strong>{{ user.nome_completo }}</strong><small>{{ user.username }} · {{ user.get_papel_display }}</small></div>
             <a href="{% url 'perfil' %}">Meus dados</a>
             <a href="{% url 'trocar_senha' %}">Alterar senha</a>
+            <button type="button" data-instalar hidden>Instalar no celular</button>
             {% if user.is_superuser %}<a href="{% url 'configuracoes' %}">Configurações</a><a href="{% url 'admin:index' %}">Administração</a>{% endif %}
             <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
           </div>

@@ -92,6 +92,7 @@ details.drop > summary::-webkit-details-marker { display: none; }
 .drop-menu a:hover, .drop-menu button:hover { background: var(--cinza-100); }
 .drop-menu .info { padding: .5rem .75rem; border-bottom: 1px solid var(--cinza-200); margin-bottom: .3rem; }
 .drop-menu .info small { display: block; }
+.drop-menu [hidden] { display: none; }
 
 .navegacao { background: #fff; border-bottom: 1px solid var(--cinza-200); }
 .navegacao .container { display: flex; gap: .25rem; overflow-x: auto; scrollbar-width: none; }
@@ -437,3 +438,13 @@ label.check input { margin-top: .2rem; }
 .faixa-config form { margin: 0; }
 td.nowrap { white-space: nowrap; }
 .campo[hidden] { display: none !important; }
+
+/* check-in com localização */
+.geo-aviso { font-size: .82rem; opacity: .85; margin: .6rem 0 0; display: flex; gap: .35rem; align-items: center; }
+.geo-aviso .ic { width: 1em; height: 1em; flex: none; }
+.geo-linha { display: flex; flex-wrap: wrap; gap: .3rem .8rem; margin-top: .25rem; font-size: .8rem; }
+.geo { display: inline-flex; align-items: center; gap: .2rem; color: var(--cinza-700); text-decoration: none; font-size: .8rem; }
+.geo .ic { width: .95em; height: .95em; }
+.geo.perto { color: var(--verde); }
+.geo.longe { color: #b42318; font-weight: 600; }
+a.geo:hover { text-decoration: underline; }

@@ -1,0 +1,135 @@
+{% load static ui %}<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Relatório {{ turma.rotulo }} — {{ hoje|date:"d-m-Y" }}</title>
+<style>
+  @page { size: A4 landscape; margin: 10mm 10mm 12mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9ecea; color: #111; font: 9pt/1.35 "Open Sans", Arial, "Liberation Sans", sans-serif; }
+  .barra { position: sticky; top: 0; z-index: 2; background: #005a2b; color: #fff; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; font: 14px Arial, sans-serif; }
+  .barra a, .barra button { font: inherit; color: #fff; text-decoration: none; padding: 7px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.5); background: transparent; cursor: pointer; white-space: nowrap; }
+  .barra button.imprimir { background: #ffcc29; color: #222; border-color: #ffcc29; font-weight: 700; }
+  .dica { max-width: 277mm; margin: 12px auto 0; padding: 0 16px; font: 13px Arial, sans-serif; color: #444; }
+  .papel-wrap { overflow-x: auto; padding: 12px 16px 32px; }
+  .papel { width: 297mm; min-height: 210mm; margin: 0 auto; background: #fff; padding: 10mm; box-shadow: 0 2px 12px rgba(0,0,0,.15); }
+
+  .cab { display: flex; gap: 6mm; align-items: center; border-bottom: 2px solid #005a2b; padding-bottom: 3mm; margin-bottom: 4mm; }
+  .cab img { height: 16mm; width: auto; }
+  .cab .txt { flex: 1; }
+  .cab .txt div { font-size: 8.5pt; color: #333; }
+  .cab h1 { font-size: 13pt; margin: 1mm 0 0; color: #005a2b; letter-spacing: .02em; }
+  .cab .emissao { text-align: right; font-size: 8pt; color: #555; }
+  .dados { display: flex; flex-wrap: wrap; gap: 1mm 8mm; margin-bottom: 4mm; font-size: 9pt; }
+  .dados b { color: #005a2b; }
+
+  .kpis { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2.5mm; margin-bottom: 5mm; }
+  .kpi { border: 1px solid #cfd8d3; border-radius: 2mm; padding: 2mm 3mm; }
+  .kpi .v { font-size: 15pt; font-weight: 700; color: #005a2b; line-height: 1.1; }
+  .kpi .r { font-size: 7.5pt; color: #444; }
+  .kpi.alerta .v { color: #b42318; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  th { background: #005a2b; color: #fff; font-weight: 600; font-size: 7.5pt; text-align: left; padding: 1.6mm 1.6mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  td { border-bottom: .3pt solid #c9d1cc; padding: 1.4mm 1.6mm; vertical-align: top; font-size: 8pt; }
+  tbody tr:nth-child(even) td { background: #f4f7f5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  td small { display: block; color: #555; font-size: 7pt; }
+  .num { text-align: right; white-space: nowrap; }
+  .barra-pct { height: 1.6mm; background: #e2e8e4; border-radius: 1mm; margin-top: .8mm; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .barra-pct span { display: block; height: 100%; background: #00843d; }
+  .sit { font-size: 7.5pt; font-weight: 600; white-space: nowrap; }
+  .sit.atraso { color: #b42318; } .sit.ok { color: #00843d; } .sit.fim { color: #666; }
+  .alto { color: #b42318; font-weight: 700; }
+  .inativo td { color: #777; }
+
+  h2 { font-size: 10.5pt; color: #005a2b; margin: 6mm 0 2mm; break-after: avoid; }
+  ul.atencao { margin: 0; padding-left: 4.5mm; columns: 2; column-gap: 8mm; }
+  ul.atencao li { break-inside: avoid; margin-bottom: 1.2mm; font-size: 8.3pt; }
+  .vazio { color: #555; font-style: italic; }
+  .assinaturas { display: flex; gap: 20mm; margin-top: 14mm; break-inside: avoid; }
+  .assinaturas div { flex: 1; border-top: .6pt solid #000; text-align: center; padding-top: 1.5mm; font-size: 8.5pt; }
+  .legenda { margin-top: 3mm; font-size: 7.3pt; color: #555; }
+
+  @media print {
+    body { background: #fff; }
+    .barra, .dica { display: none !important; }
+    .papel-wrap { padding: 0; overflow: visible; }
+    .papel { width: auto; min-height: 0; padding: 0; box-shadow: none; }
+  }
+  @media (max-width: 700px) { .kpis { grid-template-columns: repeat(4, 1fr); } }
+</style></head>
+<body>
+<div class="barra">
+  <span>Relatório geral · {{ turma.rotulo }} · {{ linhas|length }} estagiário{{ linhas|length|pluralize }}</span>
+  <span><a href="{% url 'turmas' %}">Voltar</a> <button class="imprimir" type="button" id="imprimir">Salvar PDF / imprimir</button></span>
+</div>
+<p class="dica">Para gerar o PDF, toque em “Salvar PDF / imprimir” e escolha <strong>Salvar como PDF</strong> no destino. Use folha A4 na horizontal e desmarque “cabeçalhos e rodapés”.</p>
+
+<div class="papel-wrap"><div class="papel">
+  <div class="cab">
+    <img src="{% if config.logo_folha %}{% url 'logo_folha' %}{% else %}{% static 'img/brasao-ceara-seduc.png' %}{% endif %}" alt="">
+    <div class="txt">
+      {% for linha in config.cabecalho_folha.splitlines %}{% if linha.strip %}<div>{{ linha }}</div>{% endif %}{% endfor %}
+      <h1>RELATÓRIO GERAL DE ESTÁGIO — {{ turma.nome|default:turma.curso.nome|upper }}</h1>
+    </div>
+    <div class="emissao">Posição em {{ hoje|date:"d/m/Y" }}<br>Emitido em {{ agora|date:"d/m/Y H:i" }}<br>por {{ user.nome_completo }}</div>
+  </div>
+  <div class="dados">
+    <span><b>Curso:</b> {{ turma.curso.nome }}</span>
+    <span><b>Turma:</b> {{ turma.nome|default:"—" }} (ingresso {{ turma.ano_ingresso }}, estágio em {{ turma.ano_estagio }})</span>
+    {% if config.nome_escola %}<span><b>Escola:</b> {{ config.nome_escola }}{% if config.municipio_escola %} — {{ config.municipio_escola }}{% endif %}</span>{% endif %}
+    <span><b>Orientação:</b> {{ orientadores|join:", "|default:"—" }}</span>
+    <span><b>Carga horária do curso:</b> {{ turma.curso.carga_horaria }} h</span>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="v">{{ tot.ativos }}</div><div class="r">estagiários ativos{% if linhas|length != tot.ativos %} ({{ linhas|length }} no total){% endif %}</div></div>
+    <div class="kpi"><div class="v">{{ tot.pct_medio|floatformat:1 }}%</div><div class="r">da carga horária cumprida, em média</div></div>
+    <div class="kpi"><div class="v">{{ tot.concluidos }}</div><div class="r">já cumpriram a carga</div></div>
+    <div class="kpi{% if tot.atrasados %} alerta{% endif %}"><div class="v">{{ tot.atrasados }}</div><div class="r">terminam depois do termo</div></div>
+    <div class="kpi{% if tot.faltas %} alerta{% endif %}"><div class="v">{{ tot.faltas }}</div><div class="r">faltas registradas</div></div>
+    <div class="kpi{% if tot.sem_registro %} alerta{% endif %}"><div class="v">{{ tot.sem_registro }}</div><div class="r">dias sem registro</div></div>
+    <div class="kpi"><div class="v">{{ tot.visitas }}</div><div class="r">visitas e conversas realizadas</div></div>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th style="width:3%">#</th><th style="width:19%">Estagiário</th><th style="width:20%">Concedente / supervisor</th>
+      <th style="width:8%">Início</th><th style="width:8%">Fim do termo</th><th style="width:12%">Horas cumpridas</th>
+      <th class="num" style="width:5%">Faltas</th><th class="num" style="width:6%">Sem registro</th><th class="num" style="width:6%">A validar</th>
+      <th style="width:8%">Previsão de término</th><th class="num" style="width:5%">Visitas</th><th style="width:9%">Situação</th>
+    </tr></thead>
+    <tbody>{% for l in linhas %}{% with e=l.e r=l.r %}
+      <tr{% if not e.ativo %} class="inativo"{% endif %}>
+        <td>{{ forloop.counter }}</td>
+        <td><strong>{{ e.estagiario.nome_completo }}</strong>{% if e.estagiario.matricula %}<small>Matrícula {{ e.estagiario.matricula }}</small>{% endif %}</td>
+        <td>{{ e.local.nome|default:"— sem concedente —" }}{% if e.local.cidade %} <small>{{ e.local.cidade }}</small>{% endif %}<small>Sup.: {{ e.supervisor.nome_completo|default:"—" }}</small></td>
+        <td>{{ e.data_inicio|date:"d/m/Y" }}</td>
+        <td>{{ e.data_fim|date:"d/m/Y"|default:"—" }}</td>
+        <td>{{ r.cumpridas|horas }} / {{ r.total|floatformat:0 }}h ({{ r.pct|floatformat:0 }}%)<div class="barra-pct"><span style="width:{{ r.pct|stringformat:'.1f' }}%"></span></div>{% if r.pendentes %}<small>+ {{ r.pendentes|horas }} aguardando validação</small>{% endif %}</td>
+        <td class="num{% if r.faltas >= limite_faltas %} alto{% endif %}">{{ r.faltas }}{% if r.ausencias %}<small>{{ r.ausencias }} ausência{{ r.ausencias|pluralize }} justif.</small>{% endif %}</td>
+        <td class="num{% if l.sem_registro >= limite_sem_registro %} alto{% endif %}">{{ l.sem_registro }}</td>
+        <td class="num">{{ e.n_pendentes }}</td>
+        <td>{% if r.previsao_termino and e.ativo %}{{ r.previsao_termino|date:"d/m/Y" }}<small>{{ r.dias_restantes }} dia{{ r.dias_restantes|pluralize }} de estágio</small>{% else %}—{% endif %}</td>
+        <td class="num">{{ e.n_visitas }}</td>
+        <td><span class="sit {% if l.situacao == 'Termina após o termo' %}atraso{% elif l.situacao == 'Carga cumprida' %}ok{% elif l.situacao == 'Encerrado' %}fim{% endif %}">{{ l.situacao }}</span></td>
+      </tr>{% endwith %}
+    {% empty %}<tr><td colspan="12" class="vazio">Nenhum estagiário nesta turma.</td></tr>{% endfor %}</tbody>
+  </table>
+  <p class="legenda">Horas cumpridas = presenças validadas pelo supervisor + horas anteriores ao sistema. “Sem registro”: dias de estágio já passados sem presença, ausência ou falta lançada. “A validar”: presenças que o supervisor ainda não confirmou. A previsão de término considera a escala atual, feriados e recessos.</p>
+
+  <h2>Pontos de atenção</h2>
+  {% if atencao %}<ul class="atencao">{% for e, motivos in atencao %}<li><strong>{{ e.estagiario.nome_completo }}</strong>: {{ motivos|join:"; " }}.</li>{% endfor %}</ul>
+  {% else %}<p class="vazio">Nenhum ponto de atenção.</p>{% endif %}
+
+  <div class="assinaturas">
+    <div>Orientador(a) de estágio</div>
+    <div>Coordenação</div>
+  </div>
+</div></div>
+<script>
+  document.getElementById("imprimir").addEventListener("click", function () { window.print(); });
+  if (new URLSearchParams(location.search).get("imprimir")) window.addEventListener("load", function () { setTimeout(window.print, 300); });
+</script>
+</body></html>

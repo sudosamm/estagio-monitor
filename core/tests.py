@@ -1108,3 +1108,246 @@ class RecessoConcedenteTests(Base):
         self.assertIn("não encontrada", r.context["erros"][0][1])
         self.client.post(reverse("importar_feriados"), {"etapa": "confirmar", "i": ["0"]})
         self.assertEqual(DiaSemEstagio.objects.filter(abrangencia="CONCEDENTE", concedente=self.local).count(), 3)
+
+
+class PWATests(Base):
+    def test_manifesto_e_service_worker(self):
+        r = self.client.get("/manifest.webmanifest")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("application/manifest+json", r["Content-Type"])
+        dados = r.json()
+        self.assertEqual(dados["display"], "standalone")
+        self.assertTrue(any(i["purpose"] == "maskable" for i in dados["icons"]))
+        sw = self.client.get("/sw.js")
+        self.assertEqual(sw["Service-Worker-Allowed"], "/")
+        self.assertIn("/offline/", sw.content.decode())
+        self.assertEqual(self.client.get("/offline/").status_code, 200)
+
+    def test_livre_mesmo_com_troca_de_senha_pendente(self):
+        self.aluno.deve_trocar_senha = True
+        self.aluno.save()
+        self.client.force_login(self.aluno)
+        self.assertEqual(self.client.get("/sw.js").status_code, 200)
+        self.assertEqual(self.client.get("/manifest.webmanifest").status_code, 200)
+        self.assertContains(self.client.get(reverse("trocar_senha")), 'rel="manifest"')
+
+
+class PlanilhaModeloTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.ori.is_superuser = True
+        self.ori.save()
+        self.entrar(self.ori)
+
+    def _preencher(self, concedentes=(), supervisores=(), estagiarios=()):
+        from openpyxl import load_workbook
+
+        r = self.client.get(reverse("importar_csv") + "?modelo=xlsx")
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        self.assertEqual(wb.sheetnames[:4], ["Leia-me", "Estagiários", "Concedentes", "Supervisores"])
+        self.assertIn("Informática", [c.value for c in wb["Listas"]["A"]])  # cursos do sistema na lista
+        for aba, linhas in (("Concedentes", concedentes), ("Supervisores", supervisores), ("Estagiários", estagiarios)):
+            for i, valores in enumerate(linhas, start=2):
+                for j, v in enumerate(valores, start=1):
+                    wb[aba].cell(row=i, column=j, value=v)
+        saida = io.BytesIO()
+        wb.save(saida)
+        return SimpleUploadedFile("cadastro.xlsx", saida.getvalue())
+
+    def _enviar(self, arquivo):
+        return self.client.post(reverse("importar_csv"), {
+            "etapa": "previa", "arquivo": arquivo, "orientador": self.ori.pk, "dias": ["0", "1"], "horas_por_dia": "4",
+            "carga_cursos_novos": "300", "completar_concedentes": "on"})
+
+    def test_planilha_com_tres_abas(self):
+        arquivo = self._preencher(
+            concedentes=[["Escola Nova Esperança", "Secretaria da Educação", 7954480000179, "Pública", "Rua A", "10", "Centro",
+                          "", "Itapipoca", "CE", 62500000],
+                         ["Clínica Sem Estagiário", "", "", "Privada"]],
+            supervisores=[["Rita de Cássia Lima", "Escola Nova Esperança", "(88) 99999-1111", "", "Coordenadora"],
+                          ["Pedro Alves Sozinho", "Clínica Sem Estagiário"]],
+            estagiarios=[["João Pedro Matos", 100000037, "", "", "", "Informática", "3º A", 2024, date(2026, 8, 24), None, 40,
+                          "seg-qua", 4, None, None, None, None, "Escola Nova Esperança", None],
+                         ["Lia Gomes Torres", "", "", "", "", "Informática", "3º A", 2024, date(2026, 8, 24), None, None,
+                          "", "", None, None, None, None, "Escola Nova Esperança", "Rita de Cássia Lima"]],
+        )
+        r = self._enviar(arquivo)
+        self.assertEqual(r.status_code, 200)
+        res = r.context["resultado"]
+        self.assertEqual(res.erros, [])
+        self.assertEqual(len(res.linhas_ok), 2)
+        self.assertEqual(len(res.concedentes_novas), 2)
+        self.assertEqual(len(res.supervisores_novos), 2)
+        self.assertFalse(Usuario.objects.filter(nome_completo="João Pedro Matos").exists())  # prévia não grava
+        r = self.client.post(reverse("importar_csv"), {"etapa": "confirmar"})
+        self.assertEqual(r.status_code, 200)
+        joao = Usuario.objects.get(nome_completo="João Pedro Matos")
+        self.assertEqual(joao.cpf, "001.000.000-37")  # zero à esquerda recuperado
+        est = joao.estagios.get()
+        self.assertEqual(est.supervisor.nome_completo, "Rita de Cássia Lima")  # único supervisor da concedente
+        self.assertEqual(est.horas_anteriores, 40)
+        self.assertEqual(est.escalas.get().dias, "0,1,2")
+        escola = LocalEstagio.objects.get(nome="Escola Nova Esperança")
+        self.assertEqual((escola.cnpj, escola.tipo_instituicao, escola.cep), ("07.954.480/0001-79", "PUBLICA", "62500-000"))
+        pedro = Usuario.objects.get(nome_completo="Pedro Alves Sozinho")
+        self.assertEqual(list(pedro.concedentes.values_list("nome", flat=True)), ["Clínica Sem Estagiário"])
+        self.assertEqual(Usuario.objects.get(nome_completo="Rita de Cássia Lima").cargo, "Coordenadora")
+
+    def test_erros_apontam_aba_e_linha(self):
+        arquivo = self._preencher(
+            supervisores=[["Rita de Cássia Lima", ""]],
+            estagiarios=[["João Pedro Matos", "", "", "", "", "Informática", "", "", date(2026, 8, 24)]])
+        r = self._enviar(arquivo)
+        self.assertContains(r, "Supervisores, linha 2: escolha a concedente")
+        arquivo = self._preencher(estagiarios=[["João", "", "", "", "", "Informática", "", "", "32/13/2026", None, None,
+                                                "", "", None, None, None, None, "Empresa X", ""]])
+        r = self._enviar(arquivo)
+        msgs = dict(r.context["resultado"].erros)
+        self.assertIn("Estagiários, linha 2", msgs)
+        self.assertContains(r, "Estagiários, linha 2")
+
+
+class RelatorioTurmaTests(Base):
+    def test_relatorio_mostra_estagiarios_e_pontos_de_atencao(self):
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 2), situacao=Registro.Situacao.FALTA)
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 3), situacao=Registro.Situacao.FALTA)
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 9), situacao=Registro.Situacao.FALTA)
+        self.entrar(self.ori)
+        r = self.client.get(reverse("relatorio_turma", args=[self.turma.pk]))
+        self.assertContains(r, "Maria da Silva Souza")
+        self.assertContains(r, "RELATÓRIO GERAL DE ESTÁGIO")
+        self.assertEqual(r.context["tot"]["faltas"], 3)
+        self.assertEqual(r.context["tot"]["sem_registro"], 1)  # terça 10/11 sem registro
+        motivos = dict(r.context["atencao"])[self.est]
+        self.assertIn("3 faltas", motivos)
+
+    def test_so_gestor_ve(self):
+        self.entrar(self.aluno)
+        self.assertEqual(self.client.get(reverse("relatorio_turma", args=[self.turma.pk])).status_code, 403)
+        self.entrar(self.sup)
+        self.assertEqual(self.client.get(reverse("relatorio_turma", args=[self.turma.pk])).status_code, 403)
+
+
+class CheckinLocalizacaoTests(Base):
+    PERTO = {"geo_lat": "-3.731950", "geo_lng": "-38.526700", "geo_precisao": "20"}
+    LONGE = {"geo_lat": "-3.760000", "geo_lng": "-38.526700", "geo_precisao": "20"}
+
+    def setUp(self):
+        super().setUp()
+        self.local.latitude, self.local.longitude = Decimal("-3.731900"), Decimal("-38.526700")
+        self.local.save()
+        self.est.escalas.update(dias="0,1,2,3,4")
+        self.entrar(self.aluno)
+
+    def _modo(self, modo):
+        c = Configuracao.atual()
+        c.checkin_localizacao = modo
+        c.save()
+
+    def test_desligado_nao_guarda_localizacao(self):
+        self.client.post(reverse("marcar_presenca", args=[self.est.pk]), self.LONGE)
+        self.assertIsNone(Registro.objects.get(estagio=self.est).geo_entrada)
+
+    def test_registrar_guarda_distancia_e_avisa_supervisor(self):
+        self._modo("REGISTRAR")
+        self.client.post(reverse("marcar_presenca", args=[self.est.pk]), self.LONGE)
+        reg = Registro.objects.get(estagio=self.est)
+        self.assertGreater(reg.geo_entrada["distancia"], 3000)
+        self.assertTrue(reg.local_entrada["longe"])
+        self.assertIn("longe", reg.local_entrada["texto"] + " longe")
+        self.assertTrue(Notificacao.objects.filter(usuario=self.sup, texto__contains="km da concedente").exists())
+        self.entrar(self.sup)
+        self.assertContains(self.client.get(reverse("painel_supervisor")), "geo longe")
+
+    def test_exigir_bloqueia_longe_e_sem_permissao(self):
+        self._modo("EXIGIR")
+        r = self.client.post(reverse("marcar_presenca", args=[self.est.pk]), self.LONGE, follow=True)
+        self.assertContains(r, "Só é possível marcar presença no local")
+        r = self.client.post(reverse("marcar_presenca", args=[self.est.pk]), {"geo_erro": "negada"}, follow=True)
+        self.assertContains(r, "permita o acesso à localização")
+        self.assertFalse(Registro.objects.filter(estagio=self.est).exists())
+        self.client.post(reverse("marcar_presenca", args=[self.est.pk]), self.PERTO)
+        reg = Registro.objects.get(estagio=self.est)
+        self.assertLess(reg.geo_entrada["distancia"], 50)
+        self.assertFalse(reg.local_entrada["longe"])
+        # saída longe também é bloqueada
+        r = self.client.post(reverse("registrar_saida", args=[self.est.pk]), {"ponto": "hora_saida", **self.LONGE}, follow=True)
+        self.assertContains(r, "registrar a saída")
+        reg.refresh_from_db()
+        self.assertIsNone(reg.hora_saida)
+
+    def test_exigir_sem_ponto_da_concedente_so_registra(self):
+        self._modo("EXIGIR")
+        self.local.latitude = self.local.longitude = None
+        self.local.save()
+        self.client.post(reverse("marcar_presenca", args=[self.est.pk]), self.LONGE)
+        reg = Registro.objects.get(estagio=self.est)
+        self.assertIsNone(reg.geo_entrada["distancia"])
+
+    def test_coordenadas_do_link_do_mapa(self):
+        from .services import coordenadas_do_link
+
+        self.assertEqual(coordenadas_do_link("https://www.google.com/maps/place/X/@-3.1,-38.2,17z/data=!3d-3.7319!4d-38.5267"),
+                         (Decimal("-3.731900"), Decimal("-38.526700")))
+        self.assertIsNone(coordenadas_do_link("https://maps.app.goo.gl/abc"))
+
+
+@override_settings(EMAIL_ATIVO=True, SITE_URL="https://estagio.exemplo.br")
+class AvisosEmailTests(Base):
+    def test_aviso_vai_por_email_para_quem_tem_email(self):
+        from django.core import mail
+
+        from .services import notificar
+
+        self.sup.email = "sup@exemplo.br"
+        self.sup.save()
+        self.ori.email = "ori@exemplo.br"
+        self.ori.avisos_email = False
+        self.ori.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            notificar([self.sup, self.ori, self.aluno], "Maria marcou presença hoje às 07:58.", "/supervisor/")
+        self.assertEqual(Notificacao.objects.count(), 3)  # o sino recebe todos
+        self.assertEqual(len(mail.outbox), 1)  # e-mail só para quem tem e não desligou
+        msg = mail.outbox[0]
+        self.assertEqual(msg.to, ["sup@exemplo.br"])
+        self.assertIn("Maria marcou presença", msg.subject)
+        self.assertIn("https://estagio.exemplo.br/supervisor/", msg.body)
+
+    def test_desligado_na_configuracao(self):
+        from django.core import mail
+
+        from .services import notificar
+
+        c = Configuracao.atual()
+        c.avisos_email = False
+        c.save()
+        self.sup.email = "sup@exemplo.br"
+        self.sup.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            notificar([self.sup], "Teste")
+        self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(EMAIL_ATIVO=False)
+    def test_sem_servidor_nao_envia(self):
+        from django.core import mail
+
+        from .services import notificar
+
+        self.sup.email = "sup@exemplo.br"
+        self.sup.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            notificar([self.sup], "Teste")
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_email_de_teste_nas_configuracoes(self):
+        from django.core import mail
+
+        self.ori.is_superuser = True
+        self.ori.email = "ori@exemplo.br"
+        self.ori.save()
+        self.entrar(self.ori)
+        self.assertContains(self.client.get(reverse("configuracoes")), "Enviar e-mail de teste")
+        r = self.client.post(reverse("configuracoes"), {"acao": "teste_email"}, follow=True)
+        self.assertContains(r, "E-mail de teste enviado")
+        self.assertEqual(mail.outbox[0].to, ["ori@exemplo.br"])

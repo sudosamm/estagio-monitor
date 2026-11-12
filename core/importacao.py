@@ -202,8 +202,11 @@ class Resultado:
         return not self.erros
 
 
-def importar(linhas, opcoes, usuario, confirmar=False):
-    """Processa as linhas. Sem `confirmar`, desfaz tudo no fim (prévia)."""
+def importar(linhas, opcoes, usuario, confirmar=False, concedentes_extra=(), supervisores_extra=()):
+    """Processa as linhas. Sem `confirmar`, desfaz tudo no fim (prévia).
+
+    `concedentes_extra` e `supervisores_extra` (da planilha modelo) são cadastros sem estagiário: cada linha tem as
+    colunas concedente_* (e supervisor_*, no caso dos supervisores)."""
     r = Resultado()
     senha_hash = make_password(settings.SENHA_PADRAO)
     concedentes, supervisores, cursos, orientadores = {}, {}, {}, {}
@@ -214,6 +217,19 @@ def importar(linhas, opcoes, usuario, confirmar=False):
                 with transaction.atomic():
                     _linha(n, d, opcoes, usuario, r, senha_hash, concedentes, supervisores, cursos, orientadores,
                            cpfs_no_arquivo)
+            except ErroImportacao as exc:
+                r.erros.append((n, str(exc)))
+        for n, d in concedentes_extra:
+            try:
+                with transaction.atomic():
+                    _concedente(d, opcoes, r, concedentes)
+            except ErroImportacao as exc:
+                r.erros.append((n, str(exc)))
+        for n, d in supervisores_extra:
+            try:
+                with transaction.atomic():
+                    local = _concedente(d, opcoes, r, concedentes)
+                    _supervisor(d, local, usuario, r, senha_hash, supervisores)
             except ErroImportacao as exc:
                 r.erros.append((n, str(exc)))
         if confirmar and r.ok:

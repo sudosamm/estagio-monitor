@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.files.base import ContentFile
+from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils.crypto import get_random_string
 
@@ -187,14 +188,63 @@ def trocar_supervisor(estagio, novo, feita_por, motivo=""):
 
 
 def notificar(usuarios, texto, link="", exceto=None):
+    """Aviso no sino de cada pessoa e, se estiver configurado, também por e-mail."""
     vistos = set()
-    objs = []
+    objs, destinatarios = [], []
     for u in usuarios:
         if not u or u.pk in vistos or (exceto and u.pk == exceto.pk):
             continue
         vistos.add(u.pk)
         objs.append(Notificacao(usuario=u, texto=texto[:255], link=link))
+        if u.email and u.is_active and u.avisos_email:
+            destinatarios.append(u)
     Notificacao.objects.bulk_create(objs)
+    if destinatarios and email_ativo():
+        mensagens = [mensagem_aviso(u, texto, link) for u in destinatarios]
+        transaction.on_commit(lambda: enviar_emails(mensagens))
+
+
+def email_ativo():
+    from django.conf import settings
+
+    from .models import Configuracao
+
+    return settings.EMAIL_ATIVO and Configuracao.atual().avisos_email
+
+
+def mensagem_aviso(usuario, texto, link=""):
+    """(assunto, corpo, remetente, [destinatário]) no formato de send_mass_mail."""
+    from django.conf import settings
+
+    site = settings.SITE_URL
+    corpo = [f"Olá, {usuario.primeiro_nome}.", "", texto]
+    if link and site:
+        corpo += ["", f"Abrir no sistema: {site}{link}"]
+    corpo += ["", "—", f"Aviso automático do {settings.NOME_SISTEMA}. Não responda este e-mail."]
+    if site:
+        corpo.append(f"Para não receber avisos por e-mail, desmarque a opção em Meus dados: {site}/perfil/")
+    assunto = f"[{settings.NOME_SISTEMA}] {texto[:90]}{'…' if len(texto) > 90 else ''}"
+    return (assunto.replace("\n", " "), "\n".join(corpo), settings.DEFAULT_FROM_EMAIL, [usuario.email])
+
+
+def enviar_emails(mensagens):
+    """Envia numa conexão só. Em produção roda em segundo plano: uma falha no e-mail nunca derruba a página."""
+    import logging
+    import threading
+
+    from django.conf import settings
+    from django.core.mail import send_mass_mail
+
+    def enviar():
+        try:
+            send_mass_mail(mensagens, fail_silently=False)
+        except Exception:  # noqa: BLE001 — servidor de e-mail fora do ar não pode quebrar o sistema
+            logging.getLogger("core.email").exception("Falha ao enviar %d e-mail(s) de aviso", len(mensagens))
+
+    if settings.EMAIL_ASSINCRONO:
+        threading.Thread(target=enviar, daemon=True).start()
+    else:
+        enviar()
 
 
 # ---------------------------------------------------------------- dias e status
@@ -671,3 +721,71 @@ def recusar_candidatura(cand, usuario, parecer):
         telefone=cand.contato_telefone, assunto=f"Cadastro de concedente — {_nome_escola()}", mensagem=mensagem,
         criado_por=usuario,
     )
+
+
+# ---------------------------------------------------------------- check-in com localização
+
+def distancia_metros(lat1, lng1, lat2, lng2):
+    """Distância em metros entre dois pontos (fórmula de haversine)."""
+    from math import asin, cos, radians, sin, sqrt
+
+    lat1, lng1, lat2, lng2 = map(lambda v: radians(float(v)), (lat1, lng1, lat2, lng2))
+    a = sin((lat2 - lat1) / 2) ** 2 + cos(lat1) * cos(lat2) * sin((lng2 - lng1) / 2) ** 2
+    return round(2 * 6371000 * asin(sqrt(a)))
+
+
+def coordenadas_do_link(link):
+    """Latitude e longitude de um link do Google Maps / OpenStreetMap, se o link trouxer as coordenadas."""
+    import re
+
+    padroes = [r"!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)", r"@(-?\d+\.\d+),(-?\d+\.\d+)",
+               r"[?&](?:q|query|ll|destination)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)",
+               r"mlat=(-?\d+\.\d+)&mlon=(-?\d+\.\d+)", r"^\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$"]
+    for p in padroes:
+        m = re.search(p, link or "")
+        if m:
+            lat, lng = float(m.group(1)), float(m.group(2))
+            if -90 <= lat <= 90 and -180 <= lng <= 180:
+                return Decimal(f"{lat:.6f}"), Decimal(f"{lng:.6f}")
+    return None
+
+
+ERROS_GEO = {"negada": "permissão negada", "indisponivel": "GPS indisponível", "tempo": "demorou demais",
+             "sem_suporte": "navegador sem localização"}
+
+
+def ler_localizacao(post, local):
+    """Localização enviada pelo celular junto com a marcação. Devolve o dict guardado no registro."""
+    erro = post.get("geo_erro", "")
+    try:
+        lat, lng = float(post.get("geo_lat", "")), float(post.get("geo_lng", ""))
+        precisao = round(float(post.get("geo_precisao") or 0))
+    except ValueError:
+        return {"erro": ERROS_GEO.get(erro, "não enviada")}
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        return {"erro": "inválida"}
+    geo = {"lat": round(lat, 6), "lng": round(lng, 6), "precisao": precisao, "distancia": None}
+    if local and local.latitude is not None and local.longitude is not None:
+        geo["distancia"] = distancia_metros(lat, lng, local.latitude, local.longitude)
+        geo["raio"] = local.raio_checkin
+    return geo
+
+
+def conferir_localizacao(estagio, post, acao="marcar presença"):
+    """(geo, mensagem de bloqueio). Bloqueia só no modo “exigir” e quando a concedente tem ponto no mapa."""
+    from .models import Configuracao, descrever_geo
+
+    modo = Configuracao.atual().checkin_localizacao
+    if modo == Configuracao.Localizacao.DESLIGADO:
+        return None, None
+    geo = ler_localizacao(post, estagio.local)
+    if modo == Configuracao.Localizacao.EXIGIR and estagio.local and estagio.local.latitude is not None:
+        if geo.get("erro"):
+            return geo, (f"Para {acao}, permita o acesso à localização do celular e tente de novo "
+                         f"({geo['erro']}). Se não conseguir, peça ao supervisor para lançar o dia.")
+        info = descrever_geo(geo, estagio.local)
+        if info["longe"]:
+            return geo, (f"Você parece estar {info['texto']} (limite: {estagio.local.raio_checkin} m). "
+                         f"Só é possível {acao} no local do estágio. Se estiver lá, ative o GPS, "
+                         "espere alguns segundos e tente de novo, ou peça ao supervisor para lançar o dia.")
+    return geo, None

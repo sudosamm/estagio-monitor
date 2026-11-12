@@ -9,6 +9,7 @@ def globais(request):
 
         ctx["notificacoes_nao_lidas"] = user.notificacoes.filter(lida=False).count()
         ctx["CONFIG"] = Configuracao.atual()
+        ctx["EMAIL_ATIVO"] = settings.EMAIL_ATIVO
         if user.pode("candidaturas"):
             from .models import Candidatura
 

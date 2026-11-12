@@ -6,7 +6,7 @@
   <div class="acoes">
     <a class="btn sec" href="{% url 'criar_supervisores' %}">{% icone "mais" %} Supervisores</a>
     <a class="btn" href="{% url 'criar_estagiarios' %}">{% icone "mais" %} Estagiários</a>
-    {% if user.is_superuser %}<a class="btn sec" href="{% url 'criar_orientador' %}">{% icone "mais" %} Orientador</a><a class="btn sec" href="{% url 'criar_coordenador' %}">{% icone "mais" %} Coordenador</a><a class="btn" href="{% url 'importar_csv' %}">{% icone "upload" %} Importar CSV</a>{% endif %}
+    {% if user.is_superuser %}<a class="btn sec" href="{% url 'criar_orientador' %}">{% icone "mais" %} Orientador</a><a class="btn sec" href="{% url 'criar_coordenador' %}">{% icone "mais" %} Coordenador</a><a class="btn" href="{% url 'importar_csv' %}">{% icone "upload" %} Importar planilha</a>{% endif %}
   </div></div>
 <form class="filtros card" method="get">
   <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ q }}" placeholder="Nome ou usuário"></div>

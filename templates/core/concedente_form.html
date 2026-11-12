@@ -12,7 +12,9 @@
     {% for titulo, campos in form.secoes %}
       <fieldset class="secao">
         <legend>{{ titulo }}</legend>
+        {% if titulo == "Localização para o check-in" %}<p class="muted" style="font-size:.85rem;margin-top:0">Ponto usado para conferir se o estagiário marcou presença no local (quando a conferência estiver ligada em Configurações).{% if not CONFIG.checkin_localizacao or CONFIG.checkin_localizacao == "DESLIGADO" %} <strong>Hoje a conferência está desligada.</strong>{% endif %}</p>{% endif %}
         <div class="form-linha">{% for campo in campos %}{% include "core/_campo.html" %}{% endfor %}</div>
+        {% if titulo == "Localização para o check-in" %}<p class="mb-0"><button class="btn sec sm" type="button" data-minha-posicao hidden>{% icone "pin" %} Estou na concedente: usar minha posição atual</button>{% if obj.latitude is not None %} <a class="btn sec sm" href="https://www.google.com/maps?q={{ obj.latitude|stringformat:'s' }},{{ obj.longitude|stringformat:'s' }}" target="_blank" rel="noopener noreferrer">Ver no mapa</a>{% endif %}</p>{% endif %}
       </fieldset>
     {% endfor %}
     <div class="acoes"><button class="btn" type="submit">Salvar concedente</button><a class="btn sec" href="{% url 'locais' %}">Cancelar</a></div>

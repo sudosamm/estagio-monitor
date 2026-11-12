@@ -15,6 +15,6 @@ class TrocaSenhaObrigatoriaMiddleware:
         if user and user.is_authenticated and user.deve_trocar_senha:
             caminho = request.path
             livres = [reverse(n) for n in self.LIBERADOS]
-            if caminho not in livres and not caminho.startswith(("/static/", "/admin/")):
+            if caminho not in livres and not caminho.startswith(("/static/", "/admin/", "/sw.js", "/manifest.webmanifest", "/offline/")):
                 return redirect("trocar_senha")
         return self.get_response(request)

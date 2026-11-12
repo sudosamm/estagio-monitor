@@ -13,7 +13,13 @@ Sistema de acompanhamento de estágio para **orientadores**, **supervisores** e 
 | **Supervisor** | Ver os seus estagiários no dia; confirmar ou contestar presenças (uma a uma ou em lote); lançar um dia que o estagiário esqueceu; ver quem imprimiu a folha de frequência; completar o próprio perfil; banco de talentos (quando aberto); pedir visita ou conversa; mensagens e arquivos |
 | **Estagiário** | Marcar entrada, intervalo e saída; informar ausência (hoje, dias futuros ou até 7 dias atrás); planejar dias de reposição; ver a previsão de término mudar conforme preenche o calendário; imprimir a própria folha de frequência do mês; foto de perfil e, se habilitado, currículo; anotar como foi o dia; pedir visita ou conversa; tirar dúvidas; enviar e baixar arquivos |
 
-Todos recebem **notificações** (o sino no topo) quando algo muda, por exemplo: presença marcada, ausência informada, escala alterada, visita agendada, mensagem ou arquivo novo.
+Todos recebem **notificações** (o sino no topo) quando algo muda, por exemplo: presença marcada, ausência informada, escala alterada, visita agendada, mensagem ou arquivo novo. Com o servidor de e-mail configurado, os mesmos avisos vão também por **e-mail** (ver *Avisos por e-mail*).
+
+### App no celular
+O sistema pode ser **instalado como app** (PWA): ícone na tela inicial, abre em tela cheia, sem barra do navegador.
+- **Android (Chrome):** menu do usuário → *Instalar no celular*, ou o aviso “Instalar app” do próprio Chrome.
+- **iPhone (Safari):** Compartilhar → *Adicionar à Tela de Início*.
+- O app não guarda páginas com dados pessoais no aparelho: só o visual (CSS, ícones). Sem internet, aparece uma tela “Sem conexão”, e a presença só é marcada online, com o horário do servidor.
 
 ### Contas
 - Usuário gerado como `primeiro.ultimo` sem acentos (ex.: *Maria da Silva Souza* → `maria.souza`). Se já existir, recebe um número (`maria.souza2`).
@@ -57,8 +63,8 @@ Todo estágio precisa de **concedente** e **supervisor**, e o supervisor tem de 
 - **Mais de uma concedente:** um supervisor pode estar em várias concedentes. Vincule-o na ficha da concedente, em “Vincular supervisor já cadastrado em outra concedente”, ou na edição da conta.
 - **Desvincular:** não é possível tirar um supervisor de uma concedente onde ele ainda supervisiona estagiários ativos.
 - **Trocar o supervisor do estagiário:** o supervisor só sai do estágio quando o orientador ou o coordenador coloca **outro no lugar**, pelo botão *Trocar supervisor* do estágio (ou ao editar o estágio). Nunca fica sem supervisor. Cada troca fica no histórico, e o novo supervisor, o anterior e o estagiário são avisados.
-- **Concedente desativada:** some dos cadastros, mas só pode ser desativada sem estagiários ativos. Dá para desativar junto as contas dos supervisores que só atuam nela. Aprovar uma nova candidatura dela na captação, ou importá-la por CSV, reativa a concedente.
-- **Na importação por CSV:** o supervisor de cada linha fica vinculado à concedente daquela linha. Se a mesma pessoa já existir em outra concedente, a prévia avisa para você conferir.
+- **Concedente desativada:** some dos cadastros, mas só pode ser desativada sem estagiários ativos. Dá para desativar junto as contas dos supervisores que só atuam nela. Aprovar uma nova candidatura dela na captação, ou importá-la pela planilha, reativa a concedente.
+- **Na importação (planilha ou CSV):** o supervisor fica vinculado à concedente da linha. Se a mesma pessoa já existir em outra concedente, a prévia avisa para você conferir.
 
 ### Histórico das marcações
 Toda mudança no registro de um dia fica guardada: **quem fez, quando e o que mudou**, com os horários de antes e depois (ex.: “marcou a entrada pelo botão às 07:58” e depois “digitou os horários: Entrada 07:58 → 07:30”).
@@ -105,15 +111,46 @@ Em **Configurações** existem dois interruptores:
 
 Só aparece no banco quem marcar “Mostrar meu perfil às concedentes”.
 
-### Importação em massa (CSV)
-Em **Contas → Importar CSV** (só administrador), envie um CSV com **uma linha por estagiário**: dados do estagiário, a concedente (unidade) e o supervisor dele. Clique em **Baixar modelo CSV** para ver todas as colunas.
+### Importação em massa (planilha modelo ou CSV)
+O SICE não exporta planilhas, então o ponto de partida é a **planilha modelo** (Excel). Em **Contas → Importar planilha** (só administrador), clique em **Baixar planilha modelo**. Ela tem uma aba para cada cadastro:
+- **Concedentes:** uma linha por unidade (nome, razão social, CNPJ, endereço, município, representante legal).
+- **Supervisores:** uma linha por supervisor, escolhendo a concedente numa lista suspensa.
+- **Estagiários:** uma linha por estagiário, escolhendo a concedente e o supervisor nas listas. Cursos, turmas e orientadores já cadastrados também aparecem em listas.
+
+Passe o mouse no título de cada coluna para ver a explicação. Se a concedente tiver um supervisor só na aba, a coluna *Supervisor* do estagiário pode ficar vazia. Concedentes e supervisores sem estagiário também são cadastrados. CPFs digitados como número (sem o zero à esquerda) são corrigidos. Erros aparecem por aba e linha (ex.: “Supervisores, linha 4: escolha a concedente”). Funciona com Excel, LibreOffice ou Google Planilhas (baixe como .xlsx).
+
+Também dá para enviar um CSV com **uma linha por estagiário**: dados do estagiário, a concedente (unidade) e o supervisor dele. Clique em **Modelo CSV** para ver todas as colunas.
 - **Sem duplicar:** concedentes e supervisores que se repetem são cadastrados uma vez só. Órgãos com várias unidades no mesmo CNPJ viram uma concedente por nome de unidade.
 - **Prévia:** primeiro aparece uma prévia com tudo o que será criado e os erros de cada linha, e nada é gravado até você confirmar.
 - **Padrões:** dias e horários vazios no CSV usam os padrões escolhidos na tela.
 - **Estágio já em andamento:** “Acompanhar no sistema a partir de” evita que os dias anteriores apareçam como sem registro. As horas já feitas vão na coluna `horas_anteriores`.
 - **Reenvio:** reenviar o mesmo arquivo não duplica, porque estagiários com o mesmo CPF e estágio ativo são ignorados.
 
-O arquivo gerado a partir dos TCEs fica em `importacao/`, pasta que não vai para o Git porque tem dados pessoais.
+O arquivo gerado a partir dos TCEs fica em `importacao/`, pasta que não vai para o Git porque tem dados pessoais. A planilha preenchida também tem dados pessoais: guarde-a em local seguro.
+
+### Relatório geral da turma (PDF)
+Em **Turmas e cursos**, o botão *Relatório* de cada turma (ou *Relatório da turma* na lista de estagiários filtrada por turma) abre uma página A4 deitada com:
+- **Resumo:** estagiários ativos, média da carga cumprida, quem já cumpriu, quem termina depois do fim do termo, faltas, dias sem registro e visitas realizadas.
+- **Uma linha por estagiário:** concedente, supervisor, início, fim do termo, horas cumpridas (com barra), faltas, dias sem registro, presenças a validar, previsão de término, visitas e situação.
+- **Pontos de atenção:** sem supervisor, previsão depois do termo, 3 ou mais faltas, 3 ou mais dias sem registro, presenças aguardando o supervisor, nenhuma visita.
+- Espaço para assinatura do orientador e da coordenação.
+
+Clique em *Salvar PDF / imprimir* e escolha **Salvar como PDF** (funciona também no celular).
+
+### Check-in com localização
+Em **Configurações → Localização ao marcar presença**:
+- **Não pedir a localização** (padrão).
+- **Registrar e avisar:** o celular pede a localização ao marcar a entrada e a saída. A distância até a concedente fica no registro, e o supervisor é avisado quando a marcação foi longe (“marcou a 3,1 km da concedente”). A presença é aceita do mesmo jeito.
+- **Exigir estar perto:** a entrada e a saída só são aceitas dentro da distância permitida. Sem permissão de localização, a marcação é recusada e o supervisor pode lançar o dia.
+
+Para comparar, cadastre o **ponto de cada concedente** na ficha dela (*Localização para o check-in*): latitude e longitude, ou o botão “Estou na concedente: usar minha posição atual”, ou um link do Google Maps com coordenadas no campo *Link do mapa*. A *Distância aceita* padrão é 300 m. A imprecisão do GPS informada pelo celular (até 150 m) é descontada. Concedente sem ponto cadastrado: a localização é só registrada, nunca bloqueia.
+
+**Onde ver:** no painel do supervisor (presenças a validar), na página do dia e na aba *Registros e diário*, com link para o mapa. A localização é lida só no momento da marcação, nunca em segundo plano. O celular só permite isso em endereço `https://`.
+
+### Avisos por e-mail
+Com o servidor de e-mail configurado (variáveis `EMAIL_*` abaixo), cada aviso do sino também vai para o e-mail de quem tem e-mail cadastrado. Cada pessoa pode desligar em **Meus dados** (“Receber os avisos também por e-mail”), e o administrador pode desligar para todos em **Configurações**. Lá também há o botão *Enviar e-mail de teste para mim*. O envio roda em segundo plano: se o servidor de e-mail falhar, o sistema continua funcionando e o erro vai para o log.
+
+**WhatsApp automático** exige a API oficial do WhatsApp Business (Meta): número próprio, empresa verificada, mensagens-modelo aprovadas e cobrança por conversa. Ferramentas não oficiais que “automatizam o WhatsApp Web” violam os termos e podem banir o número, por isso não são usadas. Por enquanto há atalhos que abrem o WhatsApp com a conversa pronta (captação e telefone do supervisor na página do estágio).
 
 ### Captação de concedentes
 Em **Configurações**, abra a captação, escolha o ano letivo e, se quiser, um prazo. A página pública **/seja-concedente/** (link também na tela de login) recebe os cadastros:
@@ -138,6 +175,7 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Contas, concedentes, cursos e turmas (inclui desativar/reativar) | ✔ | ✔ |
 | Captação de concedentes | ✔ | ✔ |
 | Frequências impressas | ✔ | ✔ |
+| Relatório geral da turma (PDF) | ✔ | ✔ (cursos que coordena) |
 | Agendar visitas | ✔ | — |
 | Mudar dias em lote (cada um mantém seus horários) | ✔ | — |
 | Mudar o ano de referência | ✔ | — |
@@ -196,6 +234,7 @@ O serviço sobe com **Gunicorn na porta 8000** dentro do container. O banco (SQL
    - `SENHA_PADRAO`: a senha inicial das contas
    - `ADMIN_NOME`: seu nome completo, que cria o primeiro orientador administrador
    - `PORTA`: a porta livre do servidor que o túnel vai usar (ex.: `8010`)
+   - *(opcional, avisos por e-mail)* `EMAIL_HOST` (ex.: `smtp.gmail.com`), `EMAIL_PORT` (`587`), `EMAIL_HOST_USER` (o e-mail remetente), `EMAIL_HOST_PASSWORD` (no Gmail, uma “senha de app”, não a senha normal) e `SITE_URL` (ex.: `https://estagio.seudominio.com.br`, para os links dos e-mails; vazio = o de `CSRF_TRUSTED_ORIGINS`)
 4. Garanta que o volume `/data` é persistente. No modo Compose isso já vem configurado.
 5. Faça o deploy. No Cloudflare Tunnel, aponte o hostname para `http://localhost:<PORTA>` (ou o IP da VPS, se o cloudflared rodar em outra máquina).
 6. Entre com o usuário gerado a partir de `ADMIN_NOME` (aparece no log do container) e a senha padrão. O sistema vai pedir para trocar a senha.
@@ -221,15 +260,13 @@ Tudo fica em `/data` (`db.sqlite3` e a pasta `anexos/`). Copiar esse volume já 
 ```
 core/models.py      Usuários, cursos, locais, estágios, escalas, registros, agenda, arquivos, mensagens
 core/services.py    Regras: geração de usuário, status de cada dia, horas e previsão, notificações
-core/views/         Telas por área (comum, estágio, orientador, supervisor, agenda)
+core/views/         Telas por área (comum, estágio, orientador, supervisor, agenda, relatórios, app/PWA)
+core/planilha.py    Planilha modelo (Excel) de importação: gerar e ler
 templates/          HTML (visual inspirado no portal ce.gov.br)
 static/             CSS e JS próprios, sem frameworks
 ```
 
 ## Ideias para as próximas versões
-- Notificação por e-mail ou WhatsApp, além do sino
-- Importar estagiários de uma planilha (CSV/Excel) exportada do SICE
-- Check-in com geolocalização (confirmar que o estagiário está perto do local)
 - Avaliação do estagiário pelo supervisor (formulário periódico)
-- Relatório geral em PDF por turma
-- Instalar como app no celular (PWA)
+- Autoavaliação do estagiário e avaliação do orientador, com texto pronto para copiar no SICE
+- WhatsApp automático pela API oficial do WhatsApp Business

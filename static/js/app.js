@@ -97,3 +97,73 @@ document.querySelectorAll("select[data-autoenvio]").forEach((sel) => {
   radios.forEach((r) => r.addEventListener("change", atualizar));
   atualizar();
 })();
+// app instalável (PWA): registra o service worker e oferece o botão "Instalar no celular"
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {}); });
+}
+(() => {
+  const botoes = document.querySelectorAll("[data-instalar]");
+  if (!botoes.length || window.matchMedia("(display-mode: standalone)").matches || navigator.standalone) return;
+  let pedido = null;
+  window.addEventListener("beforeinstallprompt", (ev) => {
+    ev.preventDefault();
+    pedido = ev;
+    botoes.forEach((b) => { b.hidden = false; });
+  });
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (ios) botoes.forEach((b) => { b.hidden = false; });
+  botoes.forEach((b) => b.addEventListener("click", async () => {
+    if (pedido) {
+      pedido.prompt();
+      await pedido.userChoice;
+      pedido = null;
+      botoes.forEach((x) => { x.hidden = true; });
+    } else if (ios) {
+      window.alert("No iPhone: toque em Compartilhar (quadrado com seta) e depois em “Adicionar à Tela de Início”.");
+    }
+  }));
+  window.addEventListener("appinstalled", () => botoes.forEach((x) => { x.hidden = true; }));
+})();
+// check-in com localização: pede a posição do celular só na hora de marcar entrada/saída
+document.addEventListener("submit", (ev) => {
+  const form = ev.target;
+  if (ev.defaultPrevented || !form.hasAttribute || !form.hasAttribute("data-geo") || form.dataset.geoPronto) return;
+  ev.preventDefault();
+  const btn = ev.submitter || form.querySelector("button[type=submit]");
+  const textoOriginal = btn ? btn.innerHTML : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Conferindo localização…"; }
+  const campo = (nome, valor) => {
+    let i = form.querySelector(`input[name="${nome}"]`);
+    if (!i) { i = document.createElement("input"); i.type = "hidden"; i.name = nome; form.appendChild(i); }
+    i.value = valor;
+  };
+  const enviar = () => {
+    form.dataset.geoPronto = "1";
+    if (btn) { btn.innerHTML = textoOriginal; }
+    if (btn && btn.name) campo(btn.name, btn.value);
+    form.submit();
+  };
+  if (!("geolocation" in navigator)) { campo("geo_erro", "sem_suporte"); enviar(); return; }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      campo("geo_lat", pos.coords.latitude); campo("geo_lng", pos.coords.longitude);
+      campo("geo_precisao", Math.round(pos.coords.accuracy || 0)); enviar();
+    },
+    (err) => { campo("geo_erro", { 1: "negada", 2: "indisponivel", 3: "tempo" }[err.code] || "indisponivel"); enviar(); },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+  );
+});
+// ficha da concedente: preencher latitude/longitude com a posição atual
+document.querySelectorAll("[data-minha-posicao]").forEach((b) => {
+  b.hidden = !("geolocation" in navigator);
+  b.addEventListener("click", () => {
+    const original = b.textContent;
+    b.disabled = true; b.textContent = "Obtendo posição…";
+    navigator.geolocation.getCurrentPosition((pos) => {
+      document.getElementById("id_latitude").value = pos.coords.latitude.toFixed(6);
+      document.getElementById("id_longitude").value = pos.coords.longitude.toFixed(6);
+      b.disabled = false; b.textContent = `Posição preenchida (precisão de ${Math.round(pos.coords.accuracy)} m)`;
+    }, () => { b.disabled = false; b.textContent = original; window.alert("Não foi possível obter a localização. Permita o acesso no navegador."); },
+    { enableHighAccuracy: true, timeout: 15000 });
+  });
+});

@@ -462,6 +462,25 @@ def configuracoes(request):
     if not request.user.is_superuser:
         raise PermissionDenied
     config = Configuracao.atual()
+    if request.POST.get("acao") == "teste_email":
+        from django.conf import settings
+        from django.core.mail import send_mass_mail
+
+        from ..services import mensagem_aviso
+
+        if not settings.EMAIL_ATIVO:
+            messages.error(request, "O servidor de e-mail não está configurado (variável EMAIL_HOST).")
+        elif not request.user.email:
+            messages.error(request, "Cadastre o seu e-mail em Meus dados para receber o teste.")
+        else:
+            # o teste envia na hora (sem segundo plano) para mostrar o erro do servidor, se houver
+            try:
+                send_mass_mail([mensagem_aviso(request.user, "Teste de e-mail: os avisos do sistema estão chegando.",
+                                               reverse("notificacoes"))], fail_silently=False)
+                messages.success(request, f"E-mail de teste enviado para {request.user.email}. Confira também o spam.")
+            except Exception as exc:  # noqa: BLE001
+                messages.error(request, f"O servidor de e-mail recusou o envio: {exc}")
+        return redirect("configuracoes")
     logo_antigo = config.logo_folha.name if config.logo_folha else ""
     form = ConfiguracaoForm(request.POST or None, request.FILES or None, instance=config)
     if request.method == "POST" and form.is_valid():
@@ -474,6 +493,7 @@ def configuracoes(request):
         "form": form, "titulo": "Configurações do sistema", "voltar": reverse("painel"),
         "ajuda": "Os dados da escola e o logotipo aparecem no cabeçalho da folha de frequência de todos os estagiários. "
                  "O banco de talentos só mostra estagiários que autorizarem no próprio perfil.",
+        "extra_template": "core/_config_email.html",
     })
 
 

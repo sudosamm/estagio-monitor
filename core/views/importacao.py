@@ -10,7 +10,8 @@ from django.utils import timezone
 
 from ..forms import ImportarCSVForm
 from ..importacao import COLUNAS, ErroImportacao, Opcoes, importar, ler_csv, modelo_csv
-from ..models import Usuario
+from ..models import Curso, Turma, Usuario
+from ..planilha import eh_planilha, gerar_modelo, ler_planilha
 from .base import orientador_requerido
 
 CHAVE_SESSAO = "importacao_csv"
@@ -37,6 +38,15 @@ def _iso(v):
 def importar_csv(request):
     if not request.user.is_superuser:
         raise PermissionDenied
+    if request.GET.get("modelo") == "xlsx":
+        conteudo = gerar_modelo(
+            cursos=Curso.objects.values_list("nome", flat=True),
+            turmas=Turma.objects.filter(ativa=True).values_list("nome", flat=True),
+            orientadores=Usuario.objects.filter(papel=Usuario.Papel.ORIENTADOR, is_active=True).values_list("username", flat=True),
+        )
+        resposta = HttpResponse(conteudo, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        resposta["Content-Disposition"] = 'attachment; filename="planilha-cadastro-estagio.xlsx"'
+        return resposta
     if request.GET.get("modelo"):
         resposta = HttpResponse(modelo_csv(), content_type="text/csv; charset=utf-8")
         resposta["Content-Disposition"] = 'attachment; filename="modelo-importacao.csv"'
@@ -49,12 +59,16 @@ def importar_csv(request):
             messages.error(request, "A prévia expirou. Envie o arquivo de novo.")
             return redirect("importar_csv")
         linhas = [(n, d) for n, d in guardado["linhas"]]
-        resultado = importar(linhas, _opcoes_de(guardado["opcoes"]), request.user, confirmar=True)
+        resultado = importar(linhas, _opcoes_de(guardado["opcoes"]), request.user, confirmar=True,
+                             concedentes_extra=[(n, d) for n, d in guardado.get("concedentes", [])],
+                             supervisores_extra=[(n, d) for n, d in guardado.get("supervisores", [])])
         if not resultado.confirmado:
             messages.error(request, "Os dados mudaram desde a prévia e surgiram erros. Confira abaixo.")
             return render(request, "core/importar.html", {"resultado": resultado, "nome_arquivo": guardado["nome"]})
         del request.session[CHAVE_SESSAO]
-        messages.success(request, f"Importação concluída: {len(resultado.linhas_ok)} estágio(s) criados.")
+        messages.success(request, f"Importação concluída: {len(resultado.linhas_ok)} estágio(s), "
+                                  f"{len(resultado.concedentes_novas)} concedente(s) e "
+                                  f"{len(resultado.supervisores_novos)} supervisor(es) novos.")
         from django.conf import settings
 
         return render(request, "core/contas_criadas.html", {
@@ -68,8 +82,13 @@ def importar_csv(request):
     })
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
+        conteudo, nome = d["arquivo"].read(), d["arquivo"].name
+        concedentes, supervisores = [], []
         try:
-            linhas = ler_csv(d["arquivo"].read())
+            if eh_planilha(conteudo, nome):
+                linhas, concedentes, supervisores = ler_planilha(conteudo)
+            else:
+                linhas = ler_csv(conteudo)
         except ErroImportacao as exc:
             form.add_error("arquivo", str(exc))
         else:
@@ -80,7 +99,9 @@ def importar_csv(request):
                 "acompanhamento_desde": _iso(d.get("acompanhamento_desde")),
                 "carga_cursos_novos": d["carga_cursos_novos"], "completar_concedentes": d["completar_concedentes"],
             }
-            resultado = importar(linhas, _opcoes_de(opcoes), request.user, confirmar=False)
-            request.session[CHAVE_SESSAO] = {"linhas": linhas, "opcoes": opcoes, "nome": d["arquivo"].name}
+            resultado = importar(linhas, _opcoes_de(opcoes), request.user, confirmar=False,
+                                 concedentes_extra=concedentes, supervisores_extra=supervisores)
+            request.session[CHAVE_SESSAO] = {"linhas": linhas, "concedentes": concedentes, "supervisores": supervisores,
+                                             "opcoes": opcoes, "nome": nome}
             return render(request, "core/importar.html", {"resultado": resultado, "nome_arquivo": d["arquivo"].name})
     return render(request, "core/importar.html", {"form": form, "colunas": COLUNAS})

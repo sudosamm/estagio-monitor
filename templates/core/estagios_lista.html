@@ -4,7 +4,7 @@
 {% block conteudo %}
 <div class="titulo-pagina">
   <div><h1>Estagiários</h1><p>{{ estagios|length }} encontrado(s){% if ano %} · turmas que estagiam em {{ ano }}{% endif %}</p></div>
-  <div class="acoes">{% include "core/_seletor_ano.html" %}<a class="btn sec" href="{% url 'escala_lote' %}">{% icone "calendario" %} Alterar dias</a><a class="btn" href="{% url 'criar_estagiarios' %}">{% icone "mais" %} Cadastrar estagiários</a></div>
+  <div class="acoes">{% include "core/_seletor_ano.html" %}{% if f.turma.isdigit %}<a class="btn sec" href="{% url 'relatorio_turma' f.turma %}" target="_blank" rel="noopener">{% icone "impressora" %} Relatório da turma</a>{% endif %}<a class="btn sec" href="{% url 'escala_lote' %}">{% icone "calendario" %} Alterar dias</a><a class="btn" href="{% url 'criar_estagiarios' %}">{% icone "mais" %} Cadastrar estagiários</a></div>
 </div>
 <form class="filtros card" method="get">{% if ano %}<input type="hidden" name="ano" value="{{ ano }}">{% endif %}
   <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ f.q }}" placeholder="Nome ou usuário"></div>

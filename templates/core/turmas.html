@@ -20,7 +20,7 @@
             <td><strong>{{ t.nome|default:t.curso.nome }}</strong>{% if not t.ativa %} <span class="etiqueta">inativa</span>{% endif %}</td>
             <td>{{ t.curso }}</td><td>{{ t.ano_ingresso }}</td>
             <td><a href="{% url 'estagios_lista' %}?ano={{ t.ano_estagio }}&turma={{ t.pk }}">{{ t.n }} ativo{{ t.n|pluralize }}</a>{% if t.n_total != t.n %} <small>({{ t.n_total }} no total)</small>{% endif %}</td>
-            <td><a class="btn sec sm" href="{% url 'turma_editar' t.pk %}">Editar</a></td>
+            <td class="nowrap">{% if t.n_total %}<a class="btn sec sm" href="{% url 'relatorio_turma' t.pk %}" target="_blank" rel="noopener" title="Relatório geral da turma (PDF)">{% icone "impressora" %} Relatório</a> {% endif %}<a class="btn sec sm" href="{% url 'turma_editar' t.pk %}">Editar</a></td>
           </tr>{% endfor %}</tbody>
       </table></div>
     </div>

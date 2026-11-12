@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
-from core.views import agenda, captacao, comum, estagio, frequencia, importacao, orientador, supervisor
+from core.views import agenda, captacao, comum, estagio, frequencia, importacao, orientador, pwa, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
@@ -59,6 +59,7 @@ urlpatterns = [
     path("concedentes/nova/", orientador.local_editar, name="local_novo"),
     path("concedentes/<int:pk>/", orientador.local_editar, name="local_editar"),
     path("concedentes/<int:pk>/ativacao/", orientador.ativacao_local, name="ativacao_local"),
+    path("turmas/<int:pk>/relatorio/", relatorios.relatorio_turma, name="relatorio_turma"),
     path("turmas/", orientador.turmas, name="turmas"),
     path("turmas/<int:pk>/", orientador.turmas, name="turma_editar"),
     path("configuracoes/", orientador.configuracoes, name="configuracoes"),
@@ -80,5 +81,8 @@ urlpatterns = [
     path("agenda/<int:pk>/", agenda.agendamento_detalhe, name="agendamento_detalhe"),
     path("agenda/<int:pk>/cancelar/", agenda.cancelar_agendamento, name="cancelar_agendamento"),
     path("admin/", admin.site.urls),
+    path("manifest.webmanifest", pwa.manifesto, name="manifesto"),
+    path("sw.js", pwa.service_worker, name="service_worker"),
+    path("offline/", pwa.offline, name="offline"),
     path("saude/", lambda r: HttpResponse("ok"), name="saude"),
 ]

@@ -348,7 +348,8 @@ class PerfilForm(FormularioModelo):
 
     class Meta:
         model = Usuario
-        fields = ["foto", "email", "telefone", "cpf", "cargo", "apresentacao", "habilidades", "curriculo", "perfil_visivel"]
+        fields = ["foto", "email", "telefone", "cpf", "cargo", "avisos_email", "apresentacao", "habilidades", "curriculo",
+                  "perfil_visivel"]
         labels = {"foto": "Foto de perfil", "telefone": "Telefone / WhatsApp", "cargo": "Cargo/Função"}
         widgets = {"foto": forms.ClearableFileInput(attrs={"accept": "image/*"}),
                    "curriculo": forms.ClearableFileInput(attrs={"accept": "application/pdf,.pdf"}),
@@ -422,7 +423,7 @@ class ConfiguracaoForm(FormularioModelo):
     class Meta:
         model = Configuracao
         fields = ["nome_escola", "municipio_escola", "ano_referencia", "cabecalho_folha", "logo_folha",
-                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
+                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "avisos_email", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
                   "curriculos_habilitados", "banco_talentos_habilitado"]
         widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(),
                    "texto_captacao": forms.Textarea(attrs={"rows": 3})}
@@ -480,6 +481,7 @@ class LocalForm(FormularioModelo):
         ("Dados gerais", ["tipo_concedente", "razao_social", "nome", "tipo_instituicao", "atividade", "cnpj", "matriz_filial"]),
         ("Endereço", ["endereco", "numero", "bairro", "complemento", "cidade", "uf", "cep", "telefone", "link_mapa"]),
         ("Representante legal", ["representante_nome", "representante_email", "representante_cpf", "representante_documento"]),
+        ("Localização para o check-in", ["latitude", "longitude", "raio_checkin"]),
         ("Supervisores", ["novos_supervisores", "vincular_supervisores"]),
         ("Outras informações", ["observacoes"]),
     ]
@@ -499,18 +501,27 @@ class LocalForm(FormularioModelo):
             "tipo_concedente", "razao_social", "nome", "tipo_instituicao", "atividade", "cnpj", "matriz_filial",
             "endereco", "numero", "bairro", "complemento", "cidade", "uf", "cep", "telefone", "link_mapa",
             "representante_nome", "representante_email", "representante_cpf", "representante_documento", "observacoes",
+            "latitude", "longitude", "raio_checkin",
         ]
         widgets = {
             "tipo_concedente": forms.RadioSelect, "tipo_instituicao": forms.RadioSelect, "matriz_filial": forms.RadioSelect,
             "atividade": forms.Textarea(attrs={"rows": 2}),
+            "latitude": forms.TextInput(attrs={"inputmode": "decimal", "placeholder": "-3.731900"}),
+            "longitude": forms.TextInput(attrs={"inputmode": "decimal", "placeholder": "-38.526700"}),
         }
         labels = {"endereco": "Endereço (rua, avenida…)"}
+        help_texts = {
+            "latitude": "Vazio = tirada do link do mapa, se ele tiver as coordenadas. No Google Maps, toque e segure no "
+                        "local e copie os números que aparecem.",
+        }
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         for nome in ("tipo_instituicao", "matriz_filial"):
             self.fields[nome].choices = [c for c in self.fields[nome].choices if c[0]]
         self.fields["uf"].widget.attrs.update({"maxlength": 2, "style": "text-transform:uppercase"})
+        if "raio_checkin" in self.fields:
+            self.fields["raio_checkin"].required = False
         if "vincular_supervisores" in self.fields:
             qs = supervisores_qs()
             if self.instance.pk:
@@ -535,6 +546,27 @@ class LocalForm(FormularioModelo):
 
     def clean_novos_supervisores(self):
         return SupervisoresLoteForm.clean_nomes_texto(self.cleaned_data.get("novos_supervisores", ""), obrigatorio=False)
+
+    def clean(self):
+        dados = super().clean()
+        if "latitude" not in self.fields:
+            return dados
+        if not dados.get("raio_checkin"):
+            dados["raio_checkin"] = LocalEstagio._meta.get_field("raio_checkin").default
+        lat, lng = dados.get("latitude"), dados.get("longitude")
+        if lat is None and lng is None and dados.get("link_mapa"):
+            from .services import coordenadas_do_link
+
+            achadas = coordenadas_do_link(dados["link_mapa"])
+            if achadas:
+                dados["latitude"], dados["longitude"] = achadas
+        elif (lat is None) != (lng is None):
+            self.add_error("longitude" if lng is None else "latitude", "Informe latitude e longitude juntas.")
+        if lat is not None and not -90 <= lat <= 90:
+            self.add_error("latitude", "Latitude vai de -90 a 90.")
+        if lng is not None and not -180 <= lng <= 180:
+            self.add_error("longitude", "Longitude vai de -180 a 180.")
+        return dados
 
 
 class DiaSemEstagioForm(FormularioModelo):
@@ -837,8 +869,10 @@ class CandidaturaForm(LocalForm):
         fields = [*LocalForm.Meta.fields, "contato_nome", "contato_cargo", "contato_telefone", "contato_whatsapp",
                   "contato_email", "atividades", "horario", "beneficios", "supervisor_nome", "supervisor_cargo",
                   "supervisor_telefone", "supervisor_email"]
-        fields.remove("link_mapa")
+        for _f in ("link_mapa", "latitude", "longitude", "raio_checkin"):
+            fields.remove(_f)
         labels = {**LocalForm.Meta.labels, "observacoes": "Algo mais que a escola deva saber?"}
+        help_texts = {}
         widgets = {**LocalForm.Meta.widgets, "atividades": forms.Textarea(attrs={"rows": 4})}
 
     def __init__(self, *a, **kw):
@@ -918,8 +952,8 @@ class RecusarCandidaturaForm(Formulario):
 
 
 class ImportarCSVForm(CamposEscalaMixin, Formulario):
-    arquivo = forms.FileField(label="Arquivo CSV", widget=forms.ClearableFileInput(attrs={"accept": ".csv,text/csv"}),
-                              help_text="Uma linha por estagiário. Separado por ponto e vírgula (;) ou vírgula.")
+    arquivo = forms.FileField(label="Planilha", widget=forms.ClearableFileInput(attrs={"accept": ".xlsx,.csv,text/csv"}),
+                              help_text="A planilha modelo preenchida (.xlsx) ou um CSV com uma linha por estagiário.")
     orientador = forms.ModelChoiceField(
         queryset=Usuario.objects.filter(papel=Usuario.Papel.ORIENTADOR, is_active=True), label="Orientador(a) responsável",
         help_text="Usado nas linhas em que a coluna “orientador” estiver vazia.",
@@ -929,7 +963,7 @@ class ImportarCSVForm(CamposEscalaMixin, Formulario):
         help_text="Para estágios que já começaram: os dias antes desta data não aparecem como “sem registro”.",
     )
     carga_cursos_novos = forms.IntegerField(label="Carga horária para cursos novos (h)", initial=300, min_value=1,
-                                            help_text="Só usada se o CSV trouxer um curso que ainda não existe.")
+                                            help_text="Só usada se a planilha trouxer um curso que ainda não existe.")
     completar_concedentes = forms.BooleanField(label="Completar campos vazios de concedentes já cadastradas",
                                                required=False, initial=True)
 
@@ -939,13 +973,13 @@ class ImportarCSVForm(CamposEscalaMixin, Formulario):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self.fields["dias"].label = "Dias de estágio (padrão)"
-        self.fields["dias"].help_text = "Usados quando a coluna “dias” do CSV estiver vazia."
+        self.fields["dias"].help_text = "Usados quando a coluna “Dias de estágio” estiver vazia."
         self.fields["horario_entrada"].help_text = "Horários são opcionais: o supervisor da concedente define depois."
 
     def clean_arquivo(self):
         arq = self.cleaned_data["arquivo"]
-        if arq.size > 2 * 1024 * 1024:
-            raise forms.ValidationError("O arquivo deve ter no máximo 2 MB.")
+        if arq.size > 5 * 1024 * 1024:
+            raise forms.ValidationError("O arquivo deve ter no máximo 5 MB.")
         return arq
 
 
@@ -1047,6 +1081,6 @@ class ImportarCalendarioForm(Formulario):
 
     def clean_arquivo(self):
         arq = self.cleaned_data["arquivo"]
-        if arq.size > 2 * 1024 * 1024:
-            raise forms.ValidationError("O arquivo deve ter no máximo 2 MB.")
+        if arq.size > 5 * 1024 * 1024:
+            raise forms.ValidationError("O arquivo deve ter no máximo 5 MB.")
         return arq

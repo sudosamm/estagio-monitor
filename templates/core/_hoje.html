@@ -5,10 +5,11 @@
   {% if st.codigo == "hoje" or st.codigo == "sem_registro" %}
     <h2>Hoje é dia de estágio</h2>
     <p>{% now "l, d \d\e F" %}{% if escala_atual.horario_display %} · {{ escala_atual.horario_display }}{% endif %} · {{ estagio.local|default:"local a definir" }}</p>
-    <form method="post" action="{% url 'marcar_presenca' estagio.pk %}">{% csrf_token %}
+    <form method="post" action="{% url 'marcar_presenca' estagio.pk %}"{% if CONFIG.checkin_localizacao != "DESLIGADO" %} data-geo{% endif %}>{% csrf_token %}
       <details><summary>Adicionar anotação (opcional)</summary><textarea name="diario" rows="3" placeholder="Como está sendo o dia?"></textarea></details>
       <div class="acoes mt-1"><button class="btn grande" type="submit">{% icone "check" %} Estou no estágio</button>
         <a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">{% icone "relogio" %} Digitar meus horários</a></div>
+      {% if CONFIG.checkin_localizacao != "DESLIGADO" %}<p class="geo-aviso">{% icone "pin" %} O celular vai pedir sua localização: ela é conferida só na hora de marcar a entrada e a saída{% if CONFIG.checkin_localizacao == "EXIGIR" %}, e a presença só vale perto da concedente{% endif %}.</p>{% endif %}
     </form>
   {% elif st.codigo == "aguardando" or st.codigo == "confirmado" or st.codigo == "contestado" %}
     <h2>{% if st.codigo == "confirmado" %}Presença confirmada{% elif st.codigo == "contestado" %}Presença contestada pelo supervisor{% else %}Presença marcada{% endif %}</h2>
@@ -16,7 +17,7 @@
       {% if st.codigo == "aguardando" %} · aguardando confirmação do supervisor{% endif %}
       {% if reg.confirmado_por %} · por {{ reg.confirmado_por.primeiro_nome }}{% endif %}</p>
     {% if reg.obs_supervisor %}<p><strong>Supervisor:</strong> {{ reg.obs_supervisor }}</p>{% endif %}
-    <p class="pontos">{% if reg.hora_chegada %}<span>Entrada <b>{{ reg.hora_chegada|time:"H:i" }}</b></span>{% endif %}{% if reg.saida_intervalo %}<span>Intervalo <b>{{ reg.saida_intervalo|time:"H:i" }}</b></span>{% endif %}{% if reg.volta_intervalo %}<span>Volta <b>{{ reg.volta_intervalo|time:"H:i" }}</b></span>{% endif %}{% if reg.hora_saida %}<span>Saída <b>{{ reg.hora_saida|time:"H:i" }}</b></span>{% endif %}</p>
+    <p class="pontos">{% if reg.hora_chegada %}<span>Entrada <b>{{ reg.hora_chegada|time:"H:i" }}</b>{% if reg.local_entrada.longe %} <small class="geo longe" title="{{ reg.local_entrada.texto }}">{% icone "pin" %} longe da concedente</small>{% endif %}</span>{% endif %}{% if reg.saida_intervalo %}<span>Intervalo <b>{{ reg.saida_intervalo|time:"H:i" }}</b></span>{% endif %}{% if reg.volta_intervalo %}<span>Volta <b>{{ reg.volta_intervalo|time:"H:i" }}</b></span>{% endif %}{% if reg.hora_saida %}<span>Saída <b>{{ reg.hora_saida|time:"H:i" }}</b></span>{% endif %}</p>
     <div class="acoes">
       {% if not reg.hora_saida %}
         {% with com_intervalo=escala_atual.tem_intervalo %}
@@ -25,7 +26,7 @@
         {% elif com_intervalo and not reg.volta_intervalo %}
           <form method="post" action="{% url 'registrar_saida' estagio.pk %}">{% csrf_token %}<input type="hidden" name="ponto" value="volta_intervalo"><button class="btn" type="submit">{% icone "relogio" %} Voltei do intervalo</button></form>
         {% endif %}
-        <form method="post" action="{% url 'registrar_saida' estagio.pk %}"{% if com_intervalo and not reg.volta_intervalo %} data-confirmar="Encerrar o dia agora, sem registrar o intervalo?"{% endif %}>{% csrf_token %}<input type="hidden" name="ponto" value="hora_saida"><button class="btn{% if com_intervalo and not reg.volta_intervalo %} sec{% endif %}" type="submit">{% icone "sair" %} Registrar saída</button></form>
+        <form method="post" action="{% url 'registrar_saida' estagio.pk %}"{% if com_intervalo and not reg.volta_intervalo %} data-confirmar="Encerrar o dia agora, sem registrar o intervalo?"{% endif %}{% if CONFIG.checkin_localizacao != "DESLIGADO" %} data-geo{% endif %}>{% csrf_token %}<input type="hidden" name="ponto" value="hora_saida"><button class="btn{% if com_intervalo and not reg.volta_intervalo %} sec{% endif %}" type="submit">{% icone "sair" %} Registrar saída</button></form>
         {% endwith %}
       {% endif %}
       <a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">{% icone "livro" %} {% if reg.confirmacao != "CONFIRMADA" %}Corrigir horários / anotar o dia{% elif reg.diario %}Ver anotação do dia{% else %}Anotar como foi o dia{% endif %}</a>
@@ -33,11 +34,11 @@
   {% elif st.codigo == "ausencia" or st.codigo == "ausencia_ok" %}
     <h2>Ausência informada para hoje</h2>
     <p>{{ reg.motivo|truncatechars:140 }}</p>
-    <form method="post" action="{% url 'marcar_presenca' estagio.pk %}">{% csrf_token %}<button class="btn sec" type="submit">Mudou de ideia? Marcar presença</button></form>
+    <form method="post" action="{% url 'marcar_presenca' estagio.pk %}"{% if CONFIG.checkin_localizacao != "DESLIGADO" %} data-geo{% endif %}>{% csrf_token %}<button class="btn sec" type="submit">Mudou de ideia? Marcar presença</button></form>
   {% else %}
     <h2>{% if st.codigo == "sem_estagio" %}Sem estágio hoje — {{ st.motivo_sem_estagio }}{% elif st.codigo == "fora" %}Fora do período do estágio{% else %}Hoje não é dia de estágio{% endif %}</h2>
     <p>{% if proximos %}Próximo dia: <strong>{{ proximos.0.data|date:"l, d/m" }}</strong>{% else %}Nenhum dia previsto nas próximas semanas.{% endif %}</p>
-    <form method="post" action="{% url 'marcar_presenca' estagio.pk %}" data-confirmar="Hoje não está na sua escala. Marcar presença mesmo assim?">{% csrf_token %}<button class="btn sec sm" type="submit">Fui ao estágio hoje mesmo assim</button></form>
+    <form method="post" action="{% url 'marcar_presenca' estagio.pk %}" data-confirmar="Hoje não está na sua escala. Marcar presença mesmo assim?"{% if CONFIG.checkin_localizacao != "DESLIGADO" %} data-geo{% endif %}>{% csrf_token %}<button class="btn sec sm" type="submit">Fui ao estágio hoje mesmo assim</button></form>
   {% endif %}
   <details>
     <summary>Não vou poder ir / informar ausência</summary>
@@ -52,7 +53,7 @@
 {% else %}
   <h2>{{ estagio.estagiario.primeiro_nome }} hoje: {{ st.rotulo|default:"sem estágio previsto" }}</h2>
   <p>
-    {% if reg %}{{ reg.horario_display }}{% if reg.motivo %} · {{ reg.motivo|truncatechars:120 }}{% endif %}
+    {% if reg %}{{ reg.horario_display }}{% if reg.motivo %} · {{ reg.motivo|truncatechars:120 }}{% endif %}{% include "core/_geo.html" %}
     {% elif st.previsto %}Previsto{% if escala_atual.horario_display %} das {{ escala_atual.horario_display }}{% endif %} — ainda não marcou presença.
     {% elif proximos %}Próximo dia de estágio: {{ proximos.0.data|date:"l, d/m" }}.{% endif %}
   </p>

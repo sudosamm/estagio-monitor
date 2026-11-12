@@ -21,6 +21,7 @@
           {% if registro.hora_chegada %}<dt>Entrada</dt><dd>{{ registro.hora_chegada|time:"H:i" }}</dd>{% endif %}
           {% if registro.saida_intervalo %}<dt>Intervalo</dt><dd>{{ registro.saida_intervalo|time:"H:i" }}{% if registro.volta_intervalo %} às {{ registro.volta_intervalo|time:"H:i" }}{% endif %}</dd>{% endif %}
           {% if registro.hora_saida %}<dt>Saída</dt><dd>{{ registro.hora_saida|time:"H:i" }}</dd>{% endif %}
+          {% if registro.geo_entrada or registro.geo_saida %}<dt>Localização</dt><dd>{% with reg=registro %}{% include "core/_geo.html" %}{% endwith %}</dd>{% endif %}
           <dt>Horas</dt><dd>{{ registro.horas|horas }}</dd>
           <dt>Validação</dt><dd>{{ registro.get_confirmacao_display }}{% if registro.confirmado_por %} — {{ registro.confirmado_por }} em {{ registro.confirmado_em|date:"d/m H:i" }}{% endif %}</dd>
           {% if registro.motivo %}<dt>Motivo</dt><dd class="quebra">{{ registro.motivo }}</dd>{% endif %}

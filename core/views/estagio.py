@@ -19,6 +19,7 @@ from ..models import (
     DIAS_ABREV, Agendamento, Configuracao, DiaPlanejado, Documento, Escala, HistoricoRegistro, Registro, TrocaSupervisor,
 )
 from ..services import (
+    conferir_localizacao,
     calendario_mes, horas_padrao, limite_calendario, notificar, proximos_dias, resumo_horas,
     status_hoje, status_periodo, trocar_supervisor,
 )
@@ -166,10 +167,15 @@ def marcar_presenca(request, pk):
         raise PermissionDenied
     hoje = timezone.localdate()
     agora = timezone.localtime().time().replace(second=0, microsecond=0)
+    geo, bloqueio = conferir_localizacao(estagio, request.POST)
+    if bloqueio:
+        messages.error(request, bloqueio)
+        return redirect(estagio)
     reg = Registro.objects.filter(estagio=estagio, data=hoje).first()
     if reg is None:
         reg = Registro(estagio=estagio, data=hoje, situacao=Registro.Situacao.PRESENTE,
-                       horas=horas_padrao(estagio, hoje), hora_chegada=agora, registrado_por=request.user)
+                       horas=horas_padrao(estagio, hoje), hora_chegada=agora, registrado_por=request.user,
+                       geo_entrada=geo)
         reg.anotar(request.user, HistoricoRegistro.Acao.ENTRADA, request).save()
     else:
         if reg.confirmacao == Registro.Confirmacao.CONFIRMADA:
@@ -179,6 +185,7 @@ def marcar_presenca(request, pk):
         reg.hora_chegada = reg.hora_chegada or agora
         reg.horas = reg.horas or horas_padrao(estagio, hoje)
         reg.confirmacao = Registro.Confirmacao.PENDENTE
+        reg.geo_entrada = geo or reg.geo_entrada
         reg.anotar(request.user, HistoricoRegistro.Acao.ENTRADA, request).save()
     diario = request.POST.get("diario", "").strip()
     if diario:
@@ -187,8 +194,10 @@ def marcar_presenca(request, pk):
     if not status_hoje(estagio).previsto:
         messages.warning(request, "Hoje não estava previsto na sua escala — o supervisor vai validar.")
     messages.success(request, f"Presença marcada às {agora:%H:%M}. Aguardando confirmação do supervisor.")
+    info = reg.local_entrada
+    longe = f" Atenção: marcou {info['texto']}." if info and info["longe"] else ""
     notificar(
-        [estagio.supervisor], f"{estagio.estagiario.primeiro_nome} marcou presença hoje às {agora:%H:%M}.",
+        [estagio.supervisor], f"{estagio.estagiario.primeiro_nome} marcou presença hoje às {agora:%H:%M}.{longe}",
         reverse("painel_supervisor"),
     )
     return redirect(estagio)
@@ -213,8 +222,16 @@ def registrar_saida(request, pk):
         raise Http404
     reg = get_object_or_404(Registro, estagio=estagio, data=timezone.localdate())
     agora = timezone.localtime().time().replace(second=0, microsecond=0)
-    setattr(reg, ponto, agora)
     campos = [ponto, "atualizado_em"]
+    if ponto == "hora_saida":
+        geo, bloqueio = conferir_localizacao(estagio, request.POST, "registrar a saída")
+        if bloqueio:
+            messages.error(request, bloqueio)
+            return redirect(estagio)
+        if geo:
+            reg.geo_saida = geo
+            campos.append("geo_saida")
+    setattr(reg, ponto, agora)
     if ponto == "hora_saida" and reg.calcular_horas():
         reg.horas = reg.calcular_horas()
         campos.append("horas")

@@ -18,6 +18,13 @@ services:
       NOME_INSTITUICAO: ${NOME_INSTITUICAO:-Secretaria da Educação do Ceará}
       TAMANHO_MAX_ANEXO_MB: ${TAMANHO_MAX_ANEXO_MB:-10}
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+      # avisos por e-mail (opcional): sem EMAIL_HOST os avisos ficam só no sino
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_REMETENTE: ${EMAIL_REMETENTE:-}
+      SITE_URL: ${SITE_URL:-}
       DEBUG: ${DEBUG:-0}
     volumes:
       - estagio-dados:/data

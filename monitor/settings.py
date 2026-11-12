@@ -132,6 +132,24 @@ SENHA_PADRAO = os.environ.get("SENHA_PADRAO", "estagio123")
 NOME_SISTEMA = os.environ.get("NOME_SISTEMA", "Estágio Monitor")
 NOME_INSTITUICAO = os.environ.get("NOME_INSTITUICAO", "Secretaria da Educação do Ceará")
 
+# Avisos por e-mail (SMTP). Sem EMAIL_HOST, os avisos ficam só no sino do sistema.
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", EMAIL_PORT == 465)
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", not EMAIL_USE_SSL)
+EMAIL_TIMEOUT = 20
+DEFAULT_FROM_EMAIL = os.environ.get("EMAIL_REMETENTE") or (
+    f"{NOME_SISTEMA} <{EMAIL_HOST_USER}>" if "@" in EMAIL_HOST_USER else "nao-responda@localhost")
+# EMAIL_CONSOLE=1 mostra os e-mails no terminal em vez de enviar (para testar sem servidor de e-mail)
+if env_bool("EMAIL_CONSOLE", False):
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_ATIVO = bool(EMAIL_HOST) or env_bool("EMAIL_CONSOLE", False)
+EMAIL_ASSINCRONO = "test" not in sys.argv  # envia em segundo plano para não atrasar a página
+# Endereço público do sistema, usado nos links dos e-mails. Vazio = o primeiro de CSRF_TRUSTED_ORIGINS.
+SITE_URL = (os.environ.get("SITE_URL") or (CSRF_TRUSTED_ORIGINS[0] if CSRF_TRUSTED_ORIGINS else "")).rstrip("/")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

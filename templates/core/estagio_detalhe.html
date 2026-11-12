@@ -113,7 +113,7 @@
       {% if estagio.local.endereco_completo %}<p class="muted mb-0">{{ estagio.local.endereco_completo }}</p>{% endif %}
       {% if estagio.local.telefone %}<p class="mb-0">{% icone "telefone" %} {{ estagio.local.telefone }}</p>{% endif %}
       {% if estagio.local.link_mapa %}<p class="mt-1 mb-0"><a class="btn sec sm" href="{{ estagio.local.link_mapa }}" target="_blank" rel="noopener">{% icone "pin" %} Ver no mapa</a></p>{% endif %}
-      {% if estagio.supervisor %}<hr><p class="mb-0">Supervisor: <strong>{{ estagio.supervisor }}</strong>{% if estagio.supervisor.cargo %} · {{ estagio.supervisor.cargo }}{% endif %}</p>{% if estagio.supervisor.telefone %}<p class="muted mb-0">{{ estagio.supervisor.telefone }}</p>{% endif %}{% endif %}
+      {% if estagio.supervisor %}<hr><p class="mb-0">Supervisor: <strong>{{ estagio.supervisor }}</strong>{% if estagio.supervisor.cargo %} · {{ estagio.supervisor.cargo }}{% endif %}</p>{% if estagio.supervisor.telefone %}<p class="muted mb-0">{{ estagio.supervisor.telefone }}{% with wa=estagio.supervisor.telefone|whatsapp %}{% if wa %} · <a href="{{ wa }}" target="_blank" rel="noopener noreferrer">WhatsApp</a>{% endif %}{% endwith %}</p>{% endif %}{% endif %}
     </div>
     {% endif %}
     {% if e_orientador and estagio.observacoes_orientador %}
@@ -132,7 +132,7 @@
       <tr>
         <td><strong>{{ r.data|date:"d/m/Y" }}</strong><br><small>{{ r.data|date:"l" }}</small></td>
         <td>{{ r.get_situacao_display }}</td>
-        <td>{{ r.horario_display }}<br><small class="muted" title="Quando o registro foi feito no sistema">informado {{ r.criado_em|date:"d/m H:i" }}{% if r.n_alteracoes > 1 %} · {{ r.n_alteracoes }} mudanças{% endif %}</small>{% if r.criado_em|date:"Y-m-d" > r.data|date:"Y-m-d" %} <span class="etiqueta">depois do dia</span>{% endif %}</td>
+        <td>{{ r.horario_display }}<br><small class="muted" title="Quando o registro foi feito no sistema">informado {{ r.criado_em|date:"d/m H:i" }}{% if r.n_alteracoes > 1 %} · {{ r.n_alteracoes }} mudanças{% endif %}</small>{% if r.criado_em|date:"Y-m-d" > r.data|date:"Y-m-d" %} <span class="etiqueta">depois do dia</span>{% endif %}{% with reg=r %}{% include "core/_geo.html" %}{% endwith %}</td>
         <td>{{ r.horas|horas }}</td>
         <td>{% if r.confirmacao == "CONFIRMADA" %}<span class="selo confirmado">Confirmado</span>{% elif r.confirmacao == "CONTESTADA" %}<span class="selo contestado">Contestado</span>{% else %}<span class="selo aguardando">Pendente</span>{% endif %}{% if r.confirmado_por %}<br><small>{{ r.confirmado_por.primeiro_nome }}</small>{% endif %}</td>
         <td style="max-width:320px">{{ r.diario|default:r.motivo|truncatechars:110 }}{% if r.obs_supervisor %}<br><small><strong>Supervisor:</strong> {{ r.obs_supervisor|truncatechars:80 }}</small>{% endif %}</td>
