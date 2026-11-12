@@ -73,7 +73,7 @@
     <div class="linha"><div><span class="rot">ESCOLA:</span><span class="val">{{ config.nome_escola }}</span></div><div><span class="rot">MUNICÍPIO:</span><span class="val">{{ config.municipio_escola }}</span></div></div>
     <div class="linha"><div><span class="rot">ESTAGIÁRIO:</span><span class="val">{{ estagio.estagiario.nome_completo }}</span></div><div><span class="rot">CPF:</span><span class="val">{{ estagio.estagiario.cpf }}</span></div></div>
     <div class="linha sub"><div><span class="rot">ORIENTADOR DE ESTÁGIO:</span><span class="val">{{ estagio.orientador.nome_completo }}</span></div><div><span class="rot">TEL.:</span><span class="val">{{ estagio.orientador.telefone }}</span></div></div>
-    <div class="linha sub"><div><span class="rot">INSTITUIÇÃO CEDENTE:</span><span class="val">{{ estagio.local.nome_oficial|default:"" }}</span></div><div><span class="rot">CNPJ:</span><span class="val">{{ estagio.local.cnpj|default:"" }}</span></div></div>
+    <div class="linha sub"><div><span class="rot">INSTITUIÇÃO CEDENTE:</span><span class="val">{{ estagio.local.nome|default:"" }}</span></div><div><span class="rot">CNPJ:</span><span class="val">{{ estagio.local.cnpj|default:"" }}</span></div></div>
     <div class="linha sub"><div><span class="rot">SUPERVISOR:</span><span class="val">{{ estagio.supervisor.nome_completo|default:"" }}</span></div><div><span class="rot">TEL.:</span><span class="val">{{ estagio.supervisor.telefone|default:"" }}</span></div></div>
   </div>
 

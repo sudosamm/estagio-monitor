@@ -42,7 +42,7 @@ def normalizar_nome(nome):
     return " ".join(p.lower() if p.lower() in minusculas and i else p.capitalize() for i, p in enumerate(palavras))
 
 
-def criar_usuario(nome_completo, papel, criado_por=None, **extra):
+def criar_usuario(nome_completo, papel, criado_por=None, senha_hash=None, **extra):
     nome = normalizar_nome(nome_completo)
     partes = nome.split()
     user = Usuario(
@@ -55,7 +55,10 @@ def criar_usuario(nome_completo, papel, criado_por=None, **extra):
         deve_trocar_senha=True,
         **extra,
     )
-    user.set_password(settings.SENHA_PADRAO)
+    if senha_hash:  # importação em massa: reaproveita o hash da senha padrão (muito mais rápido)
+        user.password = senha_hash
+    else:
+        user.set_password(settings.SENHA_PADRAO)
     user.save()
     return user
 
@@ -178,7 +181,8 @@ def status_periodo(estagio, inicio, fim, hoje=None, limite=None):
 
 def _status_dia(estagio, dia, hoje, registro, feriado, plano=None, limite=None):
     escala = estagio.escala_em(dia)
-    dentro = dia >= estagio.data_inicio and (limite is None or dia <= limite)
+    inicio = max(estagio.data_inicio, estagio.acompanhamento_desde or estagio.data_inicio)
+    dentro = dia >= inicio and (limite is None or dia <= limite)
     regular = bool(escala and dia.weekday() in escala.dias_lista and not feriado)
     previsto = bool(dentro and (regular or plano))
 

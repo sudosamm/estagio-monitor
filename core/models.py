@@ -177,8 +177,10 @@ class DadosConcedente(models.Model):
 
     # dados gerais
     tipo_concedente = models.CharField("Concedente", max_length=2, choices=TipoConcedente.choices, default=TipoConcedente.PJ)
-    razao_social = models.CharField("Razão social", max_length=200, blank=True, help_text="Nome que sai na folha de frequência")
-    nome = models.CharField("Nome fantasia", max_length=160, help_text="Como a concedente é conhecida no dia a dia")
+    razao_social = models.CharField("Razão social", max_length=200, blank=True)
+    nome = models.CharField("Nome fantasia / unidade", max_length=160,
+                            help_text="Como a concedente é conhecida; é o nome que sai na folha de frequência "
+                                      "(ex.: EEM São Sebastião)")
     tipo_instituicao = models.CharField("Tipo de instituição", max_length=8, choices=TipoInstituicao.choices, blank=True)
     atividade = models.TextField("Especificação da atividade", blank=True)
     cnpj = models.CharField("CNPJ", max_length=18, blank=True, help_text="Para profissional liberal, informe o CPF")
@@ -253,6 +255,11 @@ class Estagio(models.Model):
     local = models.ForeignKey(LocalEstagio, null=True, blank=True, on_delete=models.SET_NULL, related_name="estagios")
     setor = models.CharField(max_length=100, blank=True)
     data_inicio = models.DateField("Início")
+    acompanhamento_desde = models.DateField(
+        "Acompanhado no sistema desde", null=True, blank=True,
+        help_text="Para estágios que começaram antes do sistema: dias anteriores não aparecem como “sem registro”. "
+                  "As horas desse período entram em “Horas já cumpridas antes do sistema”.",
+    )
     data_fim = models.DateField("Término previsto", null=True, blank=True)
     carga_horaria = models.PositiveIntegerField(
         "Carga horária (h)", null=True, blank=True, help_text="Vazio = usa a carga horária do curso"

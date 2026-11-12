@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
-from core.views import agenda, captacao, comum, estagio, frequencia, orientador, supervisor
+from core.views import agenda, captacao, comum, estagio, frequencia, importacao, orientador, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
@@ -44,6 +44,7 @@ urlpatterns = [
     path("contas/supervisores/novos/", orientador.criar_supervisores, name="criar_supervisores"),
     path("contas/orientadores/novo/", orientador.criar_orientador, name="criar_orientador"),
     path("contas/coordenadores/novo/", orientador.criar_coordenador, name="criar_coordenador"),
+    path("contas/importar/", importacao.importar_csv, name="importar_csv"),
     path("contas/<int:pk>/", orientador.editar_usuario, name="editar_usuario"),
     path("contas/<int:pk>/senha-padrao/", orientador.redefinir_senha, name="redefinir_senha"),
     path("cursos/", orientador.cursos, name="cursos"),

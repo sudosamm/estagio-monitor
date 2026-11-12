@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Importar CSV{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><div class="migalha"><a href="{% url 'usuarios' %}">← Contas</a></div><h1>Importar estagiários, concedentes e supervisores</h1>
+    <p>{% if resultado %}Prévia de “{{ nome_arquivo }}”: nada foi gravado ainda.{% else %}Cadastro em massa a partir de uma planilha (CSV).{% endif %}</p></div>
+  {% if not resultado %}<a class="btn sec" href="?modelo=1">{% icone "arquivo" %} Baixar modelo CSV</a>{% endif %}
+</div>
+{% if resultado %}
+  <div class="kpis">
+    <div class="kpi"><div class="valor">{{ resultado.linhas_ok|length }}</div><div class="rotulo">estágios a criar</div></div>
+    <div class="kpi"><div class="valor">{{ resultado.estagiarios|length }}</div><div class="rotulo">contas de estagiário</div></div>
+    <div class="kpi azul"><div class="valor">{{ resultado.concedentes_novas|length }}</div><div class="rotulo">concedentes novas{% if resultado.concedentes_existentes %} · {{ resultado.concedentes_existentes|length }} já existentes{% endif %}</div></div>
+    <div class="kpi amarelo"><div class="valor">{{ resultado.supervisores_novos|length }}</div><div class="rotulo">supervisores novos{% if resultado.supervisores_existentes %} · {{ resultado.supervisores_existentes|length }} já existentes{% endif %}</div></div>
+    <div class="kpi {% if resultado.erros %}vermelho{% else %}laranja{% endif %}"><div class="valor">{{ resultado.erros|length }}</div><div class="rotulo">linhas com erro</div></div>
+  </div>
+  {% if resultado.erros %}
+    <div class="card laranja"><h2>Corrija estas linhas e envie de novo</h2>
+      <ul class="lista compacta">{% for n, msg in resultado.erros %}<li><span class="etiqueta">linha {{ n }}</span><span class="cresce">{{ msg }}</span></li>{% endfor %}</ul>
+      <p class="mt-1 mb-0"><a class="btn" href="{% url 'importar_csv' %}">Enviar outro arquivo</a></p>
+    </div>
+  {% else %}
+    <form method="post" class="card destaque">{% csrf_token %}<input type="hidden" name="etapa" value="confirmar">
+      <p class="mb-0">Tudo certo. Confira o resumo abaixo e confirme. As contas novas usam a senha padrão e pedem troca no primeiro acesso.</p>
+      <div class="acoes mt-1"><button class="btn grande" type="submit">{% icone "check" %} Confirmar importação</button><a class="btn sec" href="{% url 'importar_csv' %}">Cancelar</a></div>
+    </form>
+  {% endif %}
+  {% if resultado.ignoradas %}
+    <div class="card"><h3>Linhas que serão ignoradas</h3>
+      <ul class="lista compacta">{% for n, msg in resultado.ignoradas %}<li><span class="etiqueta">linha {{ n }}</span><span class="cresce">{{ msg }}</span></li>{% endfor %}</ul></div>
+  {% endif %}
+  {% if resultado.cursos_novos %}<div class="caixa-alerta" style="margin-bottom:1rem">Cursos que serão criados: {% for c in resultado.cursos_novos %}<strong>{{ c.nome }}</strong> ({{ c.carga_horaria }} h){% if not forloop.last %}, {% endif %}{% endfor %}. Ajuste a carga horária depois em Cursos, se precisar.</div>{% endif %}
+  <div class="grade grade-lado">
+    <div class="card"><h2>Estagiários</h2>
+      <div class="tabela-wrap"><table class="tabela">
+        <thead><tr><th>Linha</th><th>Estagiário</th><th>Concedente</th><th>Supervisor</th></tr></thead>
+        <tbody>{% for n, aluno, local, sup in resultado.linhas_ok %}
+          <tr><td>{{ n }}</td><td><strong>{{ aluno.nome_completo }}</strong><br><small>{{ aluno.username }}</small></td><td>{{ local }}</td><td>{{ sup|default:"—" }}{% if sup %}<br><small>{{ sup.username }}</small>{% endif %}</td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+    </div>
+    <div>
+      <div class="card"><h3>Concedentes novas</h3>
+        <ul class="lista compacta">{% for l in resultado.concedentes_novas %}<li><span class="cresce"><strong>{{ l.nome }}</strong><small style="display:block">{{ l.razao_social }}{% if l.cnpj %} · {{ l.cnpj }}{% endif %}</small></span></li>{% empty %}<li class="vazio">Nenhuma.</li>{% endfor %}</ul></div>
+      <div class="card"><h3>Supervisores novos</h3>
+        <ul class="lista compacta">{% for s in resultado.supervisores_novos %}<li><span class="cresce"><strong>{{ s.nome_completo }}</strong><small style="display:block">{{ s.username }}{% if s.telefone %} · {{ s.telefone }}{% endif %} · {{ s.local }}</small></span></li>{% empty %}<li class="vazio">Nenhum.</li>{% endfor %}</ul></div>
+    </div>
+  </div>
+{% else %}
+  <div class="grade grade-lado">
+    <form class="card destaque" method="post" enctype="multipart/form-data" novalidate>{% csrf_token %}<input type="hidden" name="etapa" value="previa">
+      {% include "core/_form.html" %}
+      <button class="btn" type="submit">Ver prévia</button>
+    </form>
+    <div class="card">
+      <h3>Como montar o CSV</h3>
+      <p style="font-size:.88rem">Uma linha por estagiário, com a concedente e o supervisor dele. Concedentes e supervisores que se repetem são cadastrados uma vez só. Órgãos com várias unidades no mesmo CNPJ (escolas, secretarias) viram uma concedente por <strong>nome da unidade</strong>.</p>
+      <p style="font-size:.88rem">Estagiários já cadastrados (mesmo CPF) com estágio ativo são ignorados, então dá para enviar o mesmo arquivo de novo sem duplicar.</p>
+      <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Coluna</th><th></th></tr></thead><tbody>
+        {% for nome, obrig, desc in colunas %}<tr><td><code>{{ nome }}</code>{% if obrig %} <span class="selo falta">obrigatória</span>{% endif %}</td><td><small>{{ desc }}</small></td></tr>{% endfor %}
+      </tbody></table></div>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

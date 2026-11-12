@@ -46,6 +46,16 @@ Em **Configurações** existem dois interruptores:
 
 Só aparece no banco quem marcar “Mostrar meu perfil às concedentes”.
 
+### Importação em massa (CSV)
+Em **Contas → Importar CSV** (só administrador), envie um CSV com **uma linha por estagiário**: dados do estagiário, a concedente (unidade) e o supervisor dele. Clique em **Baixar modelo CSV** para ver todas as colunas.
+- **Sem duplicar:** concedentes e supervisores que se repetem são cadastrados uma vez só. Órgãos com várias unidades no mesmo CNPJ viram uma concedente por nome de unidade.
+- **Prévia:** primeiro aparece uma prévia com tudo o que será criado e os erros de cada linha, e nada é gravado até você confirmar.
+- **Padrões:** dias e horários vazios no CSV usam os padrões escolhidos na tela.
+- **Estágio já em andamento:** “Acompanhar no sistema a partir de” evita que os dias anteriores apareçam como sem registro. As horas já feitas vão na coluna `horas_anteriores`.
+- **Reenvio:** reenviar o mesmo arquivo não duplica, porque estagiários com o mesmo CPF e estágio ativo são ignorados.
+
+O arquivo gerado a partir dos TCEs fica em `importacao/`, pasta que não vai para o Git porque tem dados pessoais.
+
 ### Captação de concedentes
 Em **Configurações**, abra a captação, escolha o ano letivo e, se quiser, um prazo. A página pública **/seja-concedente/** (link também na tela de login) recebe os cadastros:
 - dados da ficha de concedente;

@@ -437,10 +437,10 @@ class EstagioForm(FormularioModelo):
     class Meta:
         model = Estagio
         fields = [
-            "curso", "turma", "local", "setor", "supervisor", "data_inicio", "data_fim", "carga_horaria",
-            "horas_anteriores", "ativo", "observacoes_orientador",
+            "curso", "turma", "local", "setor", "supervisor", "data_inicio", "data_fim", "acompanhamento_desde",
+            "carga_horaria", "horas_anteriores", "ativo", "observacoes_orientador",
         ]
-        widgets = {"data_inicio": DataInput(), "data_fim": DataInput()}
+        widgets = {"data_inicio": DataInput(), "data_fim": DataInput(), "acompanhamento_desde": DataInput()}
         labels = {"local": "Concedente", "data_fim": "Término previsto no termo"}
         help_texts = {"data_fim": "Só informativo: a previsão real é calculada pelas horas que faltam."}
 
@@ -685,3 +685,37 @@ class AprovarCandidaturaForm(Formulario):
 
 class RecusarCandidaturaForm(Formulario):
     parecer = forms.CharField(label="Motivo (vai na mensagem para a concedente)", widget=forms.Textarea(attrs={"rows": 3}))
+
+
+# ------------------------------------------------------------------ importação em massa
+
+
+class ImportarCSVForm(CamposEscalaMixin, Formulario):
+    arquivo = forms.FileField(label="Arquivo CSV", widget=forms.ClearableFileInput(attrs={"accept": ".csv,text/csv"}),
+                              help_text="Uma linha por estagiário. Separado por ponto e vírgula (;) ou vírgula.")
+    orientador = forms.ModelChoiceField(
+        queryset=Usuario.objects.filter(papel=Usuario.Papel.ORIENTADOR, is_active=True), label="Orientador(a) responsável",
+        help_text="Usado nas linhas em que a coluna “orientador” estiver vazia.",
+    )
+    acompanhamento_desde = forms.DateField(
+        label="Acompanhar no sistema a partir de", widget=DataInput(), required=False,
+        help_text="Para estágios que já começaram: os dias antes desta data não aparecem como “sem registro”.",
+    )
+    carga_cursos_novos = forms.IntegerField(label="Carga horária para cursos novos (h)", initial=300, min_value=1,
+                                            help_text="Só usada se o CSV trouxer um curso que ainda não existe.")
+    completar_concedentes = forms.BooleanField(label="Completar campos vazios de concedentes já cadastradas",
+                                               required=False, initial=True)
+
+    field_order = ["arquivo", "orientador", "acompanhamento_desde", *CAMPOS_ESCALA, "carga_cursos_novos",
+                   "completar_concedentes"]
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.fields["dias"].label = "Dias de estágio (padrão)"
+        self.fields["dias"].help_text = "Usados quando a coluna “dias” do CSV estiver vazia. Os horários abaixo também."
+
+    def clean_arquivo(self):
+        arq = self.cleaned_data["arquivo"]
+        if arq.size > 2 * 1024 * 1024:
+            raise forms.ValidationError("O arquivo deve ter no máximo 2 MB.")
+        return arq

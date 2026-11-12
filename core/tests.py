@@ -474,3 +474,87 @@ class CaptacaoTests(Base):
         self.assertIn("Sem vagas", AvisoExterno.objects.get().mensagem)
         self.entrar(self.aluno)
         self.assertEqual(self.client.get(reverse("captacao")).status_code, 403)
+
+
+class ImportacaoCSVTests(Base):
+    CAB = ("estagiario_nome;estagiario_cpf;curso;data_inicio;horas_anteriores;dias;concedente_nome;concedente_razao_social;"
+           "concedente_cnpj;concedente_cidade;supervisor_nome;supervisor_telefone\n")
+
+    def setUp(self):
+        super().setUp()
+        self.ori.is_superuser = True
+        self.ori.save()
+        self.entrar(self.ori)
+
+    def _csv(self, linhas):
+        return SimpleUploadedFile("tce.csv", ("﻿" + self.CAB + "\n".join(linhas)).encode("utf-8"), "text/csv")
+
+    def _enviar(self, linhas, **extra):
+        dados = {"etapa": "previa", "arquivo": self._csv(linhas), "orientador": self.ori.pk, "dias": ["0", "1"],
+                 "horas_por_dia": "8", "horario_entrada": "07:00", "saida_intervalo": "11:00", "volta_intervalo": "13:00",
+                 "horario_saida": "17:00", "acompanhamento_desde": "2026-11-11", "carga_cursos_novos": "400",
+                 "completar_concedentes": "on"}
+        dados.update(extra)
+        return self.client.post(reverse("importar_csv"), dados)
+
+    LINHAS = [
+        "ANA BEATRIZ CASTRO FERNANDES;529.982.247-25;TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS;24/08/2026;160;;"
+        "CEI - JOANA DARC LEITE;SECRETARIA DA EDUCAÇÃO;30.017.109/0001-00;GENERAL SAMPAIO;GEISA MARIA MARTINS ARAUJO;(85) 3357-1081",
+        "CAIO BRENO DUARTE PIRES;111.444.777-35;TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS;24/08/2026;;seg-sex;"
+        "ESCOLA JOSÉ BEZERRA FILHO;SECRETARIA DA EDUCAÇÃO;30.017.109/0001-00;GENERAL SAMPAIO;FRANCISCA SAMARA OLIVEIRA SILVA;",
+        "MARIA ELOISA RODRIGUES MAGALHAES;;TÉCNICO EM DESENVOLVIMENTO DE SISTEMAS;01/09/2026;;;"
+        "ESCOLA JOSÉ BEZERRA FILHO;SECRETARIA DA EDUCAÇÃO;30.017.109/0001-00;GENERAL SAMPAIO;FRANCISCA SAMARA OLIVEIRA SILVA;",
+    ]
+
+    def test_previa_nao_grava_e_confirmacao_cria_tudo(self):
+        r = self._enviar(self.LINHAS)
+        self.assertContains(r, "Confirmar importação")
+        self.assertContains(r, "ana.fernandes")
+        self.assertFalse(Usuario.objects.filter(username="ana.fernandes").exists())  # prévia desfeita
+
+        r = self.client.post(reverse("importar_csv"), {"etapa": "confirmar"})
+        self.assertContains(r, "ana.fernandes")
+        ana = Usuario.objects.get(username="ana.fernandes")
+        self.assertEqual((ana.nome_completo, ana.cpf), ("Ana Beatriz Castro Fernandes", "529.982.247-25"))
+        self.assertTrue(ana.check_password("senha-teste-1"))
+        est = ana.estagios.get()
+        self.assertEqual((est.horas_anteriores, est.acompanhamento_desde, est.orientador), (160, date(2026, 11, 11), self.ori))
+        esc = est.escalas.get()
+        self.assertEqual((esc.dias, esc.horas_por_dia, esc.saida_intervalo.hour), ("0,1", 8, 11))
+        self.assertEqual(Usuario.objects.get(username="caio.pires").estagios.get().escalas.get().dias, "0,1,2,3,4")
+        # mesma razão social/CNPJ, unidades diferentes -> duas concedentes; supervisor repetido -> um só
+        self.assertEqual(LocalEstagio.objects.filter(cnpj="30.017.109/0001-00").count(), 2)
+        self.assertEqual(Usuario.objects.filter(nome_completo="Francisca Samara Oliveira Silva").count(), 1)
+        self.assertEqual(Usuario.objects.get(username="geisa.araujo").telefone, "(85) 3357-1081")
+        self.assertEqual(Curso.objects.get(nome__icontains="desenvolvimento").carga_horaria, 400)
+        # dias antes do acompanhamento não ficam "sem registro"
+        dia = status_periodo(est, date(2026, 11, 9), date(2026, 11, 9))[0]
+        self.assertEqual(dia.codigo, "fora")
+
+    def test_reenviar_o_mesmo_arquivo_nao_duplica(self):
+        self._enviar(self.LINHAS)
+        self.client.post(reverse("importar_csv"), {"etapa": "confirmar"})
+        r = self._enviar(self.LINHAS)
+        self.assertContains(r, "já tem estágio ativo")
+        self.client.post(reverse("importar_csv"), {"etapa": "confirmar"})
+        self.assertEqual(Estagio.objects.filter(estagiario__username="ana.fernandes").count(), 1)
+        self.assertEqual(LocalEstagio.objects.filter(cnpj="30.017.109/0001-00").count(), 2)
+
+    def test_erros_por_linha_e_cpf_repetido(self):
+        linhas = [self.LINHAS[0], self.LINHAS[0],
+                  "SÓNOME;;CURSO X;24/08/2026;;;Unidade;;11.111.111/1111-11;;;",
+                  "JOAO SILVA;;CURSO X;32/13/2026;;;Unidade;;;;;"]
+        r = self._enviar(linhas)
+        self.assertContains(r, "repetido no arquivo")
+        self.assertContains(r, "informe nome e sobrenome")
+        self.assertContains(r, "data inválida")
+        self.assertNotContains(r, "Confirmar importação")
+
+    def test_so_administrador(self):
+        self.ori.is_superuser = False
+        self.ori.save()
+        self.assertEqual(self.client.get(reverse("importar_csv")).status_code, 403)
+
+    def test_modelo_csv(self):
+        r = self.client.get(reverse("importar_csv") + "?modelo=1")
+        self.assertIn("estagiario_nome;estagiario_cpf", r.content.decode("utf-8-sig"))
