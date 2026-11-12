@@ -33,7 +33,7 @@
   <a href="?aba=mensagens" class="{% if aba == 'mensagens' %}ativo{% endif %}">Dúvidas e mensagens</a>
   <a href="?aba=arquivos" class="{% if aba == 'arquivos' %}ativo{% endif %}">Arquivos</a>
   <a href="?aba=agenda" class="{% if aba == 'agenda' %}ativo{% endif %}">Visitas</a>
-  <a href="?aba=escalas" class="{% if aba == 'escalas' %}ativo{% endif %}">Dias de estágio</a>
+  <a href="?aba=escalas" class="{% if aba == 'escalas' %}ativo{% endif %}">Dias e horários</a>
 </nav>
 
 {% if aba == "visao" %}
@@ -196,12 +196,12 @@
 {% elif aba == "escalas" %}
 <div class="grade grade-lado">
   <div class="card">
-    <h2>Histórico de dias de estágio</h2>
-    <p class="muted">A escala mais recente que já começou é a que vale. Mudanças futuras aparecem aqui antes de começarem.</p>
+    <h2>Dias e horários de estágio</h2>
+    <p class="muted">Definidos pelo supervisor da concedente. A escala mais recente que já começou é a que vale; mudanças futuras aparecem aqui antes de começarem.</p>
     <ul class="lista">
     {% for e in escalas %}
       <li>
-        <span class="cresce"><strong>{{ e.dias_display }}</strong> · {{ e.horas_por_dia|horas }}/dia{% if e.horario_display %}<br><small>{{ e.horario_display }}{% if e.tem_intervalo %} (com intervalo){% endif %}</small>{% endif %}
+        <span class="cresce"><strong>{{ e.dias_display }}</strong> · {{ e.horas_por_dia|horas }}/dia<br><small>{% if e.horario_display %}{{ e.horario_display }}{% if e.tem_intervalo %} (com intervalo){% endif %}{% else %}<span class="alerta-txt">horário ainda não definido pela concedente</span>{% endif %}</small>
           <small style="display:block">a partir de {{ e.vigente_desde|date:"d/m/Y" }}{% if e == escala_atual %} · <strong style="color:var(--verde)">vigente</strong>{% elif e.vigente_desde > escala_atual.vigente_desde or not escala_atual %} · <strong style="color:var(--laranja)">futura</strong>{% endif %}{% if e.criado_por %} · por {{ e.criado_por.primeiro_nome }}{% endif %}</small></span>
         {% if pode_escalas %}<form method="post" action="{% url 'excluir_escala' e.pk %}" data-confirmar="Remover esta escala?">{% csrf_token %}<button class="btn perigo sm" type="submit">{% icone "lixo" %}</button></form>{% endif %}
       </li>
@@ -210,12 +210,12 @@
   </div>
   {% if pode_escalas %}
   <div class="card destaque">
-    <h3>Mudar dias a partir de uma data</h3>
+    <h3>Definir dias e horários a partir de uma data</h3>
     <form method="post" action="{% url 'nova_escala' estagio.pk %}">{% csrf_token %}
       {% with form=escala_form %}{% include "core/_form.html" %}{% endwith %}
       <button class="btn bloco" type="submit">Salvar escala</button>
     </form>
-    <p class="muted mt-1" style="font-size:.85rem">Para mudar vários estagiários de uma vez, use <a href="{% url 'escala_lote' %}">Alterar dias</a>.</p>
+    <p class="muted mt-1" style="font-size:.85rem">Para vários estagiários de uma vez, use <a href="{% url 'escala_lote' %}">{% if e_supervisor %}Dias e horários{% else %}Alterar dias{% endif %}</a>.</p>
   </div>
   {% endif %}
 </div>

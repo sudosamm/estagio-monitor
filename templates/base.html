@@ -64,6 +64,7 @@
       {% elif user.is_supervisor %}
         <a href="{% url 'painel_supervisor' %}" class="{% if n in 'painel_supervisor,estagio_detalhe,estagio_dia' %}ativo{% endif %}">Meus estagiários</a>
         <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Visitas e conversas</a>
+        <a href="{% url 'escala_lote' %}" class="{% if n == 'escala_lote' %}ativo{% endif %}">Dias e horários</a>
         <a href="{% url 'frequencias' %}" class="{% if n == 'frequencias' %}ativo{% endif %}">Frequências</a>
         {% if CONFIG.banco_talentos_habilitado %}<a href="{% url 'banco_talentos' %}" class="{% if n == 'banco_talentos' %}ativo{% endif %}">Banco de talentos</a>{% endif %}
       {% else %}

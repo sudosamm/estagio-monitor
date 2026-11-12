@@ -28,7 +28,7 @@
       <dt>Usuário</dt><dd>{{ user.username }}</dd>
       <dt>Perfil</dt><dd>{{ user.get_papel_display }}</dd>
       {% if user.matricula %}<dt>Matrícula</dt><dd>{{ user.matricula }}</dd>{% endif %}
-      {% if user.local %}<dt>Concedente</dt><dd>{{ user.local }}</dd>{% endif %}
+      {% if user.is_supervisor %}<dt>Concedente{{ user.concedentes.count|pluralize }}</dt><dd>{{ user.concedentes_txt|default:"—" }}</dd>{% endif %}
     </dl>
     <p class="muted mt-1" style="font-size:.85rem">Nome e matrícula são alterados pelo orientador.</p>
     <p class="mb-0"><a class="btn sec" href="{% url 'trocar_senha' %}">{% icone "chave" %} Alterar senha</a></p>

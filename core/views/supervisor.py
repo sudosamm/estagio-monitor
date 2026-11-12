@@ -14,12 +14,18 @@ supervisor_requerido = papel(Usuario.Papel.SUPERVISOR)
 @supervisor_requerido
 def painel_supervisor(request):
     estagios = list(estagios_visiveis(request.user).filter(ativo=True).prefetch_related("escalas"))
+    hoje = timezone.localdate()
+    sem_horario = []
     for e in estagios:
         e.st = status_hoje(e)
+        esc = e.escala_em(hoje) or e.escalas.order_by("vigente_desde").first()
+        if not esc or not esc.horario_entrada:
+            sem_horario.append(e)
     pendentes = Registro.objects.filter(
         estagio__in=estagios, confirmacao=Registro.Confirmacao.PENDENTE, data__lte=timezone.localdate(),
     ).select_related("estagio__estagiario").order_by("-data")
-    return render(request, "core/painel_supervisor.html", {"estagios": estagios, "pendentes": pendentes})
+    return render(request, "core/painel_supervisor.html", {"estagios": estagios, "pendentes": pendentes,
+                                                           "sem_horario": sem_horario})
 
 
 @supervisor_requerido

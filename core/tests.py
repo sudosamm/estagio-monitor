@@ -34,7 +34,7 @@ class Base(TestCase):
     def setUp(self):
         self.ori = _ativo(criar_usuario("Paula Orientadora", Usuario.Papel.ORIENTADOR))
         self.local = LocalEstagio.objects.create(nome="Empresa X")
-        self.sup = _ativo(criar_usuario("Sérgio Supervisor", Usuario.Papel.SUPERVISOR, local=self.local))
+        self.sup = _ativo(criar_usuario("Sérgio Supervisor", Usuario.Papel.SUPERVISOR, concedente=self.local))
         self.curso = Curso.objects.create(nome="Informática", carga_horaria=100, horas_por_dia_padrao=4)
         self.aluno = _ativo(criar_usuario("Maria da Silva Souza", Usuario.Papel.ESTAGIARIO))
         self.est = Estagio.objects.create(estagiario=self.aluno, orientador=self.ori, supervisor=self.sup,
@@ -303,7 +303,7 @@ class ConcedenteEPerfilTests(Base):
         self.assertContains(r, "rita.lopes")
         local = LocalEstagio.objects.get(nome="Clínica Vida")
         self.assertEqual((local.cnpj, local.cep, local.uf), ("11.222.333/0001-81", "60025-100", "CE"))
-        self.assertEqual(Usuario.objects.get(username="rita.lopes").local, local)
+        self.assertEqual(list(Usuario.objects.get(username="rita.lopes").concedentes.all()), [local])
 
     @override_settings(MEDIA_ROOT=str(settings.DATA_DIR / "anexos-testes"))
     def test_foto_de_perfil_recortada(self):
@@ -375,6 +375,7 @@ class CoordenadorTests(Base):
         self.entrar(self.coord)
         r = self.client.post(reverse("criar_estagiarios"), {
             "nomes": "Caio Prado", "curso": self.curso.pk, "orientador": self.ori.pk, "data_inicio": "2026-11-16",
+            "local": self.local.pk, "supervisor": self.sup.pk,
             "dias": ["0"], "horas_por_dia": "4"})
         self.assertContains(r, "caio.prado")
         self.assertEqual(Usuario.objects.get(username="caio.prado").estagios.get().orientador, self.ori)
@@ -433,7 +434,7 @@ class CaptacaoTests(Base):
         self.assertEqual(cand.status, Candidatura.Status.APROVADA)
         self.assertEqual(cand.local.cnpj, "11.222.333/0001-81")
         sup = Usuario.objects.get(username="marta.amaral")
-        self.assertEqual((sup.papel, sup.local), (Usuario.Papel.SUPERVISOR, cand.local))
+        self.assertEqual((sup.papel, list(sup.concedentes.all())), (Usuario.Papel.SUPERVISOR, [cand.local]))
         aviso = AvisoExterno.objects.get()
         self.assertIn("aprovado", aviso.mensagem)
         self.assertIn("marta.amaral", aviso.mensagem)
@@ -558,3 +559,146 @@ class ImportacaoCSVTests(Base):
     def test_modelo_csv(self):
         r = self.client.get(reverse("importar_csv") + "?modelo=1")
         self.assertIn("estagiario_nome;estagiario_cpf", r.content.decode("utf-8-sig"))
+
+
+class HorariosDaConcedenteTests(Base):
+    """Os horários são definidos pelo supervisor; o estagiário informa os horários do dia e o supervisor confirma."""
+
+    HORARIO = {"horario_entrada": "07:30", "saida_intervalo": "11:30", "volta_intervalo": "13:30", "horario_saida": "17:30"}
+
+    def test_supervisor_define_dias_e_horarios(self):
+        self.entrar(self.sup)
+        r = self.client.post(reverse("nova_escala", args=[self.est.pk]),
+                             {"vigente_desde": "2026-11-16", "dias": ["0", "1", "2"], "horas_por_dia": "8", **self.HORARIO})
+        self.assertEqual(r.status_code, 302)
+        esc = self.est.escalas.get(vigente_desde=date(2026, 11, 16))
+        self.assertEqual((esc.horario_entrada.hour, esc.horario_entrada.minute, esc.dias), (7, 30, "0,1,2"))
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="07:30").exists())
+        self.assertTrue(Notificacao.objects.filter(usuario=self.ori, texto__contains="07:30").exists())
+        # supervisor de outra concedente não mexe
+        outro = _ativo(criar_usuario("Selma Duarte", Usuario.Papel.SUPERVISOR))
+        self.entrar(outro)
+        r = self.client.post(reverse("nova_escala", args=[self.est.pk]),
+                             {"vigente_desde": "2026-11-17", "dias": ["0"], "horas_por_dia": "4"})
+        self.assertEqual(r.status_code, 403)
+
+    def test_supervisor_em_lote_e_orientador_so_muda_os_dias(self):
+        self.entrar(self.sup)
+        r = self.client.get(reverse("painel_supervisor"))
+        self.assertContains(r, "sem horário definido")
+        self.client.post(reverse("escala_lote"), {"estagios": [self.est.pk], "vigente_desde": "2026-11-11",
+                                                  "dias": ["0", "1"], "horas_por_dia": "8", **self.HORARIO})
+        self.assertNotContains(self.client.get(reverse("painel_supervisor")), "sem horário definido")
+
+        self.entrar(self.ori)
+        r = self.client.get(reverse("escala_lote"))
+        self.assertNotContains(r, 'name="horario_entrada"')
+        self.client.post(reverse("escala_lote"), {"estagios": [self.est.pk], "vigente_desde": "2026-11-16",
+                                                  "dias": ["0", "1", "2", "3", "4"]})
+        nova = self.est.escalas.get(vigente_desde=date(2026, 11, 16))
+        self.assertEqual((nova.dias, nova.horas_por_dia, nova.horario_entrada.minute, nova.horario_saida.hour),
+                         ("0,1,2,3,4", 8, 30, 17))
+
+    def test_estagiario_informa_horarios_e_horas_sao_calculadas(self):
+        self.entrar(self.aluno)
+        url = reverse("estagio_dia", args=[self.est.pk, "2026-11-10"])
+        self.assertContains(self.client.get(url), "Meus horários neste dia")
+        self.client.post(url, {"h-hora_chegada": "07:30", "h-saida_intervalo": "11:30", "h-volta_intervalo": "13:00",
+                               "h-hora_saida": "16:30"})
+        reg = Registro.objects.get(estagio=self.est, data=date(2026, 11, 10))
+        self.assertEqual((reg.situacao, reg.confirmacao, reg.horas), ("PRESENTE", "PENDENTE", Decimal("7.50")))
+        self.assertTrue(Notificacao.objects.filter(usuario=self.sup, texto__contains="07:30").exists())
+        # depois de confirmado, o estagiário não muda mais
+        reg.confirmar(self.sup, Registro.Confirmacao.CONFIRMADA)
+        reg.save()
+        self.assertNotContains(self.client.get(url), "Meus horários neste dia")
+        # mais de 7 dias atrás: só o supervisor/orientador lança
+        self.assertNotContains(self.client.get(reverse("estagio_dia", args=[self.est.pk, "2026-11-02"])),
+                               "Meus horários neste dia")
+
+    def test_intervalo_incompleto_e_ordem(self):
+        self.entrar(self.aluno)
+        url = reverse("estagio_dia", args=[self.est.pk, "2026-11-10"])
+        r = self.client.post(url, {"h-hora_chegada": "08:00", "h-saida_intervalo": "12:00", "h-hora_saida": "17:00"})
+        self.assertContains(r, "saída e a volta do intervalo")
+        r = self.client.post(url, {"h-hora_chegada": "14:00", "h-hora_saida": "12:00"})
+        self.assertContains(r, "em ordem")
+        self.assertFalse(Registro.objects.exists())
+
+    def test_saida_pelo_botao_calcula_horas(self):
+        from datetime import time
+
+        reg = Registro.objects.create(estagio=self.est, data=QUARTA, situacao="PRESENTE", horas=4,
+                                      hora_chegada=time(0, 0), registrado_por=self.aluno)
+        self.entrar(self.aluno)
+        self.client.post(reverse("registrar_saida", args=[self.est.pk]), {"ponto": "hora_saida"})
+        reg.refresh_from_db()
+        self.assertIsNotNone(reg.hora_saida)
+        self.assertEqual(reg.horas, reg.calcular_horas())
+
+    def test_lancamento_do_supervisor_calcula_pelos_horarios(self):
+        self.entrar(self.sup)
+        self.client.post(reverse("estagio_dia", args=[self.est.pk, "2026-11-10"]), {
+            "l-situacao": "PRESENTE", "l-horas": "4", "l-hora_chegada": "08:00", "l-saida_intervalo": "12:00",
+            "l-volta_intervalo": "13:00", "l-hora_saida": "15:00", "l-confirmacao": "CONFIRMADA"})
+        self.assertEqual(Registro.objects.get(data=date(2026, 11, 10)).horas, Decimal("6.00"))
+
+
+class SupervisorDaConcedenteTests(Base):
+    """Todo estagiário tem supervisor, e o supervisor tem de estar cadastrado na concedente do estágio."""
+
+    def setUp(self):
+        super().setUp()
+        self.outro_local = LocalEstagio.objects.create(nome="Empresa Y")
+        self.sup_y = _ativo(criar_usuario("Yara Supervisora", Usuario.Papel.SUPERVISOR, concedente=self.outro_local))
+        self.entrar(self.ori)
+
+    def _editar(self, **kw):
+        dados = {"curso": self.curso.pk, "local": self.local.pk, "supervisor": self.sup.pk, "data_inicio": "2026-11-02",
+                 "horas_anteriores": "0", "ativo": "on"}
+        dados.update(kw)
+        return self.client.post(reverse("editar_estagio", args=[self.est.pk]), dados)
+
+    def test_estagio_nao_aceita_supervisor_de_outra_concedente(self):
+        r = self._editar(supervisor=self.sup_y.pk)
+        self.assertContains(r, "não é supervisor(a) de Empresa X")
+        self.est.refresh_from_db()
+        self.assertEqual(self.est.supervisor, self.sup)
+        # depois de cadastrada também na Empresa X, pode
+        self.sup_y.concedentes.add(self.local)
+        self.assertEqual(self._editar(supervisor=self.sup_y.pk).status_code, 302)
+        self.est.refresh_from_db()
+        self.assertEqual(self.est.supervisor, self.sup_y)
+
+    def test_supervisor_e_concedente_obrigatorios(self):
+        r = self._editar(supervisor="")
+        self.assertEqual(r.status_code, 200)
+        r = self.client.post(reverse("criar_estagiarios"), {
+            "nomes": "Lia Souza", "curso": self.curso.pk, "local": self.local.pk, "supervisor": self.sup_y.pk,
+            "data_inicio": "2026-11-16", "dias": ["0"], "horas_por_dia": "4"})
+        self.assertContains(r, "não é supervisor(a) de Empresa X")
+        self.assertFalse(Usuario.objects.filter(username="lia.souza").exists())
+
+    def test_vincular_supervisor_a_outra_concedente_e_nao_desvincular_com_estagio_ativo(self):
+        self.client.post(reverse("local_editar", args=[self.local.pk]),
+                         {"tipo_concedente": "PJ", "nome": "Empresa X", "uf": "CE", "vincular_supervisores": [self.sup_y.pk]})
+        self.assertEqual(set(self.sup_y.concedentes.all()), {self.local, self.outro_local})
+        r = self.client.post(reverse("editar_usuario", args=[self.sup.pk]), {
+            "nome_completo": self.sup.nome_completo, "concedentes": [self.outro_local.pk], "is_active": "on"})
+        self.assertContains(r, "há estagiários ativos supervisionados")
+        self.assertEqual(list(self.sup.concedentes.all()), [self.local])
+
+    def test_importacao_vincula_supervisor_a_concedente(self):
+        from .importacao import Opcoes, importar
+
+        linhas = [(2, {"estagiario_nome": "Rui Lopes", "curso": "Informática", "data_inicio": "01/09/2026",
+                       "concedente_nome": "Empresa Y", "supervisor_nome": "Sérgio Supervisor"}),
+                  (3, {"estagiario_nome": "Ivo Lopes", "curso": "Informática", "data_inicio": "01/09/2026",
+                       "concedente_nome": "Empresa Z"})]
+        r = importar(linhas, Opcoes(orientador=self.ori, dias=[0], horas_por_dia=Decimal(4)), self.ori, confirmar=True)
+        self.assertIn("supervisor_nome: obrigatório", r.erros[0][1])
+        r = importar(linhas[:1], Opcoes(orientador=self.ori, dias=[0], horas_por_dia=Decimal(4)), self.ori, confirmar=True)
+        self.assertTrue(r.confirmado)
+        self.assertEqual([(s, l) for s, l in r.supervisores_vinculados], [(self.sup, self.outro_local)])
+        self.assertEqual(set(self.sup.concedentes.all()), {self.local, self.outro_local})
+        self.assertEqual(Usuario.objects.filter(nome_completo="Sérgio Supervisor").count(), 1)

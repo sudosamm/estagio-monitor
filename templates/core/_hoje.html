@@ -7,7 +7,8 @@
     <p>{% now "l, d \d\e F" %}{% if escala_atual.horario_display %} · {{ escala_atual.horario_display }}{% endif %} · {{ estagio.local|default:"local a definir" }}</p>
     <form method="post" action="{% url 'marcar_presenca' estagio.pk %}">{% csrf_token %}
       <details><summary>Adicionar anotação (opcional)</summary><textarea name="diario" rows="3" placeholder="Como está sendo o dia?"></textarea></details>
-      <div class="acoes mt-1"><button class="btn grande" type="submit">{% icone "check" %} Estou no estágio</button></div>
+      <div class="acoes mt-1"><button class="btn grande" type="submit">{% icone "check" %} Estou no estágio</button>
+        <a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">{% icone "relogio" %} Digitar meus horários</a></div>
     </form>
   {% elif st.codigo == "aguardando" or st.codigo == "confirmado" or st.codigo == "contestado" %}
     <h2>{% if st.codigo == "confirmado" %}Presença confirmada{% elif st.codigo == "contestado" %}Presença contestada pelo supervisor{% else %}Presença marcada{% endif %}</h2>
@@ -27,7 +28,7 @@
         <form method="post" action="{% url 'registrar_saida' estagio.pk %}"{% if com_intervalo and not reg.volta_intervalo %} data-confirmar="Encerrar o dia agora, sem registrar o intervalo?"{% endif %}>{% csrf_token %}<input type="hidden" name="ponto" value="hora_saida"><button class="btn{% if com_intervalo and not reg.volta_intervalo %} sec{% endif %}" type="submit">{% icone "sair" %} Registrar saída</button></form>
         {% endwith %}
       {% endif %}
-      <a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">{% icone "livro" %} {% if reg.diario %}Ver anotação do dia{% else %}Anotar como foi o dia{% endif %}</a>
+      <a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">{% icone "livro" %} {% if reg.confirmacao != "CONFIRMADA" %}Corrigir horários / anotar o dia{% elif reg.diario %}Ver anotação do dia{% else %}Anotar como foi o dia{% endif %}</a>
     </div>
   {% elif st.codigo == "ausencia" or st.codigo == "ausencia_ok" %}
     <h2>Ausência informada para hoje</h2>

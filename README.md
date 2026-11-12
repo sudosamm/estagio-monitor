@@ -20,15 +20,26 @@ Todos recebem **notificações** (o sino no topo) quando algo muda, por exemplo:
 - Todas as contas nascem com a `SENHA_PADRAO` e a pessoa **é obrigada a criar a própria senha** no primeiro acesso.
 - O orientador pode voltar a senha de alguém para a padrão (em *Contas → Editar*).
 
+### Dias e horários
+- **Supervisor:** os horários são da concedente. Ele define dias, carga diária (4, 6 ou 8 h) e horários de cada estagiário, um por um (aba *Dias e horários* do estágio) ou vários de uma vez (*Dias e horários* no menu). O painel avisa quem ainda está sem horário definido.
+- **Estagiário:** marca entrada, intervalo e saída pelos botões ou **digita os horários do dia**, como na folha de papel (até 7 dias atrás). As horas do dia são calculadas pelos horários, e o supervisor confirma.
+- **Orientador:** muda só os **dias** em lote (ex.: “a partir de 16/11, segunda a sexta”). Cada estagiário mantém os horários que a concedente definiu.
+
 ### Mudança de dias (ex.: “a partir de 16/11, segunda a sexta”)
 Em **Alterar dias**, escolha a data, os dias da semana e os estagiários (dá para filtrar por curso ou turma). O sistema guarda o histórico: os dias anteriores continuam valendo como antes, e a nova escala vale a partir da data escolhida. Estagiários e supervisores são avisados.
 
 ### Folha de frequência
-Cada pessoa gera a folha do mês no modelo oficial (cabeçalho preenchido, fins de semana em cinza, feriados e eventos já escritos na linha). A folha é só para impressão: não há botão de download.
+Cada pessoa gera a folha do mês reproduzindo, medida a medida, a folha oficial da CEPAE/SEDUC: brasão, cabeçalho preenchido, fins de semana em cinza e feriados/eventos escritos na linha. O brasão padrão pode ser trocado em Configurações. A folha é só para impressão: não há botão de download.
 - Toda abertura fica registrada, com o número de impressões (inclusive “Salvar como PDF”, que passa pela impressão do navegador).
 - No rodapé sai um código. Em **Frequências**, o orientador e o supervisor buscam esse código para saber quem emitiu a folha e quando.
 - O estagiário não vê nada desse registro.
 - Escola, município, cabeçalho e logotipo da folha ficam em **Configurações** (menu do usuário, só para o administrador).
+
+### Supervisor e concedente
+Todo estágio precisa de **concedente** e **supervisor**, e o supervisor tem de estar **cadastrado nessa concedente**. Os formulários só mostram os supervisores da concedente escolhida e recusam outro.
+- **Mais de uma concedente:** um supervisor pode estar em várias concedentes. Vincule-o na ficha da concedente, em “Vincular supervisor já cadastrado em outra concedente”, ou na edição da conta.
+- **Desvincular:** não é possível tirar um supervisor de uma concedente onde ele ainda supervisiona estagiários ativos.
+- **Na importação por CSV:** o supervisor de cada linha fica vinculado à concedente daquela linha. Se a mesma pessoa já existir em outra concedente, a prévia avisa para você conferir.
 
 ### Previsão de término
 A previsão parte das horas que faltam e percorre a escala, pulando feriados e eventos da escola. Também entra o que o estagiário marca no calendário:
@@ -80,7 +91,7 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Captação de concedentes | ✔ | ✔ |
 | Frequências impressas | ✔ | ✔ |
 | Agendar visitas | ✔ | — |
-| Mudar dias e horários | ✔ | — |
+| Mudar dias em lote (cada um mantém seus horários) | ✔ | — |
 | Feriados e eventos | ✔ | — |
 | Arquivos gerais | ✔ | — |
 

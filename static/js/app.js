@@ -61,3 +61,18 @@ document.querySelectorAll("form.aviso-externo").forEach((form) => {
     navigator.clipboard?.writeText(texto.value).then(() => { ev.target.textContent = "Copiado!"; });
   });
 });
+// supervisor: só mostra quem é da concedente escolhida
+document.querySelectorAll("form").forEach((form) => {
+  const local = form.querySelector("select[name$='local']");
+  const sup = form.querySelector("select[name$='supervisor']");
+  if (!local || !sup || !sup.querySelector("option[data-concedentes]")) return;
+  const filtrar = () => {
+    sup.querySelectorAll("option[data-concedentes]").forEach((op) => {
+      const ok = local.value && op.dataset.concedentes.split(",").includes(local.value);
+      op.hidden = !ok; op.disabled = !ok;
+      if (!ok && op.selected) sup.value = "";
+    });
+  };
+  local.addEventListener("change", filtrar);
+  filtrar();
+});

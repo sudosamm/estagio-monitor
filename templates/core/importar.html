@@ -30,6 +30,8 @@
     <div class="card"><h3>Linhas que serão ignoradas</h3>
       <ul class="lista compacta">{% for n, msg in resultado.ignoradas %}<li><span class="etiqueta">linha {{ n }}</span><span class="cresce">{{ msg }}</span></li>{% endfor %}</ul></div>
   {% endif %}
+  {% if resultado.supervisores_vinculados %}<div class="caixa-alerta" style="margin-bottom:1rem"><strong>Confira:</strong> estes supervisores já existiam em outra concedente e serão vinculados também a esta (é a mesma pessoa?):
+    <ul style="margin:.3rem 0 0">{% for s, l in resultado.supervisores_vinculados %}<li>{{ s.nome_completo }} → {{ l }}</li>{% endfor %}</ul></div>{% endif %}
   {% if resultado.cursos_novos %}<div class="caixa-alerta" style="margin-bottom:1rem">Cursos que serão criados: {% for c in resultado.cursos_novos %}<strong>{{ c.nome }}</strong> ({{ c.carga_horaria }} h){% if not forloop.last %}, {% endif %}{% endfor %}. Ajuste a carga horária depois em Cursos, se precisar.</div>{% endif %}
   <div class="grade grade-lado">
     <div class="card"><h2>Estagiários</h2>
@@ -44,7 +46,7 @@
       <div class="card"><h3>Concedentes novas</h3>
         <ul class="lista compacta">{% for l in resultado.concedentes_novas %}<li><span class="cresce"><strong>{{ l.nome }}</strong><small style="display:block">{{ l.razao_social }}{% if l.cnpj %} · {{ l.cnpj }}{% endif %}</small></span></li>{% empty %}<li class="vazio">Nenhuma.</li>{% endfor %}</ul></div>
       <div class="card"><h3>Supervisores novos</h3>
-        <ul class="lista compacta">{% for s in resultado.supervisores_novos %}<li><span class="cresce"><strong>{{ s.nome_completo }}</strong><small style="display:block">{{ s.username }}{% if s.telefone %} · {{ s.telefone }}{% endif %} · {{ s.local }}</small></span></li>{% empty %}<li class="vazio">Nenhum.</li>{% endfor %}</ul></div>
+        <ul class="lista compacta">{% for s in resultado.supervisores_novos %}<li><span class="cresce"><strong>{{ s.nome_completo }}</strong><small style="display:block">{{ s.username }}{% if s.telefone %} · {{ s.telefone }}{% endif %} · {{ s.concedentes_txt }}</small></span></li>{% empty %}<li class="vazio">Nenhum.</li>{% endfor %}</ul></div>
     </div>
   </div>
 {% else %}

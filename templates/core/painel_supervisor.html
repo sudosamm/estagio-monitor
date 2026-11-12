@@ -2,8 +2,11 @@
 {% load ui %}
 {% block titulo %}Meus estagiários{% endblock %}
 {% block conteudo %}
-<div class="titulo-pagina"><div><h1>Olá, {{ user.primeiro_nome }}</h1><p>{% now "l, d \d\e F" %} · {{ user.local|default:"" }}</p></div>
-  <a class="btn" href="{% url 'novo_agendamento' %}">{% icone "mensagem" %} Pedir visita ou conversa</a></div>
+<div class="titulo-pagina"><div><h1>Olá, {{ user.primeiro_nome }}</h1><p>{% now "l, d \d\e F" %} · {{ user.concedentes_txt }}</p></div>
+  <div class="acoes"><a class="btn sec" href="{% url 'escala_lote' %}">{% icone "relogio" %} Dias e horários</a><a class="btn" href="{% url 'novo_agendamento' %}">{% icone "mensagem" %} Pedir visita ou conversa</a></div></div>
+{% if sem_horario %}
+<a class="faixa-aviso" href="{% url 'escala_lote' %}">{% icone "relogio" %}<span><strong>{{ sem_horario|length }} estagiário{{ sem_horario|pluralize }} sem horário definido:</strong> {% for e in sem_horario %}{{ e.estagiario.primeiro_nome }}{% if not forloop.last %}, {% endif %}{% endfor %}. Os horários são definidos por você, supervisor.</span><span class="btn sm">Definir</span></a>
+{% endif %}
 <div class="grade grade-lado">
   <div class="card destaque">
     <h2>Hoje</h2>
@@ -24,7 +27,7 @@
       <ul class="lista">
       {% for r in pendentes %}
         <li><input type="checkbox" class="chk-reg" name="registros" value="{{ r.pk }}" id="r{{ r.pk }}">
-          <label for="r{{ r.pk }}" class="cresce"><strong>{{ r.estagio.estagiario.primeiro_nome }}</strong> · {{ r.data|date:"d/m" }}<small style="display:block">{{ r.get_situacao_display }}{% if r.hora_chegada %} às {{ r.hora_chegada|time:"H:i" }}{% endif %}{% if r.motivo %} — {{ r.motivo|truncatechars:50 }}{% endif %}</small></label>
+          <label for="r{{ r.pk }}" class="cresce"><strong>{{ r.estagio.estagiario.primeiro_nome }}</strong> · {{ r.data|date:"d/m" }}<small style="display:block">{{ r.get_situacao_display }}{% if r.situacao == "PRESENTE" %}{% if r.horario_display %} · {{ r.horario_display }}{% endif %} · {{ r.horas|horas }}{% endif %}{% if r.motivo %} — {{ r.motivo|truncatechars:50 }}{% endif %}</small></label>
           <a class="btn sec sm" href="{% url 'estagio_dia' r.estagio_id r.data|date:'Y-m-d' %}">Ver</a></li>
       {% endfor %}
       </ul>

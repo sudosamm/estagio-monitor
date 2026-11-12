@@ -4,7 +4,7 @@
     <label>{{ campo }} {{ campo.label }}</label>
   {% elif tipo == 'checkboxselectmultiple' or tipo == 'radioselect' %}
     <span class="rotulo">{{ campo.label }}</span>
-    <div class="opcoes{% if campo.name == 'estagios' %} lista{% endif %}"{% if campo.name == 'estagios' %} id="lista-{{ campo.name }}"{% endif %}>
+    <div class="opcoes{% if campo.name == 'estagios' or campo.name == 'concedentes' %} lista{% endif %}"{% if campo.name == 'estagios' %} id="lista-{{ campo.name }}"{% endif %}>
       {% for op in campo %}<label>{{ op.tag }} {{ op.choice_label }}</label>{% endfor %}
     </div>
   {% else %}

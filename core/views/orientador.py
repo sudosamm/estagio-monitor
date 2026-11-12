@@ -2,6 +2,7 @@
 from datetime import timedelta
 
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Q
@@ -98,9 +99,8 @@ def estagios_lista(request):
 
 @permissao("estagiarios")
 def criar_estagiarios(request):
-    form = EstagiariosLoteForm(request.POST or None, usuario=request.user, initial={"data_inicio": timezone.localdate(), "dias": [0, 1, 2, 3, 4],
-                                                              "horario_entrada": "07:00", "saida_intervalo": "11:00",
-                                                              "volta_intervalo": "13:00", "horario_saida": "17:00"})
+    form = EstagiariosLoteForm(request.POST or None, usuario=request.user,
+                               initial={"data_inicio": timezone.localdate(), "dias": [0, 1, 2, 3, 4]})
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         criados = []
@@ -134,7 +134,7 @@ def criar_supervisores(request):
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         with transaction.atomic():
-            criados = [criar_usuario(nome, Usuario.Papel.SUPERVISOR, request.user, telefone=tel, local=d["local"],
+            criados = [criar_usuario(nome, Usuario.Papel.SUPERVISOR, request.user, telefone=tel, concedente=d["local"],
                                      cargo=d["cargo"]) for nome, tel in d["nomes"]]
         return _resultado_contas(request, criados, "Supervisores criados")
     return render(request, "core/form_pagina.html", {
@@ -202,7 +202,7 @@ def usuarios(request):
         qs = qs.filter(papel=papel)
     if q:
         qs = qs.filter(Q(nome_completo__icontains=q) | Q(username__icontains=q))
-    qs = qs.select_related("local").annotate(n_supervisionados=Count("estagios_supervisionados", distinct=True))
+    qs = qs.prefetch_related("concedentes").annotate(n_supervisionados=Count("estagios_supervisionados", distinct=True))
     return render(request, "core/usuarios.html", {
         "usuarios": qs.distinct(), "papel": papel, "q": q, "papeis": Usuario.Papel.choices,
     })
@@ -225,7 +225,7 @@ def editar_usuario(request, pk):
         raise PermissionDenied
     form = UsuarioEditForm(request.POST or None, instance=alvo)
     if not alvo.is_supervisor:
-        del form.fields["local"], form.fields["cargo"]
+        del form.fields["concedentes"], form.fields["cargo"]
     if not alvo.is_estagiario:
         del form.fields["cpf"]
     if not (alvo.is_coordenador and request.user.is_superuser):
@@ -296,8 +296,10 @@ def local_editar(request, pk=None):
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
             local = form.save()
-            criados = [criar_usuario(nome, Usuario.Papel.SUPERVISOR, request.user, telefone=tel, local=local)
+            criados = [criar_usuario(nome, Usuario.Papel.SUPERVISOR, request.user, telefone=tel, concedente=local)
                        for nome, tel in form.cleaned_data["novos_supervisores"]]
+            for sup in form.cleaned_data["vincular_supervisores"]:
+                sup.concedentes.add(local)
         messages.success(request, f"Concedente “{local}” salva.")
         if criados:
             return _resultado_contas(request, criados, f"Supervisores de {local}")
@@ -363,34 +365,49 @@ def dias_sem_estagio(request):
 # ----------------------------------------------------------------- alterações em lote
 
 
-@permissao("escalas")
+@login_required
 def escala_lote(request):
-    qs = _meus_estagios(request)
+    """Supervisor: dias e horários de vários estagiários. Orientador: só os dias (cada um mantém seus horários)."""
+    user = request.user
+    supervisor = user.is_supervisor
+    if not (supervisor or user.pode("escalas")):
+        raise PermissionDenied
+    qs = estagios_visiveis(user).filter(ativo=True).prefetch_related("escalas")
     filtro_curso = request.GET.get("curso", "")
     filtro_turma = request.GET.get("turma", "")
     if filtro_curso:
         qs = qs.filter(curso_id=filtro_curso)
     if filtro_turma:
         qs = qs.filter(turma=filtro_turma)
-    form = EscalaLoteForm(request.POST or None, estagios_qs=qs, initial={"dias": [0, 1, 2, 3, 4]})
+    inicial = {"dias": [0, 1, 2, 3, 4], "vigente_desde": timezone.localdate()}
+    if request.GET.get("estagio"):
+        inicial["estagios"] = qs.filter(pk=request.GET["estagio"])
+    form = EscalaLoteForm(request.POST or None, estagios_qs=qs, com_horarios=supervisor, initial=inicial)
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
+        dados = form.dados_escala()
         with transaction.atomic():
             for e in d["estagios"]:
+                if not supervisor:  # mantém horas e horários que a concedente definiu
+                    atual = e.escala_em(d["vigente_desde"]) or e.escalas.order_by("vigente_desde").first()
+                    dados = {**form.dados_escala(), **({
+                        "horas_por_dia": atual.horas_por_dia, "horario_entrada": atual.horario_entrada,
+                        "saida_intervalo": atual.saida_intervalo, "volta_intervalo": atual.volta_intervalo,
+                        "horario_saida": atual.horario_saida,
+                    } if atual else {"horas_por_dia": e.curso.horas_por_dia_padrao})}
                 Escala.objects.update_or_create(
-                    estagio=e, vigente_desde=d["vigente_desde"],
-                    defaults={**form.dados_escala(), "criado_por": request.user},
+                    estagio=e, vigente_desde=d["vigente_desde"], defaults={**dados, "criado_por": user},
                 )
-        exemplo = Escala(dias=form.dados_escala()["dias"])
-        pessoas = [p for e in d["estagios"] for p in (e.estagiario, e.supervisor)]
-        notificar(pessoas, f"Mudança nos dias de estágio a partir de {d['vigente_desde']:%d/%m}: "
-                  f"{exemplo.dias_display}.", reverse("inicio"))
-        messages.success(request, f"Nova escala aplicada a {len(d['estagios'])} estagiário(s) a partir de "
-                                  f"{d['vigente_desde']:%d/%m/%Y}.")
-        return redirect("estagios_lista")
-    turmas = sorted(set(_meus_estagios(request).exclude(turma="").values_list("turma", flat=True)))
+        exemplo = Escala(**{k: v for k, v in dados.items() if k != "horas_por_dia"})
+        o_que = f"{exemplo.dias_display}" + (f" · {exemplo.horario_display}" if supervisor and exemplo.horario_display else "")
+        pessoas = [p for e in d["estagios"] for p in (e.estagiario, e.supervisor, e.orientador)]
+        notificar(pessoas, f"{user.primeiro_nome} mudou os dias de estágio a partir de {d['vigente_desde']:%d/%m}: {o_que}.",
+                  reverse("inicio"), exceto=user)
+        messages.success(request, f"Aplicado a {len(d['estagios'])} estagiário(s) a partir de {d['vigente_desde']:%d/%m/%Y}.")
+        return redirect("painel_supervisor" if supervisor else "estagios_lista")
+    turmas = sorted(set(estagios_visiveis(user).exclude(turma="").values_list("turma", flat=True)))
     return render(request, "core/escala_lote.html", {
-        "form": form, "cursos": Curso.objects.all(), "turmas": turmas,
+        "form": form, "cursos": Curso.objects.all(), "turmas": turmas, "supervisor": supervisor,
         "filtro_curso": filtro_curso, "filtro_turma": filtro_turma,
     })
 

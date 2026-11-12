@@ -65,7 +65,6 @@ def importar_csv(request):
     form = ImportarCSVForm(request.POST or None, request.FILES or None, initial={
         "orientador": request.user if request.user.is_orientador else None,
         "acompanhamento_desde": timezone.localdate(), "dias": [0, 1, 2, 3, 4], "horas_por_dia": "8",
-        "horario_entrada": "07:00", "saida_intervalo": "11:00", "volta_intervalo": "13:00", "horario_saida": "17:00",
     })
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data

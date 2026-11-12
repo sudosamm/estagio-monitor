@@ -1,53 +1,54 @@
-{% load static %}<!doctype html>
+{% load static ui %}<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Frequência {{ mes_nome }} {{ ano }} — {{ estagio.estagiario }}</title>
 <style>
-  @page { size: A4 portrait; margin: 8mm 10mm; }
+  /* Medidas em milímetros copiadas da folha oficial (CEPAE/SEDUC), página A4 sem margem. */
+  @page { size: A4 portrait; margin: 0; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #e9ecea; font-family: Arial, Helvetica, sans-serif; color: #000; }
-  .barra { position: sticky; top: 0; z-index: 2; background: #005a2b; color: #fff; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; font-size: 14px; }
+  body { margin: 0; background: #e9ecea; color: #000; }
+  .barra { position: sticky; top: 0; z-index: 2; background: #005a2b; color: #fff; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; font: 14px Arial, sans-serif; }
   .barra a, .barra button { font: inherit; color: #fff; text-decoration: none; padding: 7px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.5); background: transparent; cursor: pointer; white-space: nowrap; }
   .barra button.imprimir { background: #ffcc29; color: #222; border-color: #ffcc29; font-weight: 700; }
   .barra .mes { font-weight: 700; }
-  .dica { max-width: 210mm; margin: 12px auto 0; padding: 0 16px; font-size: 13px; color: #444; }
+  .dica { max-width: 210mm; margin: 12px auto 0; padding: 0 16px; font: 13px Arial, sans-serif; color: #444; }
   .papel-wrap { overflow-x: auto; padding: 12px 16px 32px; }
-  .folha { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; padding: 8mm 10mm; box-shadow: 0 2px 12px rgba(0,0,0,.15); font-size: 8.4pt; line-height: 1.2; user-select: none; -webkit-user-select: none; }
 
-  .cab { display: grid; grid-template-columns: 34mm 1fr 34mm; align-items: center; min-height: 17mm; }
-  .cab img { max-width: 32mm; max-height: 17mm; object-fit: contain; }
-  .cab .centro { text-align: center; font-size: 10.5pt; line-height: 1.3; }
-  .cab .titulo { font-size: 11.5pt; margin-top: 1.5mm; }
-  .info { margin-top: 1.5mm; }
-  .info .linha { display: grid; grid-template-columns: 1fr 62mm; gap: 3mm; min-height: 4.6mm; align-items: end; }
-  .info .linha > div { display: flex; gap: 2mm; white-space: nowrap; overflow: hidden; }
-  .info .rot { flex: none; }
-  .info .val { text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; }
-  .info .sub .val { flex: 1; border-bottom: .3mm solid #000; padding-left: 1mm; }
-  .avisos { border: .3mm solid #000; padding: .8mm 1.5mm; margin-top: 1.2mm; font-size: 7.6pt; line-height: 1.25; }
+  .folha { position: relative; width: 210mm; height: 297mm; margin: 0 auto; background: #fff; overflow: hidden;
+           box-shadow: 0 2px 12px rgba(0,0,0,.15); font-family: Helvetica, Arial, "Liberation Sans", sans-serif;
+           font-size: 8pt; line-height: 1; user-select: none; -webkit-user-select: none; }
+  .a { position: absolute; white-space: nowrap; }
+  .t10 { font-size: 10pt; }
+  .t9 { font-size: 9pt; }
+  .centro { left: 0; width: 210mm; text-align: center; }
+  .v { overflow: hidden; text-overflow: clip; }
+  .linha { position: absolute; border-top: 1pt solid #000; height: 0; }
+  .logo { position: absolute; left: 7.1mm; top: 6.7mm; width: 22.5mm; height: 13mm; object-fit: contain; object-position: left top; }
 
-  table { width: 100%; border-collapse: collapse; table-layout: fixed; border: .3mm solid #000; border-top: 0; }
-  th, td { border: .25mm solid #000; padding: 0 1mm; height: 4.8mm; text-align: center; vertical-align: middle; font-weight: normal; overflow: hidden; white-space: nowrap; text-overflow: clip; }
-  thead th { height: 4.4mm; font-size: 7.8pt; }
-  td.n { width: 7mm; } td.dsem { text-align: center; }
+  .avisos { position: absolute; left: 7.1mm; top: 54.7mm; width: 195.7mm; height: 13mm; border: .25pt solid #000; border-bottom: 0;
+            padding: 0 0 0 1.6mm; line-height: 3.25mm; padding-top: .1mm; }
+
+  .corpo { position: absolute; left: 7.1mm; top: 67.7mm; width: 195.7mm; }
+  table { width: 195.7mm; border-collapse: collapse; table-layout: fixed; }
+  th, td { border: .25pt solid #000; height: 4.6mm; padding: 0 .4mm; text-align: center; vertical-align: middle;
+           font-weight: normal; overflow: hidden; white-space: nowrap; text-overflow: clip; font-size: 8pt; }
   tr.cinza td { background: #cfcfcf; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  td.feriado { text-transform: uppercase; letter-spacing: .2px; }
-  .totais { display: grid; grid-template-columns: 1fr 1fr; border: .3mm solid #000; border-top: 0; }
-  .totais div { padding: .8mm 1.5mm; } .totais div + div { border-left: .3mm solid #000; }
-  .lei { font-size: 7.3pt; line-height: 1.25; margin-top: .8mm; text-align: justify; }
-  .obs { margin-top: 2mm; display: grid; grid-template-columns: auto 1fr; gap: 0 1mm; font-size: 10pt; }
-  .obs span { border-bottom: .3mm solid #000; height: 5mm; }
-  .obs span.l2 { grid-column: 2; }
-  .assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 14mm; margin-top: 7mm; text-align: center; font-size: 7.8pt; }
-  .assinaturas div { border-top: .3mm solid #000; padding-top: 1mm; }
-  .assinaturas b { display: block; font-weight: normal; font-size: 9.5pt; }
-  .emissao { margin-top: 2mm; text-align: right; font-size: 6.5pt; color: #444; }
+  td.fer { text-transform: uppercase; }
+
+  .rodape { position: relative; height: 50mm; }
+  .totais { position: absolute; left: 0; top: 0; width: 195.7mm; height: 4.3mm; border: .25pt solid #000; border-top: 0; }
+  .totais span { position: absolute; top: .1mm; }
+  .totais .div { position: absolute; left: 99.1mm; top: 0; bottom: 0; border-left: .25pt solid #000; }
+  .lei { position: absolute; left: 0; top: 3.9mm; line-height: 3.25mm; }
+  .ass { position: absolute; top: 32.3mm; width: 94.1mm; text-align: center; line-height: 1.15; }
+  .ass .t10 { display: block; margin-top: .5mm; }
+  .emissao { position: absolute; right: 7.2mm; bottom: 6mm; font-size: 6pt; color: #555; }
 
   @media print {
     body { background: #fff; }
     .barra, .dica { display: none !important; }
     .papel-wrap { padding: 0; overflow: visible; }
-    .folha { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+    .folha { margin: 0; box-shadow: none; }
   }
 </style></head>
 <body oncontextmenu="return false">
@@ -55,58 +56,86 @@
   <span><a href="?mes={{ nav.anterior }}" aria-label="Mês anterior">←</a> <span class="mes">{{ mes_nome }} de {{ ano }}</span> <a href="?mes={{ nav.proximo }}" aria-label="Próximo mês">→</a></span>
   <span><a href="{{ estagio.get_absolute_url }}">Voltar</a> <button class="imprimir" type="button" id="imprimir">Imprimir</button></span>
 </div>
-<p class="dica">Imprima em papel A4, com margens <em>padrão</em> e sem “cabeçalhos e rodapés” do navegador. Assine todos os dias e entregue ao orientador no último dia do mês.</p>
+<p class="dica">Imprima em papel A4, com margens <em>padrão</em> (ou “nenhuma”) e sem “cabeçalhos e rodapés” do navegador. Assine todos os dias e entregue ao orientador no último dia do mês.</p>
 
 <div class="papel-wrap"><div class="folha">
-  <div class="cab">
-    <div>{% if config.logo_folha %}<img src="{% url 'logo_folha' %}" alt="">{% endif %}</div>
-    <div class="centro">
-      {% for linha in config.cabecalho_folha.splitlines %}{% if linha.strip %}<div>{{ linha }}</div>{% endif %}{% endfor %}
-      <div class="titulo">FREQUÊNCIA DE ESTÁGIO</div>
+  <img class="logo" src="{% if config.logo_folha %}{% url 'logo_folha' %}{% else %}{% static 'img/brasao-ceara-seduc.png' %}{% endif %}" alt="">
+  {% with linhas_cab=config.cabecalho_folha.splitlines %}
+    {% for linha in linhas_cab %}{% if linha.strip %}<div class="a centro t10" style="top:{% if forloop.counter == 1 %}6.6{% else %}10.6{% endif %}mm">{{ linha }}</div>{% endif %}{% endfor %}
+  {% endwith %}
+  <div class="a centro t10" style="top:17.4mm">FREQUÊNCIA DE ESTÁGIO</div>
+
+  <div class="a" style="left:7.8mm;top:23.4mm">MÊS/ANO:</div>
+  <div class="a" style="left:27.5mm;top:23.4mm">{{ mes_nome }}</div>
+  <div class="a" style="left:58.6mm;top:23.4mm">{{ ano }}</div>
+  <div class="a" style="left:76.9mm;top:23.4mm">ANO LETIVO:</div>
+  <div class="a" style="left:104.4mm;top:23.4mm">{{ ano }}</div>
+
+  <div class="a" style="left:7.8mm;top:27.6mm">CURSO:</div>
+  <div class="a v" style="left:22.9mm;top:27.6mm;max-width:175mm">{{ estagio.curso.nome|upper }}</div>
+
+  <div class="a" style="left:7.8mm;top:31.9mm">ESCOLA:</div>
+  <div class="a v" style="left:26.5mm;top:31.9mm;max-width:93mm">{{ config.nome_escola|upper }}</div>
+  <div class="a" style="left:121.7mm;top:31.9mm">MUNICÍPIO:</div>
+  <div class="a v" style="left:143.6mm;top:31.9mm;max-width:58mm">{{ config.municipio_escola|upper }}</div>
+
+  <div class="a" style="left:7.8mm;top:36.4mm">ESTAGIÁRIO:</div>
+  <div class="a v" style="left:27.5mm;top:36.4mm;max-width:133mm">{{ estagio.estagiario.nome_completo|upper }}</div>
+  <div class="a" style="left:162.3mm;top:36.4mm">CPF:</div>
+  <div class="a" style="left:169.7mm;top:36.4mm">{{ estagio.estagiario.cpf|digitos }}</div>
+
+  <div class="a" style="left:7.8mm;top:40.7mm">ORIENTADOR DE ESTÁGIO:</div>
+  <div class="a v" style="left:49mm;top:40.2mm;max-width:76mm">{{ estagio.orientador.nome_completo|upper }}</div>
+  <div class="a" style="left:127.4mm;top:40.7mm">TEL.:</div>
+  <div class="a v" style="left:136.2mm;top:40.2mm;max-width:66mm">{{ estagio.orientador.telefone }}</div>
+  <div class="linha" style="left:54.3mm;width:70.9mm;top:43.9mm"></div>
+  <div class="linha" style="left:139.7mm;width:62.4mm;top:44.3mm"></div>
+
+  <div class="a" style="left:7.8mm;top:45.3mm">INSTITUIÇÃO CEDENTE:</div>
+  <div class="a v" style="left:49mm;top:44.6mm;max-width:76mm">{{ estagio.local.nome|default:""|upper }}</div>
+  <div class="a" style="left:127.4mm;top:45.3mm">CNPJ:</div>
+  <div class="a v" style="left:139.3mm;top:44.7mm;max-width:63mm">{{ estagio.local.cnpj|digitos }}</div>
+  <div class="linha" style="left:54.3mm;width:70.6mm;top:48.5mm"></div>
+  <div class="linha" style="left:139.7mm;width:62.4mm;top:49.2mm"></div>
+
+  <div class="a" style="left:7.8mm;top:49.8mm">SUPERVISOR:</div>
+  <div class="a v" style="left:55.7mm;top:49.7mm;max-width:69mm">{{ estagio.supervisor.nome_completo|default:""|upper }}</div>
+  <div class="a" style="left:127.4mm;top:49.8mm">TEL.:</div>
+  <div class="a v" style="left:141.1mm;top:49.7mm;max-width:61mm">{{ estagio.supervisor.telefone|default:"" }}</div>
+  <div class="linha" style="left:54.3mm;width:70.9mm;top:53.1mm"></div>
+  <div class="linha" style="left:139.7mm;width:62.4mm;top:53.6mm"></div>
+
+  <div class="avisos">ORIENTADOR: entregar ao estagiário com o cabeçalho preenchido.<br>SUPERVISOR: evite problemas com a Justiça do Trabalho assinando diariamente.<br>ESTAGIÁRIO: assinar diariamente e encaminhar para o Orientador responsável no último dia do mês.<br>Os dados ilegíveis ou que firam a Lei do Estágio Nº 11.788 poderão invalidar este documento.</div>
+
+  <div class="corpo">
+    <table>
+      <colgroup><col style="width:5.6mm"><col style="width:16.9mm"><col style="width:18.7mm"><col style="width:18.7mm"><col style="width:18.7mm"><col style="width:18.7mm"><col style="width:71.3mm"><col style="width:27.1mm"></colgroup>
+      <thead>
+        <tr><th colspan="2" rowspan="2">DIA</th><th colspan="4">HORÁRIO</th><th rowspan="2">ASSINATURA DO ESTAGIÁRIO</th><th rowspan="2" style="line-height:1.2">VISTO DO<br>SUPERVISOR</th></tr>
+        <tr><th>ENTRADA</th><th>SAÍDA</th><th>ENTRADA</th><th>SAÍDA</th></tr>
+      </thead>
+      <tbody>
+      {% for l in linhas %}
+        <tr class="{% if l.cinza %}cinza{% endif %}">
+          <td>{{ l.data|date:"d" }}</td><td>{{ l.dia_semana }}</td>
+          {% if l.feriado %}{% for _ in "123456" %}<td class="fer">{{ l.feriado }}</td>{% endfor %}{% else %}<td></td><td></td><td></td><td></td><td></td><td></td>{% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="rodape">
+      <div class="totais t9"><span style="left:0">TOTAL DE DIAS ESTAGIADOS:</span><i class="div"></i><span style="left:99.1mm">TOTAL DE HORAS ESTAGIADAS:</span></div>
+      <div class="lei">§ 1º Art. 3º Lei 11.788 O estágio, como ato educativo escolar supervisionado, deverá ter acompanhamento efetivo pelo professor orientador da instituição<br>de ensino e por supervisor da parte concedente, comprovado por vistos nos relatórios referidos do inciso IV do caput do art. 7º desta Lei e por menção de<br>aprovação final.</div>
+      <div class="a t10" style="left:.3mm;top:15.4mm">OBS.</div>
+      <div class="linha" style="left:9.1mm;width:185.9mm;top:20mm"></div>
+      <div class="linha" style="left:9.1mm;width:185.9mm;top:24.2mm"></div>
+      <div class="linha" style="left:0;width:94.1mm;top:31.6mm"></div>
+      <div class="linha" style="left:108.4mm;width:87.3mm;top:31.6mm"></div>
+      <div class="ass" style="left:0">ASS. DO ORIENTADOR DE ESTÁGIO<span class="t10">(Carimbo)</span><span class="t10">Na ausência do carimbo, indicar<br>nome por extenso</span></div>
+      <div class="ass" style="left:105mm;width:92mm">ASS. DO GESTOR ESCOLAR<span class="t10">(Carimbo)</span><span class="t10">Na ausência do gestor, indicar nome por extenso e<br>cargo</span></div>
     </div>
-    <div></div>
   </div>
-
-  <div class="info">
-    <div class="linha"><div><span class="rot">MÊS/ANO:</span><span class="val">&nbsp;&nbsp;{{ mes_nome }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ ano }}</span></div><div><span class="rot">ANO LETIVO:</span><span class="val">&nbsp;&nbsp;{{ ano }}</span></div></div>
-    <div class="linha"><div><span class="rot">CURSO:</span><span class="val">{{ estagio.curso.nome }}</span></div><div></div></div>
-    <div class="linha"><div><span class="rot">ESCOLA:</span><span class="val">{{ config.nome_escola }}</span></div><div><span class="rot">MUNICÍPIO:</span><span class="val">{{ config.municipio_escola }}</span></div></div>
-    <div class="linha"><div><span class="rot">ESTAGIÁRIO:</span><span class="val">{{ estagio.estagiario.nome_completo }}</span></div><div><span class="rot">CPF:</span><span class="val">{{ estagio.estagiario.cpf }}</span></div></div>
-    <div class="linha sub"><div><span class="rot">ORIENTADOR DE ESTÁGIO:</span><span class="val">{{ estagio.orientador.nome_completo }}</span></div><div><span class="rot">TEL.:</span><span class="val">{{ estagio.orientador.telefone }}</span></div></div>
-    <div class="linha sub"><div><span class="rot">INSTITUIÇÃO CEDENTE:</span><span class="val">{{ estagio.local.nome|default:"" }}</span></div><div><span class="rot">CNPJ:</span><span class="val">{{ estagio.local.cnpj|default:"" }}</span></div></div>
-    <div class="linha sub"><div><span class="rot">SUPERVISOR:</span><span class="val">{{ estagio.supervisor.nome_completo|default:"" }}</span></div><div><span class="rot">TEL.:</span><span class="val">{{ estagio.supervisor.telefone|default:"" }}</span></div></div>
-  </div>
-
-  <div class="avisos">
-    ORIENTADOR: entregar ao estagiário com o cabeçalho preenchido.<br>
-    SUPERVISOR: evite problemas com a Justiça do Trabalho assinando diariamente.<br>
-    ESTAGIÁRIO: assinar diariamente e encaminhar para o Orientador responsável no último dia do mês.<br>
-    Os dados ilegíveis ou que firam a Lei do Estágio Nº 11.788 poderão invalidar este documento.
-  </div>
-
-  <table>
-    <colgroup><col style="width:7mm"><col style="width:17mm"><col style="width:16.5mm"><col style="width:16.5mm"><col style="width:16.5mm"><col style="width:16.5mm"><col><col style="width:26mm"></colgroup>
-    <thead>
-      <tr><th colspan="2" rowspan="2">DIA</th><th colspan="4">HORÁRIO</th><th rowspan="2">ASSINATURA DO ESTAGIÁRIO</th><th rowspan="2">VISTO DO<br>SUPERVISOR</th></tr>
-      <tr><th>ENTRADA</th><th>SAÍDA</th><th>ENTRADA</th><th>SAÍDA</th></tr>
-    </thead>
-    <tbody>
-    {% for l in linhas %}
-      <tr class="{% if l.cinza %}cinza{% endif %}">
-        <td class="n">{{ l.data|date:"d" }}</td><td class="dsem">{{ l.dia_semana }}</td>
-        {% if l.feriado %}<td colspan="6" class="feriado">{{ l.feriado }}</td>{% else %}<td></td><td></td><td></td><td></td><td></td><td></td>{% endif %}
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  <div class="totais"><div>TOTAL DE DIAS ESTAGIADOS:</div><div>TOTAL DE HORAS ESTAGIADAS:</div></div>
-  <p class="lei">§ 1º Art. 3º Lei 11.788 O estágio, como ato educativo escolar supervisionado, deverá ter acompanhamento efetivo pelo professor orientador da instituição de ensino e por supervisor da parte concedente, comprovado por vistos nos relatórios referidos do inciso IV do caput do art. 7º desta Lei e por menção de aprovação final.</p>
-  <div class="obs"><b style="font-weight:normal">OBS.</b><span></span><span class="l2"></span></div>
-  <div class="assinaturas">
-    <div>ASS. DO ORIENTADOR DE ESTÁGIO<b>(Carimbo)</b><b>Na ausência do carimbo, indicar nome por extenso</b></div>
-    <div>ASS. DO GESTOR ESCOLAR<b>(Carimbo)</b><b>Na ausência do gestor, indicar nome por extenso e cargo</b></div>
-  </div>
-  <div class="emissao">Emitida em {{ agora|date:"d/m/Y H:i" }} · cód. {{ log.codigo }}</div>
+  {% if config.mostrar_codigo_folha %}<div class="emissao">Emitida em {{ agora|date:"d/m/Y H:i" }} · cód. {{ log.codigo }}</div>{% endif %}
 </div></div>
 
 <form id="registro" hidden>{% csrf_token %}<input type="hidden" name="codigo" value="{{ log.codigo }}"></form>

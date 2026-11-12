@@ -14,13 +14,13 @@
   <button class="btn" type="submit">Filtrar</button>
 </form>
 <div class="card"><div class="tabela-wrap"><table class="tabela">
-  <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Local</th><th>Senha</th><th></th></tr></thead>
+  <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Concedente</th><th>Senha</th><th></th></tr></thead>
   <tbody>{% for u in usuarios %}
     <tr{% if not u.is_active %} style="opacity:.55"{% endif %}>
       <td><strong>{{ u.nome_completo }}</strong>{% if u.telefone %}<br><small>{{ u.telefone }}</small>{% endif %}</td>
       <td>{{ u.username }}</td>
       <td>{{ u.get_papel_display }}{% if u.is_coordenador %}<br><small>{{ u.cursos_coordenados.all|join:", "|default:"todos os cursos" }}</small>{% endif %}{% if u.is_supervisor %}<br><small>{{ u.n_supervisionados }} estagiário(s)</small>{% endif %}</td>
-      <td>{{ u.local|default:"" }}</td>
+      <td>{% for c in u.concedentes.all %}{{ c }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
       <td>{% if u.deve_trocar_senha %}<span class="selo ausencia">padrão</span>{% else %}<span class="selo confirmado">própria</span>{% endif %}</td>
       <td><a class="btn sec sm" href="{% url 'editar_usuario' u.pk %}">Editar</a></td>
     </tr>

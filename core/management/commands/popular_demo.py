@@ -72,8 +72,8 @@ class Command(BaseCommand):
             cnpj=cnpj_ficticio(44555666), endereco="Av. Bezerra de Menezes", numero="1200", bairro="São Gerardo",
             cidade="Fortaleza", telefone="(85) 3200-0000",
         )
-        ana = conta("Ana Beatriz Rocha", Usuario.Papel.SUPERVISOR, local=l1, cargo="Coordenadora de TI", telefone="(85) 99999-1111")
-        carlos = conta("Carlos Mendes", Usuario.Papel.SUPERVISOR, local=l2, cargo="Enfermeiro chefe", telefone="(85) 99999-2222")
+        ana = conta("Ana Beatriz Rocha", Usuario.Papel.SUPERVISOR, concedente=l1, cargo="Coordenadora de TI", telefone="(85) 99999-1111")
+        carlos = conta("Carlos Mendes", Usuario.Papel.SUPERVISOR, concedente=l2, cargo="Enfermeiro chefe", telefone="(85) 99999-2222")
 
         inicio = hoje - timedelta(days=40)
         inicio -= timedelta(days=inicio.weekday())  # segunda-feira

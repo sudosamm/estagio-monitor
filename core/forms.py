@@ -79,6 +79,27 @@ def _ajustar_widgets(form):
             w.attrs.setdefault("rows", 3)
 
 
+class SupervisorSelect(forms.Select):
+    """Cada opção leva as concedentes do supervisor, para o JS mostrar só os da concedente escolhida."""
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        opcao = super().create_option(name, value, label, selected, index, subindex, attrs)
+        usuario = getattr(value, "instance", None)
+        if usuario is not None:
+            opcao["attrs"]["data-concedentes"] = ",".join(str(c.pk) for c in usuario.concedentes.all())
+        return opcao
+
+
+def supervisores_qs():
+    return Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR, is_active=True).prefetch_related("concedentes")
+
+
+def validar_supervisor_da_concedente(form, local, supervisor):
+    if local and supervisor and local not in supervisor.concedentes.all():
+        form.add_error("supervisor", f"{supervisor} não é supervisor(a) de {local}. Escolha um supervisor dessa concedente "
+                                     "ou vincule-o(a) a ela na ficha da concedente.")
+
+
 class Formulario(forms.Form):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
@@ -135,6 +156,8 @@ class CamposEscalaMixin(forms.Form):
 
     def dados_escala(self):
         d = self.cleaned_data
+        if "horas_por_dia" not in d:
+            return {"dias": ",".join(str(x) for x in sorted(d["dias"]))}
         return {
             "dias": ",".join(str(x) for x in sorted(d["dias"])),
             "horario_entrada": d.get("horario_entrada"),
@@ -153,10 +176,14 @@ class EscalaLoteForm(CamposEscalaMixin, Formulario):
 
     field_order = ["vigente_desde", *CAMPOS_ESCALA, "estagios"]
 
-    def __init__(self, *a, estagios_qs=None, **kw):
+    def __init__(self, *a, estagios_qs=None, com_horarios=True, **kw):
         super().__init__(*a, **kw)
         self.fields["estagios"].queryset = estagios_qs
         self.fields["estagios"].label_from_instance = lambda e: f"{e.estagiario} — {e.curso} · {e.local or 'sem local'}"
+        self.com_horarios = com_horarios
+        if not com_horarios:  # orientador muda só os dias; cada estagiário mantém horas e horários
+            for nome in ("horas_por_dia", "horario_entrada", "saida_intervalo", "volta_intervalo", "horario_saida"):
+                del self.fields[nome]
 
 
 # ------------------------------------------------------------------ contas
@@ -170,10 +197,9 @@ class EstagiariosLoteForm(CamposEscalaMixin, Formulario):
     )
     curso = forms.ModelChoiceField(queryset=Curso.objects.all())
     turma = forms.CharField(required=False, max_length=40)
-    local = forms.ModelChoiceField(queryset=LocalEstagio.objects.all(), required=False, label="Concedente")
-    supervisor = forms.ModelChoiceField(
-        queryset=Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR, is_active=True), required=False
-    )
+    local = forms.ModelChoiceField(queryset=LocalEstagio.objects.all(), label="Concedente")
+    supervisor = forms.ModelChoiceField(queryset=supervisores_qs(), widget=SupervisorSelect,
+                                        help_text="Só aparecem os supervisores da concedente escolhida.")
     setor = forms.CharField(required=False, max_length=100)
     data_inicio = forms.DateField(label="Início do estágio", widget=DataInput())
     data_fim = forms.DateField(label="Término previsto no termo", widget=DataInput(), required=False)
@@ -187,7 +213,8 @@ class EstagiariosLoteForm(CamposEscalaMixin, Formulario):
 
     def __init__(self, *a, usuario=None, **kw):
         super().__init__(*a, **kw)
-        self.fields["supervisor"].label_from_instance = lambda u: f"{u} ({u.local or 'sem local'})"
+        self.fields["supervisor"].queryset = supervisores_qs()
+        self.fields["supervisor"].label_from_instance = lambda u: f"{u} ({u.concedentes_txt or 'sem concedente'})"
         # o orientador cadastra os próprios estagiários; o coordenador escolhe o orientador
         if usuario is not None and usuario.is_orientador:
             del self.fields["orientador"]
@@ -196,6 +223,12 @@ class EstagiariosLoteForm(CamposEscalaMixin, Formulario):
             self.order_fields(["nomes", "curso", "orientador"])
         if usuario is not None and usuario.is_coordenador and usuario.cursos_ids():
             self.fields["curso"].queryset = Curso.objects.filter(pk__in=usuario.cursos_ids())
+        self.fields["horario_entrada"].help_text = "Horários são opcionais: o supervisor da concedente define depois."
+
+    def clean(self):
+        dados = super().clean()
+        validar_supervisor_da_concedente(self, dados.get("local"), dados.get("supervisor"))
+        return dados
 
     def clean_nomes(self):
         linhas = []
@@ -258,13 +291,27 @@ class CoordenadorForm(Formulario):
 class UsuarioEditForm(FormularioModelo):
     class Meta:
         model = Usuario
-        fields = ["nome_completo", "email", "telefone", "cpf", "matricula", "cargo", "local", "cursos_coordenados",
+        fields = ["nome_completo", "email", "telefone", "cpf", "matricula", "cargo", "concedentes", "cursos_coordenados",
                   "is_active"]
-        labels = {"is_active": "Conta ativa", "local": "Concedente"}
-        widgets = {"cursos_coordenados": forms.CheckboxSelectMultiple}
+        labels = {"is_active": "Conta ativa"}
+        widgets = {"cursos_coordenados": forms.CheckboxSelectMultiple, "concedentes": forms.CheckboxSelectMultiple}
 
     def clean_cpf(self):
         return limpar_cpf(self.cleaned_data.get("cpf"))
+
+    def clean_concedentes(self):
+        novas = self.cleaned_data.get("concedentes")
+        if "concedentes" not in self.fields or not self.instance.pk:
+            return novas
+        if not novas:
+            raise forms.ValidationError("O supervisor precisa estar vinculado a pelo menos uma concedente.")
+        presas = (Estagio.objects.filter(supervisor=self.instance, ativo=True).exclude(local__in=novas)
+                  .select_related("local", "estagiario"))
+        if presas:
+            nomes = ", ".join(sorted({str(e.local) for e in presas}))
+            raise forms.ValidationError(f"Não dá para tirar {nomes}: há estagiários ativos supervisionados lá. "
+                                        "Troque o supervisor desses estágios antes.")
+        return novas
 
 
 class PerfilForm(FormularioModelo):
@@ -347,7 +394,7 @@ class PerfilForm(FormularioModelo):
 class ConfiguracaoForm(FormularioModelo):
     class Meta:
         model = Configuracao
-        fields = ["nome_escola", "municipio_escola", "cabecalho_folha", "logo_folha",
+        fields = ["nome_escola", "municipio_escola", "cabecalho_folha", "logo_folha", "mostrar_codigo_folha",
                   "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
                   "curriculos_habilitados", "banco_talentos_habilitado"]
         widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(),
@@ -376,9 +423,13 @@ class LocalForm(FormularioModelo):
         ("Dados gerais", ["tipo_concedente", "razao_social", "nome", "tipo_instituicao", "atividade", "cnpj", "matriz_filial"]),
         ("Endereço", ["endereco", "numero", "bairro", "complemento", "cidade", "uf", "cep", "telefone", "link_mapa"]),
         ("Representante legal", ["representante_nome", "representante_email", "representante_cpf", "representante_documento"]),
-        ("Supervisores", ["novos_supervisores"]),
+        ("Supervisores", ["novos_supervisores", "vincular_supervisores"]),
         ("Outras informações", ["observacoes"]),
     ]
+    vincular_supervisores = forms.ModelMultipleChoiceField(
+        queryset=Usuario.objects.none(), required=False, label="Vincular supervisor já cadastrado em outra concedente",
+        help_text="Use quando a mesma pessoa também supervisiona estagiários aqui.",
+    )
     novos_supervisores = forms.CharField(
         label="Cadastrar supervisores desta concedente", required=False,
         widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Ana Beatriz Rocha; (85) 99999-0000"}),
@@ -403,6 +454,12 @@ class LocalForm(FormularioModelo):
         for nome in ("tipo_instituicao", "matriz_filial"):
             self.fields[nome].choices = [c for c in self.fields[nome].choices if c[0]]
         self.fields["uf"].widget.attrs.update({"maxlength": 2, "style": "text-transform:uppercase"})
+        if "vincular_supervisores" in self.fields:
+            qs = supervisores_qs()
+            if self.instance.pk:
+                qs = qs.exclude(concedentes=self.instance)
+            self.fields["vincular_supervisores"].queryset = qs
+            self.fields["vincular_supervisores"].label_from_instance = lambda u: f"{u} ({u.concedentes_txt or 'sem concedente'})"
 
     def secoes(self):
         return [(titulo, [self[n] for n in campos if n in self.fields]) for titulo, campos in self.SECOES]
@@ -440,14 +497,22 @@ class EstagioForm(FormularioModelo):
             "curso", "turma", "local", "setor", "supervisor", "data_inicio", "data_fim", "acompanhamento_desde",
             "carga_horaria", "horas_anteriores", "ativo", "observacoes_orientador",
         ]
-        widgets = {"data_inicio": DataInput(), "data_fim": DataInput(), "acompanhamento_desde": DataInput()}
         labels = {"local": "Concedente", "data_fim": "Término previsto no termo"}
-        help_texts = {"data_fim": "Só informativo: a previsão real é calculada pelas horas que faltam."}
+        help_texts = {"data_fim": "Só informativo: a previsão real é calculada pelas horas que faltam.",
+                      "supervisor": "Só aparecem os supervisores da concedente escolhida."}
+        widgets = {"data_inicio": DataInput(), "data_fim": DataInput(), "acompanhamento_desde": DataInput(),
+                   "supervisor": SupervisorSelect}
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
-        self.fields["supervisor"].queryset = Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR, is_active=True)
-        self.fields["supervisor"].label_from_instance = lambda u: f"{u} ({u.local or 'sem local'})"
+        self.fields["local"].required = self.fields["supervisor"].required = True
+        self.fields["supervisor"].queryset = supervisores_qs()
+        self.fields["supervisor"].label_from_instance = lambda u: f"{u} ({u.concedentes_txt or 'sem concedente'})"
+
+    def clean(self):
+        dados = super().clean()
+        validar_supervisor_da_concedente(self, dados.get("local"), dados.get("supervisor"))
+        return dados
 
 
 class EscalaForm(CamposEscalaMixin, Formulario):
@@ -483,6 +548,25 @@ class PlanejarDiaForm(Formulario):
         _ajustar_choices_horas(self, "horas")
 
 
+class HorariosDiaForm(Formulario):
+    """O estagiário informa a que horas entrou e saiu, como na folha de papel; o supervisor confirma."""
+
+    hora_chegada = forms.TimeField(label="Entrada", widget=HoraInput())
+    saida_intervalo = forms.TimeField(label="Saída p/ intervalo", required=False, widget=HoraInput())
+    volta_intervalo = forms.TimeField(label="Volta do intervalo", required=False, widget=HoraInput())
+    hora_saida = forms.TimeField(label="Saída", required=False, widget=HoraInput())
+
+    def clean(self):
+        d = super().clean()
+        si, vi = d.get("saida_intervalo"), d.get("volta_intervalo")
+        if bool(si) != bool(vi):
+            raise forms.ValidationError("Informe a saída e a volta do intervalo (ou deixe as duas em branco).")
+        seq = [t for t in (d.get("hora_chegada"), si, vi, d.get("hora_saida")) if t]
+        if any(b <= a for a, b in zip(seq, seq[1:])):
+            raise forms.ValidationError("Os horários devem estar em ordem: entrada, intervalo e saída.")
+        return d
+
+
 class DiarioForm(Formulario):
     diario = forms.CharField(
         widget=forms.Textarea(attrs={"rows": 4, "placeholder": "O que você fez, aprendeu ou teve dificuldade hoje?"}),
@@ -499,7 +583,19 @@ class LancamentoForm(FormularioModelo):
                   "confirmacao", "motivo", "obs_supervisor"]
         widgets = {"hora_chegada": HoraInput(), "saida_intervalo": HoraInput(), "volta_intervalo": HoraInput(),
                    "hora_saida": HoraInput()}
+        help_texts = {"horas": "Com entrada e saída preenchidas, as horas são calculadas pelos horários."}
         labels = {"confirmacao": "Validação"}
+
+    def clean(self):
+        d = super().clean()
+        if d.get("situacao") == Registro.Situacao.PRESENTE:
+            r = Registro(hora_chegada=d.get("hora_chegada"), saida_intervalo=d.get("saida_intervalo"),
+                         volta_intervalo=d.get("volta_intervalo"), hora_saida=d.get("hora_saida"))
+            calculadas = r.calcular_horas()
+            if calculadas:
+                d["horas"] = calculadas
+                self.instance.horas = calculadas
+        return d
 
 
 class MensagemForm(FormularioModelo):
@@ -616,7 +712,7 @@ class CandidaturaForm(LocalForm):
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
-        del self.fields["novos_supervisores"]
+        del self.fields["novos_supervisores"], self.fields["vincular_supervisores"]
         self.fields["razao_social"].required = True
         self.fields["razao_social"].help_text = ""
         self.fields["atividades"].widget.attrs["placeholder"] = "Ex.: apoio no atendimento ao público, organização de arquivos, suporte de informática…"
@@ -712,7 +808,8 @@ class ImportarCSVForm(CamposEscalaMixin, Formulario):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self.fields["dias"].label = "Dias de estágio (padrão)"
-        self.fields["dias"].help_text = "Usados quando a coluna “dias” do CSV estiver vazia. Os horários abaixo também."
+        self.fields["dias"].help_text = "Usados quando a coluna “dias” do CSV estiver vazia."
+        self.fields["horario_entrada"].help_text = "Horários são opcionais: o supervisor da concedente define depois."
 
     def clean_arquivo(self):
         arq = self.cleaned_data["arquivo"]

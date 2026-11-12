@@ -1,5 +1,5 @@
 """Tela do estágio (compartilhada por estagiário, supervisor e orientador) e ações do dia a dia."""
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -12,15 +12,17 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..forms import (
-    AusenciaForm, DiarioForm, DocumentoForm, EscalaForm, EstagioForm, LancamentoForm, MensagemForm, PlanejarDiaForm,
-    horas_str,
+    AusenciaForm, DiarioForm, DocumentoForm, EscalaForm, EstagioForm, HorariosDiaForm, LancamentoForm, MensagemForm,
+    PlanejarDiaForm, horas_str,
 )
 from ..models import DIAS_ABREV, Agendamento, DiaPlanejado, Documento, Escala, Registro
 from ..services import (
     calendario_mes, horas_padrao, limite_calendario, notificar, proximos_dias, resumo_horas,
     status_hoje, status_periodo,
 )
-from .base import destino_seguro, eh_orientador_do, eh_supervisor_do, orientador_requerido, pegar_estagio, permissao
+from .base import (
+    destino_seguro, eh_orientador_do, eh_supervisor_do, orientador_requerido, pegar_estagio, pode_definir_horario,
+)
 
 MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro",
          "Outubro", "Novembro", "Dezembro"]
@@ -98,7 +100,7 @@ def estagio_detalhe(request, pk):
         "e_supervisor": eh_supervisor_do(user, estagio),
         "e_estagiario": estagio.estagiario_id == user.pk,
         "nao_lidas_msg": 0,
-        "pode_escalas": eh_orientador_do(user, estagio) and user.pode("escalas"),
+        "pode_escalas": pode_definir_horario(user, estagio),
         "pode_agenda": not user.is_gestor or user.pode("agenda"),
     }
     if aba == "visao":
@@ -206,8 +208,13 @@ def registrar_saida(request, pk):
     reg = get_object_or_404(Registro, estagio=estagio, data=timezone.localdate())
     agora = timezone.localtime().time().replace(second=0, microsecond=0)
     setattr(reg, ponto, agora)
-    reg.save(update_fields=[ponto, "atualizado_em"])
-    messages.success(request, f"{PONTOS[ponto]} às {agora:%H:%M}.")
+    campos = [ponto, "atualizado_em"]
+    if ponto == "hora_saida" and reg.calcular_horas():
+        reg.horas = reg.calcular_horas()
+        campos.append("horas")
+    reg.save(update_fields=campos)
+    messages.success(request, f"{PONTOS[ponto]} às {agora:%H:%M}."
+                     + (f" Total do dia: {horas_str(reg.horas)}h." if ponto == "hora_saida" else ""))
     return redirect(estagio)
 
 
@@ -294,6 +301,31 @@ def estagio_dia(request, pk, data):
                 )
                 return redirect(destino_seguro(request, request.path))
 
+    # ---- o estagiário informa os horários do dia (como na folha de papel); o supervisor confirma
+    hoje = timezone.localdate()
+    horarios_form = None
+    pode_informar = (e_estagiario and estagio.ativo and hoje - timedelta(days=7) <= dia <= hoje
+                     and not (reg and reg.confirmacao == Registro.Confirmacao.CONFIRMADA))
+    if pode_informar:
+        inicial = ({"hora_chegada": reg.hora_chegada, "saida_intervalo": reg.saida_intervalo,
+                    "volta_intervalo": reg.volta_intervalo, "hora_saida": reg.hora_saida}
+                   if reg and reg.situacao == Registro.Situacao.PRESENTE else {})
+        horarios_form = HorariosDiaForm(request.POST if "h-hora_chegada" in request.POST else None, initial=inicial,
+                                        prefix="h")
+        if request.method == "POST" and "h-hora_chegada" in request.POST and horarios_form.is_valid():
+            novo = reg or Registro(estagio=estagio, data=dia, registrado_por=user)
+            novo.situacao = Registro.Situacao.PRESENTE
+            for campo, valor in horarios_form.cleaned_data.items():
+                setattr(novo, campo, valor)
+            novo.horas = novo.calcular_horas() or horas_padrao(estagio, dia)
+            novo.confirmacao = Registro.Confirmacao.PENDENTE
+            novo.save()
+            messages.success(request, f"Horários de {dia:%d/%m} enviados ({novo.horario_display}, {horas_str(novo.horas)}h). "
+                                      "Aguardando confirmação do supervisor.")
+            notificar([estagio.supervisor], f"{estagio.estagiario.primeiro_nome} informou os horários de {dia:%d/%m}: "
+                      f"{novo.horario_display}.", reverse("painel_supervisor"))
+            return redirect(request.path)
+
     if e_estagiario and reg:
         diario_form = DiarioForm(request.POST or None, initial={"diario": reg.diario}, prefix="d")
         if request.method == "POST" and "d-diario" in request.POST and diario_form.is_valid():
@@ -303,7 +335,6 @@ def estagio_dia(request, pk, data):
             return redirect(request.path)
 
     # ---- planejamento de dias de hoje em diante (entra na previsão de término)
-    hoje = timezone.localdate()
     pode_planejar = (e_estagiario or pode_lancar) and dia >= hoje and dia >= estagio.data_inicio and estagio.ativo
     plano_form = None
     if pode_planejar:
@@ -322,6 +353,7 @@ def estagio_dia(request, pk, data):
         "diario_form": diario_form, "e_estagiario": e_estagiario, "pode_lancar": pode_lancar,
         "futuro": dia > hoje, "pode_planejar": pode_planejar, "plano_form": plano_form,
         "ausencia_form": AusenciaForm(initial={"data": dia}), "previsao": _previsao(estagio),
+        "horarios_form": horarios_form,
     })
 
 
@@ -460,11 +492,12 @@ def editar_estagio(request, pk):
     })
 
 
-@permissao("escalas")
+@login_required
 @require_POST
 def nova_escala(request, pk):
+    """Dias e horários do estagiário a partir de uma data (definidos pelo supervisor da concedente)."""
     estagio = pegar_estagio(request, pk)
-    if not eh_orientador_do(request.user, estagio):
+    if not pode_definir_horario(request.user, estagio):
         raise PermissionDenied
     form = EscalaForm(request.POST)
     if form.is_valid():
@@ -472,9 +505,11 @@ def nova_escala(request, pk):
             estagio=estagio, vigente_desde=form.cleaned_data["vigente_desde"],
             defaults={**form.dados_escala(), "criado_por": request.user},
         )
-        notificar([estagio.estagiario, estagio.supervisor],
-                  f"Nova escala de estágio a partir de {esc.vigente_desde:%d/%m}: {esc.dias_display}.",
-                  estagio.get_absolute_url(), exceto=request.user)
+        horario = f" · {esc.horario_display}" if esc.horario_display else ""
+        notificar([estagio.estagiario, estagio.supervisor, estagio.orientador],
+                  f"{request.user.primeiro_nome} definiu os dias/horários de {estagio.estagiario.primeiro_nome} a partir de "
+                  f"{esc.vigente_desde:%d/%m}: {esc.dias_display}{horario}.",
+                  estagio.get_absolute_url() + "?aba=escalas", exceto=request.user)
         messages.success(request, f"Escala salva: {esc}.")
     else:
         for erros in form.errors.values():
@@ -482,11 +517,11 @@ def nova_escala(request, pk):
     return redirect(estagio.get_absolute_url() + "?aba=escalas")
 
 
-@permissao("escalas")
+@login_required
 @require_POST
 def excluir_escala(request, pk):
     esc = get_object_or_404(Escala.objects.select_related("estagio"), pk=pk)
-    if not eh_orientador_do(request.user, esc.estagio):
+    if not (esc.estagio.pode_ver(request.user) and pode_definir_horario(request.user, esc.estagio)):
         raise PermissionDenied
     if esc.estagio.escalas.count() == 1:
         messages.error(request, "O estágio precisa ter ao menos uma escala.")

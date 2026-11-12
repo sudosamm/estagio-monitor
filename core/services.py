@@ -42,7 +42,7 @@ def normalizar_nome(nome):
     return " ".join(p.lower() if p.lower() in minusculas and i else p.capitalize() for i, p in enumerate(palavras))
 
 
-def criar_usuario(nome_completo, papel, criado_por=None, senha_hash=None, **extra):
+def criar_usuario(nome_completo, papel, criado_por=None, senha_hash=None, concedente=None, **extra):
     nome = normalizar_nome(nome_completo)
     partes = nome.split()
     user = Usuario(
@@ -60,6 +60,8 @@ def criar_usuario(nome_completo, papel, criado_por=None, senha_hash=None, **extr
     else:
         user.set_password(settings.SENHA_PADRAO)
     user.save()
+    if concedente:  # supervisor sempre nasce ligado a uma concedente
+        user.concedentes.add(concedente)
     return user
 
 
@@ -397,7 +399,7 @@ def aprovar_candidatura(cand, usuario, destino="nova", criar_supervisor=False, p
             local.save()
         supervisor = None
         if criar_supervisor and cand.supervisor_nome:
-            supervisor = criar_usuario(cand.supervisor_nome, Usuario.Papel.SUPERVISOR, usuario, local=local,
+            supervisor = criar_usuario(cand.supervisor_nome, Usuario.Papel.SUPERVISOR, usuario, concedente=local,
                                        telefone=cand.supervisor_telefone, email=cand.supervisor_email,
                                        cargo=cand.supervisor_cargo)
         cand.status, cand.local = cand.Status.APROVADA, local

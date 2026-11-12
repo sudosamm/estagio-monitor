@@ -55,6 +55,15 @@
     </div>
   </div>
   <div>
+    {% if horarios_form %}
+    <div class="card destaque">
+      <h3>{% icone "relogio" %} Meus horários neste dia</h3>
+      <p class="muted" style="font-size:.85rem">Informe a que horas entrou e saiu, como na folha de frequência. O supervisor confirma. As horas do dia são calculadas pelos horários.</p>
+      {% if registro.confirmacao == "CONTESTADA" %}<div class="caixa-alerta" style="margin-bottom:.6rem">O supervisor contestou este dia{% if registro.obs_supervisor %}: {{ registro.obs_supervisor }}{% endif %}. Corrija e envie de novo.</div>{% endif %}
+      <form method="post">{% csrf_token %}{% with form=horarios_form %}{% include "core/_form.html" %}{% endwith %}
+        <button class="btn bloco" type="submit">{% if registro %}Atualizar horários{% else %}Enviar horários{% endif %}</button></form>
+    </div>
+    {% endif %}
     {% if pode_planejar %}
     <div class="card laranja">
       <h3>{% icone "bandeira" %} Planejar este dia</h3>

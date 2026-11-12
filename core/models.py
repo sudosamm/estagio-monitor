@@ -31,7 +31,7 @@ PERMISSOES = {
     "candidaturas": "Captação: analisar cadastros de concedentes",
     "frequencias": "Ver quem abriu e imprimiu a folha de frequência",
     "agenda": "Agendar visitas e conversas",
-    "escalas": "Mudar dias e horários de estágio",
+    "escalas": "Mudar os dias de estágio (os horários são definidos pelo supervisor da concedente)",
     "feriados": "Feriados e eventos da escola",
     "arquivos": "Publicar arquivos gerais",
 }
@@ -53,9 +53,9 @@ class Usuario(AbstractUser):
     telefone = models.CharField(max_length=30, blank=True)
     matricula = models.CharField("Matrícula", max_length=40, blank=True)
     cargo = models.CharField("Cargo/Função", max_length=80, blank=True, help_text="Para supervisores")
-    local = models.ForeignKey(
-        "LocalEstagio", null=True, blank=True, on_delete=models.SET_NULL, related_name="supervisores",
-        help_text="Local onde o supervisor trabalha",
+    concedentes = models.ManyToManyField(
+        "LocalEstagio", blank=True, related_name="supervisores", verbose_name="Concedentes",
+        help_text="Concedentes em que a pessoa é supervisora. Só pode supervisionar estagiários dessas concedentes.",
     )
     cpf = models.CharField("CPF", max_length=14, blank=True)
     foto = models.ImageField(upload_to="fotos/", blank=True)
@@ -135,6 +135,10 @@ class Usuario(AbstractUser):
     def iniciais(self):
         partes = (self.nome_completo or self.username).split()
         return (partes[0][0] + (partes[-1][0] if len(partes) > 1 else "")).upper()
+
+    @property
+    def concedentes_txt(self):
+        return ", ".join(str(c) for c in self.concedentes.all())
 
     @property
     def foto_url(self):
@@ -296,6 +300,12 @@ class Estagio(models.Model):
                 return e
         return None
 
+    def clean(self):
+        super().clean()
+        if self.supervisor_id and self.local_id and not self.supervisor.concedentes.filter(pk=self.local_id).exists():
+            raise ValidationError({"supervisor": f"{self.supervisor} não está cadastrado(a) como supervisor(a) de "
+                                                 f"{self.local}. Vincule-o(a) a essa concedente primeiro."})
+
     def pode_ver(self, usuario):
         if usuario.is_superuser or usuario.coordena(self.curso_id):
             return True
@@ -422,6 +432,18 @@ class Registro(models.Model):
     @property
     def horario_display(self):
         return formatar_horario(self.hora_chegada, self.saida_intervalo, self.volta_intervalo, self.hora_saida)
+
+    def calcular_horas(self):
+        """Horas trabalhadas pelos horários (entrada até saída, menos o intervalo). None se faltar entrada/saída."""
+        if not (self.hora_chegada and self.hora_saida):
+            return None
+        m = lambda t: t.hour * 60 + t.minute  # noqa: E731
+        minutos = m(self.hora_saida) - m(self.hora_chegada)
+        if self.saida_intervalo and self.volta_intervalo:
+            minutos -= m(self.volta_intervalo) - m(self.saida_intervalo)
+        if minutos <= 0:
+            return None
+        return (Decimal(minutos) / 60).quantize(Decimal("0.01"))
 
     def confirmar(self, usuario, status, obs=""):
         self.confirmacao = status
@@ -600,8 +622,13 @@ class Configuracao(models.Model):
         default="Coordenadoria de Educação Profissional\nCélula de Estágio - CEPAE",
         help_text="Uma linha por linha do cabeçalho, acima do título “FREQUÊNCIA DE ESTÁGIO”.",
     )
-    logo_folha = models.ImageField("Logotipo da folha", upload_to="config/", blank=True,
-                                   help_text="Imagem que aparece no canto superior esquerdo da folha de frequência.")
+    logo_folha = models.ImageField("Brasão / logotipo da folha", upload_to="config/", blank=True,
+                                   help_text="Canto superior esquerdo da folha de frequência. Vazio = brasão padrão do "
+                                             "Governo do Ceará / SEDUC (o mesmo da folha oficial).")
+    mostrar_codigo_folha = models.BooleanField(
+        "Imprimir código de controle no rodapé da folha", default=True,
+        help_text="Linha discreta “Emitida em … · cód. XXXX” que permite saber quem emitiu cada folha impressa.",
+    )
     captacao_aberta = models.BooleanField(
         "Captação de concedentes aberta", default=False,
         help_text="Libera a página pública “Seja uma concedente”, onde empresas se candidatam a receber estagiários.",

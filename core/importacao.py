@@ -54,7 +54,7 @@ COLUNAS = [
     ("representante_email", False, ""),
     ("representante_cpf", False, ""),
     ("representante_documento", False, ""),
-    ("supervisor_nome", False, "Nome completo do supervisor"),
+    ("supervisor_nome", True, "Nome completo do supervisor (fica vinculado à concedente da linha)"),
     ("supervisor_telefone", False, ""),
     ("supervisor_email", False, ""),
     ("supervisor_cargo", False, ""),
@@ -190,6 +190,7 @@ class Resultado:
     estagiarios: list = field(default_factory=list)
     supervisores_novos: list = field(default_factory=list)
     supervisores_existentes: set = field(default_factory=set)
+    supervisores_vinculados: list = field(default_factory=list)   # (supervisor, concedente) já existente ligado a outra
     concedentes_novas: list = field(default_factory=list)
     concedentes_existentes: set = field(default_factory=set)
     cursos_novos: list = field(default_factory=list)
@@ -361,23 +362,30 @@ def _concedente(d, op, r, cache):
 
 
 def _supervisor(d, local, usuario, r, senha_hash, cache):
+    """O supervisor fica sempre vinculado à concedente da linha. A mesma pessoa (mesmo nome) em outra concedente
+    é a mesma conta, vinculada às duas — a prévia mostra esses casos para conferência."""
     nome = " ".join(d.get("supervisor_nome", "").split())
     if not nome:
-        return None
+        raise ErroImportacao("supervisor_nome: obrigatório (todo estagiário precisa de um supervisor da concedente)")
     if len(nome.split()) < 2:
         raise ErroImportacao("supervisor_nome: informe nome e sobrenome")
-    chave = (local.pk, _chave(nome))
+    chave = _chave(nome)
     if chave in cache:
         sup = cache[chave]
     else:
-        sup = next((u for u in Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR, local=local)
-                    if _chave(u.nome_completo) == chave[1]), None)
+        iguais = [u for u in Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR).prefetch_related("concedentes")
+                  if _chave(u.nome_completo) == chave]
+        sup = next((u for u in iguais if local in u.concedentes.all()), None) or (iguais[0] if len(iguais) == 1 else None)
         if sup:
             r.supervisores_existentes.add(sup)
         else:
-            sup = criar_usuario(nome, Usuario.Papel.SUPERVISOR, usuario, senha_hash=senha_hash, local=local)
+            sup = criar_usuario(nome, Usuario.Papel.SUPERVISOR, usuario, senha_hash=senha_hash)
             r.supervisores_novos.append(sup)
         cache[chave] = sup
+    if not sup.concedentes.filter(pk=local.pk).exists():
+        if sup.concedentes.exists():
+            r.supervisores_vinculados.append((sup, local))
+        sup.concedentes.add(local)
     mudou = False
     for campo, col in (("telefone", "supervisor_telefone"), ("email", "supervisor_email"), ("cargo", "supervisor_cargo")):
         if d.get(col) and not getattr(sup, campo):

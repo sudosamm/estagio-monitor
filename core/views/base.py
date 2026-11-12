@@ -62,6 +62,11 @@ def eh_supervisor_do(user, estagio):
     return estagio.supervisor_id == user.pk
 
 
+def pode_definir_horario(user, estagio):
+    """Dias e horários são da concedente: o supervisor define; o orientador pode ajustar se tiver a permissão."""
+    return eh_supervisor_do(user, estagio) or (eh_orientador_do(user, estagio) and user.pode("escalas"))
+
+
 def destino_seguro(request, padrao):
     prox = request.POST.get("next") or request.GET.get("next")
     if prox and url_has_allowed_host_and_scheme(prox, allowed_hosts={request.get_host()}):

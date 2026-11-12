@@ -6,11 +6,11 @@ from . import models
 
 @admin.register(models.Usuario)
 class UsuarioAdmin(UserAdmin):
-    list_display = ("username", "nome_completo", "papel", "local", "is_active", "deve_trocar_senha")
+    list_display = ("username", "nome_completo", "papel", "is_active", "deve_trocar_senha")
     list_filter = ("papel", "is_active")
     search_fields = ("username", "nome_completo", "email")
     fieldsets = UserAdmin.fieldsets + (
-        ("Estágio Monitor", {"fields": ("papel", "nome_completo", "telefone", "cpf", "matricula", "cargo", "local", "foto",
+        ("Estágio Monitor", {"fields": ("papel", "nome_completo", "telefone", "cpf", "matricula", "cargo", "concedentes", "foto",
                                    "cursos_coordenados", "deve_trocar_senha")}),
         ("Perfil profissional", {"fields": ("apresentacao", "habilidades", "curriculo", "perfil_visivel")}),
     )

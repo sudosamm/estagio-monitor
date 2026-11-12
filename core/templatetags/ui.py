@@ -77,6 +77,12 @@ def horas_txt(valor):
 
 
 @register.filter
+def digitos(valor):
+    """'116.331.423-45' -> '11633142345' (como na folha oficial)"""
+    return "".join(c for c in str(valor or "") if c.isdigit())
+
+
+@register.filter
 def get_item(dicionario, chave):
     return dicionario.get(chave) if dicionario else None
 

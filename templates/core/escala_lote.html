@@ -1,23 +1,28 @@
 {% extends "base.html" %}
-{% block titulo %}Alterar dias de estágio{% endblock %}
+{% load ui %}
+{% block titulo %}{% if supervisor %}Dias e horários{% else %}Alterar dias de estágio{% endif %}{% endblock %}
 {% block conteudo %}
-<div class="titulo-pagina"><div><h1>Alterar dias de estágio</h1><p>Ex.: “a partir de 16/11, a turma passa a ir de segunda a sexta”. O histórico anterior é mantido.</p></div></div>
+<div class="titulo-pagina"><div>
+  {% if supervisor %}<h1>Dias e horários dos estagiários</h1><p>Defina quando cada estagiário vai à concedente. Vale a partir da data escolhida; o histórico anterior é mantido.</p>
+  {% else %}<h1>Alterar dias de estágio</h1><p>Ex.: “a partir de 16/11, a turma passa a ir de segunda a sexta”. Cada estagiário <strong>mantém os horários</strong> definidos pela concedente.</p>{% endif %}
+</div></div>
+{% if not supervisor %}
 <form class="filtros card" method="get">
   <div><label class="rotulo">Curso</label><select name="curso"><option value="">Todos</option>{% for c in cursos %}<option value="{{ c.pk }}"{% if filtro_curso == c.pk|stringformat:"s" %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
   <div><label class="rotulo">Turma</label><select name="turma"><option value="">Todas</option>{% for t in turmas %}<option{% if filtro_turma == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
   <button class="btn sec" type="submit">Filtrar lista</button>
 </form>
+{% endif %}
 <form method="post" class="card destaque" novalidate>{% csrf_token %}
   {% if form.non_field_errors %}<div class="aviso error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
   <div class="grade grade-2">
     <div>
-      <div class="campo{% if form.vigente_desde.errors %} erro-campo{% endif %}"><label>{{ form.vigente_desde.label }}</label>{{ form.vigente_desde }}{% for e in form.vigente_desde.errors %}<div class="erro">{{ e }}</div>{% endfor %}</div>
-      <div class="campo"><span class="rotulo">Dias de estágio</span><div class="opcoes">{% for op in form.dias %}<label>{{ op.tag }} {{ op.choice_label }}</label>{% endfor %}</div>{% for e in form.dias.errors %}<div class="erro">{{ e }}</div>{% endfor %}</div>
-      <div class="form-linha">
-        <div class="campo"><label>Entrada</label>{{ form.horario_entrada }}</div>
-        <div class="campo"><label>Saída</label>{{ form.horario_saida }}{% for e in form.horario_saida.errors %}<div class="erro">{{ e }}</div>{% endfor %}</div>
-        <div class="campo"><label>Horas por dia</label>{{ form.horas_por_dia }}</div>
-      </div>
+      {% with campo=form.vigente_desde %}{% include "core/_campo.html" %}{% endwith %}
+      {% with campo=form.dias %}{% include "core/_campo.html" %}{% endwith %}
+      {% if supervisor %}
+        {% with campo=form.horas_por_dia %}{% include "core/_campo.html" %}{% endwith %}
+        {% with campo=form.horario_entrada %}{% include "core/_campo.html" %}{% endwith %}{% with campo=form.saida_intervalo %}{% include "core/_campo.html" %}{% endwith %}{% with campo=form.volta_intervalo %}{% include "core/_campo.html" %}{% endwith %}{% with campo=form.horario_saida %}{% include "core/_campo.html" %}{% endwith %}
+      {% endif %}
     </div>
     <div>
       <div class="campo">
@@ -28,6 +33,6 @@
       </div>
     </div>
   </div>
-  <button class="btn grande" type="submit">Aplicar nova escala e avisar</button>
+  <button class="btn grande" type="submit">{% if supervisor %}Salvar dias e horários{% else %}Aplicar novos dias e avisar{% endif %}</button>
 </form>
 {% endblock %}
