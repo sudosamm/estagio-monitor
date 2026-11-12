@@ -55,20 +55,13 @@
   <nav class="navegacao">
     <div class="container">
       {% if user.is_gestor %}
-        <a href="{% url 'painel' %}" class="{% if n == 'painel' %}ativo{% endif %}">Painel</a>
-        <a href="{% url 'estagios_lista' %}" class="{% if n in 'estagios_lista,estagio_detalhe,estagio_dia,criar_estagiarios,editar_estagio' %}ativo{% endif %}">Estagiários</a>
-        {% if user|pode:"agenda" %}<a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Agenda</a>{% endif %}
-        {% if user|pode:"escalas" %}<a href="{% url 'escala_lote' %}" class="{% if n == 'escala_lote' %}ativo{% endif %}">Alterar dias</a>{% endif %}
-        {% if user|pode:"candidaturas" %}<a href="{% url 'captacao' %}" class="{% if n in 'captacao,captacao_detalhe' %}ativo{% endif %}">Captação{% if candidaturas_pendentes %} <span class="contador">{{ candidaturas_pendentes }}</span>{% endif %}</a>{% endif %}
-        <a href="{% url 'frequencias' %}" class="{% if n == 'frequencias' %}ativo{% endif %}">Frequências</a>
-        <a href="{% url 'pasta_geral' %}" class="{% if n in 'pasta_geral,tipos_documento,tipo_documento_editar' %}ativo{% endif %}">Pasta</a>
-        <a href="{% url 'atestados' %}" class="{% if n in 'atestados,atestado_detalhe' %}ativo{% endif %}">Atestados{% if atestados_pendentes %} <span class="contador">{{ atestados_pendentes }}</span>{% endif %}</a>
-        {% if user|pode:"arquivos" %}<a href="{% url 'documentos_gerais' %}" class="{% if n == 'documentos_gerais' %}ativo{% endif %}">Arquivos</a>{% endif %}
-        <a href="{% url 'usuarios' %}" class="{% if n in 'usuarios,editar_usuario,criar_supervisores,criar_orientador,criar_coordenador' %}ativo{% endif %}">Contas</a>
-        <a href="{% url 'locais' %}" class="{% if n in 'locais,local_editar,local_novo' %}ativo{% endif %}">Concedentes</a>
-        <a href="{% url 'turmas' %}" class="{% if n in 'turmas,turma_editar,cursos,curso_editar' %}ativo{% endif %}">Turmas e cursos</a>
-        {% if user|pode:"feriados" %}<a href="{% url 'dias_sem_estagio' %}" class="{% if n in 'dias_sem_estagio,importar_feriados,recessos' %}ativo{% endif %}">Feriados</a>{% elif user|pode:"cadastros" %}<a href="{% url 'recessos' %}" class="{% if n == 'recessos' %}ativo{% endif %}">Recessos</a>{% endif %}
-        {% if CONFIG.banco_talentos_habilitado or CONFIG.curriculos_habilitados %}<a href="{% url 'banco_talentos' %}" class="{% if n == 'banco_talentos' %}ativo{% endif %}">Talentos</a>{% endif %}
+        {% for i in MENU.soltos %}<a href="{{ i.url }}" class="{% if i.ativo %}ativo{% endif %}">{{ i.rotulo }}</a>{% endfor %}
+        {% for sec in MENU.secoes %}
+        <details class="nav-secao">
+          <summary class="{% if sec.ativo %}ativo{% endif %}">{{ sec.rotulo }}{% if sec.contador %} <span class="contador">{{ sec.contador }}</span>{% endif %}</summary>
+          <div class="nav-menu">{% for i in sec.itens %}<a href="{{ i.url }}" class="{% if i.ativo %}ativo{% endif %}">{{ i.rotulo }}{% if i.contador %} <span class="contador">{{ i.contador }}</span>{% endif %}</a>{% endfor %}</div>
+        </details>
+        {% endfor %}
       {% elif user.is_supervisor %}
         <a href="{% url 'painel_supervisor' %}" class="{% if n in 'painel_supervisor,estagio_detalhe,estagio_dia' %}ativo{% endif %}">Meus estagiários</a>
         <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Visitas e conversas</a>

@@ -31,3 +31,23 @@ self.addEventListener("fetch", (ev) => {
     })));
   }
 });
+
+// notificações no celular: mostra o aviso e, ao tocar, abre a página certa
+self.addEventListener("push", (ev) => {
+  let d = {};
+  try { d = ev.data ? ev.data.json() : {}; } catch (e) { d = { texto: ev.data ? ev.data.text() : "" }; }
+  ev.waitUntil(self.registration.showNotification(d.titulo || "{{ NOME_SISTEMA|escapejs }}", {
+    body: d.texto || "", icon: "{{ icone|escapejs }}", badge: "{{ icone|escapejs }}", lang: "pt-BR",
+    tag: d.tag || undefined, data: { url: d.url || "/" },
+  }));
+});
+self.addEventListener("notificationclick", (ev) => {
+  ev.notification.close();
+  const url = new URL((ev.notification.data && ev.notification.data.url) || "/", self.location.origin).href;
+  ev.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((janelas) => {
+    for (const j of janelas) {
+      if (j.url.startsWith(self.location.origin) && "navigate" in j) return j.navigate(url).then((w) => w && w.focus());
+    }
+    return self.clients.openWindow(url);
+  }));
+});

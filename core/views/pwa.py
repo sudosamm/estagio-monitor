@@ -41,7 +41,7 @@ def manifesto(request):
 @cache_control(max_age=0, no_cache=True)
 def service_worker(request):
     arquivos = [static(p) for p in ("css/app.css", "js/app.js", "img/icone.svg", "img/app-192.png")]
-    resposta = render(request, "pwa/sw.js", {"arquivos": arquivos, "rede_primeiro": settings.DEBUG, "versao": hashlib.sha1("|".join(arquivos).encode()).hexdigest()[:10]},
+    resposta = render(request, "pwa/sw.js", {"arquivos": arquivos, "rede_primeiro": settings.DEBUG, "icone": static("img/app-192.png"), "versao": hashlib.sha1("|".join(arquivos).encode()).hexdigest()[:10]},
                       content_type="application/javascript; charset=utf-8")
     resposta["Service-Worker-Allowed"] = "/"
     return resposta

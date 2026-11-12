@@ -1888,3 +1888,159 @@ class PastaDocumentosTests(Base):
         self.entrar(self.aluno)
         r = self.client.post(reverse("entregue_em_papel", args=[self.est.pk, self.relatorio.pk]))
         self.assertEqual(r.status_code, 403)
+
+
+@override_settings(VAPID_ARQUIVO=settings.BASE_DIR / "data" / "teste-vapid.pem", PUSH_ATIVO=True)
+class PushTests(Base):
+    INSC = {"endpoint": "https://fcm.googleapis.com/fcm/send/abc123", "keys": {"p256dh": "BPk" + "x" * 80, "auth": "y" * 22}}
+
+    def setUp(self):
+        super().setUp()
+        from . import push
+
+        push._vapid = None
+        self.addCleanup(lambda: (settings.BASE_DIR / "data" / "teste-vapid.pem").unlink(missing_ok=True))
+        self.addCleanup(setattr, push, "_vapid", None)
+
+    def _inscrever(self, user=None):
+        import json
+
+        self.entrar(user or self.aluno)
+        return self.client.post(reverse("push_inscrever"), json.dumps(self.INSC), content_type="application/json")
+
+    def test_chave_publica_gerada_e_guardada(self):
+        self.entrar(self.aluno)
+        chave = self.client.get(reverse("push_chave")).json()["chave"]
+        self.assertEqual(len(chave), 87)  # 65 bytes em base64url
+        self.assertTrue((settings.BASE_DIR / "data" / "teste-vapid.pem").exists())
+        from . import push
+
+        push._vapid = None
+        self.assertEqual(self.client.get(reverse("push_chave")).json()["chave"], chave)  # mesma chave depois
+
+    def test_inscrever_e_cancelar(self):
+        import json
+
+        from .models import InscricaoPush
+
+        self.assertEqual(self._inscrever().json(), {"ok": True})
+        self._inscrever()  # repetir não duplica
+        self.assertEqual(InscricaoPush.objects.get().usuario, self.aluno)
+        r = self.client.post(reverse("push_inscrever"), json.dumps({"endpoint": "http://x"}), content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+        self.client.post(reverse("push_cancelar"), json.dumps({"endpoint": self.INSC["endpoint"]}),
+                         content_type="application/json")
+        self.assertFalse(InscricaoPush.objects.exists())
+
+    def test_notificar_envia_ao_celular(self):
+        import json
+
+        from .services import notificar
+
+        self._inscrever()
+        with mock.patch("pywebpush.webpush") as wp, self.captureOnCommitCallbacks(execute=True):
+            notificar([self.aluno, self.sup], "Sua presença foi confirmada.", "/estagios/1/")
+        self.assertEqual(wp.call_count, 1)  # só o aluno ativou
+        args, kw = wp.call_args
+        self.assertEqual(args[0]["endpoint"], self.INSC["endpoint"])
+        payload = json.loads(kw["data"])
+        n = Notificacao.objects.get(usuario=self.aluno)
+        self.assertEqual(payload["texto"], "Sua presença foi confirmada.")
+        self.assertEqual(payload["url"], reverse("notificacao_abrir", args=[n.pk]))
+
+    def test_inscricao_expirada_e_removida(self):
+        from pywebpush import WebPushException
+
+        from .models import InscricaoPush
+        from .services import notificar
+
+        self._inscrever()
+        resposta = mock.Mock(status_code=410)
+        with mock.patch("pywebpush.webpush", side_effect=WebPushException("gone", response=resposta)), \
+                self.captureOnCommitCallbacks(execute=True):
+            notificar([self.aluno], "Teste")
+        self.assertFalse(InscricaoPush.objects.exists())
+
+    def test_botao_de_teste(self):
+        self._inscrever()
+        with mock.patch("pywebpush.webpush") as wp:
+            r = self.client.post(reverse("push_teste"))
+        self.assertEqual(r.json(), {"ok": True, "enviados": 1})
+        self.assertEqual(wp.call_count, 1)
+
+
+@override_settings(EMAIL_ATIVO=True, SITE_URL="https://estagio.exemplo.br")
+class ComunicadoTests(Base):
+    def test_aviso_para_a_turma(self):
+        from django.core import mail
+
+        from .models import Comunicado
+
+        self.aluno.email = "maria@exemplo.br"
+        self.aluno.save()
+        outra_turma = Turma.objects.create(curso=self.curso, nome="3º B", ano_ingresso=2024, ano_estagio=2026)
+        fora = _ativo(criar_usuario("Fora da Turma", Usuario.Papel.ESTAGIARIO))
+        Estagio.objects.create(estagiario=fora, orientador=self.ori, curso=self.curso, turma=outra_turma,
+                               data_inicio=date(2026, 11, 2))
+        self.entrar(self.ori)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(reverse("comunicados"), {
+                "para": "estagiarios", "turma": self.turma.pk, "titulo": "Relatório até sexta",
+                "texto": "Pessoal, o relatório parcial deve ser entregue até sexta-feira, dia 20."}, follow=True)
+        self.assertContains(r, "Aviso enviado para 1 pessoa")
+        c = Comunicado.objects.get()
+        self.assertEqual(list(c.destinatarios.all()), [self.aluno])
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto="Paula: Relatório até sexta").exists())
+        self.assertFalse(Notificacao.objects.filter(usuario=fora).exists())
+        self.assertIn("entregue até sexta-feira", mail.outbox[0].body)
+        self.entrar(self.aluno)
+        self.assertContains(self.client.get(c.get_absolute_url()), "dia 20")
+        self.assertContains(self.client.get(reverse("meus_comunicados")), "Relatório até sexta")
+        self.entrar(fora)
+        self.assertEqual(self.client.get(c.get_absolute_url()).status_code, 403)
+
+    def test_aviso_para_supervisores(self):
+        self.entrar(self.ori)
+        self.client.post(reverse("comunicados"), {"para": "supervisores", "titulo": "Visitas na próxima semana",
+                                                  "texto": "Vou visitar as concedentes."})
+        self.assertTrue(Notificacao.objects.filter(usuario=self.sup).exists())
+        self.assertFalse(Notificacao.objects.filter(usuario=self.aluno).exists())
+
+    def test_sem_destinatarios_e_permissao(self):
+        outro_local = LocalEstagio.objects.create(nome="Ninguém Aqui")
+        self.entrar(self.ori)
+        r = self.client.post(reverse("comunicados"), {"para": "estagiarios", "local": outro_local.pk, "titulo": "X",
+                                                      "texto": "Y"})
+        self.assertContains(r, "Ninguém recebe com esses filtros")
+        self.entrar(self.aluno)
+        self.assertEqual(self.client.get(reverse("comunicados")).status_code, 403)
+
+
+class MenuSecoesTests(Base):
+    def test_gestor_ve_secoes_com_contador_e_item_ativo(self):
+        from .models import Justificativa
+
+        Justificativa.objects.create(estagio=self.est, data_inicio=QUARTA, data_fim=QUARTA, arquivo="x.pdf")
+        self.entrar(self.ori)
+        menu = self.client.get(reverse("atestados")).context["MENU"]
+        secoes = {s["rotulo"]: s for s in menu["secoes"]}
+        self.assertEqual(list(secoes), ["Acompanhamento", "Comunicação", "Cadastros"])
+        acomp = secoes["Acompanhamento"]
+        self.assertTrue(acomp["ativo"])
+        self.assertEqual(acomp["contador"], 1)
+        self.assertEqual([i["rotulo"] for i in acomp["itens"] if i["ativo"]], ["Atestados"])
+
+    def test_coordenador_nao_ve_o_que_nao_pode(self):
+        coord = _ativo(criar_usuario("Carla Coord", Usuario.Papel.COORDENADOR))
+        self.entrar(coord)
+        menu = self.client.get(reverse("painel")).context["MENU"]
+        rotulos = [i["rotulo"] for s in menu["secoes"] for i in s["itens"]]
+        self.assertNotIn("Agenda de visitas", rotulos)
+        self.assertNotIn("Arquivos gerais", rotulos)
+        self.assertIn("Recessos", rotulos)
+
+    def test_estagiario_mantem_barra_simples(self):
+        self.entrar(self.aluno)
+        r = self.client.get(self.est.get_absolute_url())
+        self.assertNotIn("MENU", r.context)
+        self.assertContains(r, "Meu estágio")

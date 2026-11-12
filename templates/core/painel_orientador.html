@@ -23,6 +23,7 @@
   <div class="kpi laranja"><div class="valor">{{ grupos.ausentes|length }}</div><div class="rotulo">Ausências hoje</div></div>
   <div class="kpi vermelho"><div class="valor">{{ grupos.pendentes|length }}</div><div class="rotulo">Ainda não marcaram</div></div>
 </div>
+{% include "core/_push.html" with lembrete=True %}
 <div class="grade grade-lado">
   <div>
     <div class="card destaque">

@@ -2,6 +2,7 @@
 {% block titulo %}Notificações{% endblock %}
 {% block conteudo %}
 <div class="titulo-pagina"><h1>Notificações</h1>
+  <a class="btn sec sm" href="{% url 'meus_comunicados' %}">Avisos da escola</a>
   {% if notificacoes_nao_lidas %}<form method="post" action="{% url 'notificacoes_lidas' %}">{% csrf_token %}<button class="btn sec sm" type="submit">Marcar todas como lidas</button></form>{% endif %}
 </div>
 <div class="card">

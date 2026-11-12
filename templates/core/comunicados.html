@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Enviar aviso{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Avisos para a turma</h1><p>Mande um recado para os seus estagiários e/ou supervisores: chega no sino, no celular de quem ativou as notificações e por e-mail.</p></div></div>
+<div class="grade grade-lado">
+  <div class="card destaque"><h2>Novo aviso</h2>
+    <form method="post" novalidate data-confirmar="Enviar este aviso agora?">{% csrf_token %}{% include "core/_form.html" %}
+      <p class="muted" style="font-size:.85rem">Turma, curso e concedente são filtros: deixe em branco para mandar a todos os seus estagiários ativos.</p>
+      <button class="btn" type="submit">{% icone "sino" %} Enviar aviso</button></form>
+  </div>
+  <div class="card"><h3>Enviados</h3>
+    <ul class="lista compacta">{% for c in enviados %}<li><a class="cresce pessoa" href="{{ c.get_absolute_url }}"><span><strong>{{ c.titulo }}</strong><small>{{ c.criado_em|date:"d/m/Y H:i" }} · {{ c.para }} · {{ c.destinatarios.all|length }} pessoa{{ c.destinatarios.all|length|pluralize }}{% if user.is_superuser and c.autor != user %} · por {{ c.autor.primeiro_nome }}{% endif %}</small></span></a></li>
+    {% empty %}<li class="vazio">Nenhum aviso enviado ainda.</li>{% endfor %}</ul>
+  </div>
+</div>
+{% endblock %}

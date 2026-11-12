@@ -1,0 +1,14 @@
+{% load ui %}
+<div class="card{% if lembrete %} destaque{% endif %}" data-push{% if lembrete %} data-push-lembrete{% endif %} hidden>
+  <h3>{% icone "sino" %} Notificações no celular</h3>
+  <p style="font-size:.9rem" data-push-texto>Receba os avisos do sistema (presenças, visitas, documentos, avisos da escola) como notificação, mesmo com o app fechado.</p>
+  <p class="caixa-info" data-push-ios hidden style="font-size:.85rem">No iPhone, primeiro instale o app: no Safari, toque em Compartilhar → <strong>Adicionar à Tela de Início</strong>, abra pelo ícone e volte aqui.</p>
+  <p class="caixa-alerta" data-push-bloqueado hidden style="font-size:.85rem">As notificações estão bloqueadas para este site. Libere nas configurações do navegador (cadeado ao lado do endereço) e recarregue a página.</p>
+  <div class="acoes">
+    <button class="btn" type="button" data-push-ativar hidden>{% icone "sino" %} Ativar neste aparelho</button>
+    <button class="btn sec" type="button" data-push-testar hidden>Enviar um teste</button>
+    <button class="btn sec" type="button" data-push-desativar hidden>Desativar neste aparelho</button>
+    {% if lembrete %}<button class="btn sec" type="button" data-push-dispensar>Agora não</button>{% endif %}
+  </div>
+  <p class="muted" style="font-size:.8rem;margin-bottom:0">Vale só para este celular ou computador. Ative em cada aparelho que usar.</p>
+</div>

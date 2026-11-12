@@ -1031,6 +1031,49 @@ class Notificacao(models.Model):
         ordering = ["-criado_em"]
 
 
+class InscricaoPush(models.Model):
+    """Um celular/navegador que aceitou receber notificações (Web Push). Uma pessoa pode ter vários."""
+
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="inscricoes_push")
+    endpoint = models.CharField(max_length=600, unique=True)
+    p256dh = models.CharField(max_length=200)
+    auth = models.CharField(max_length=100)
+    navegador = models.CharField(max_length=200, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    ultimo_envio = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "celular com notificações"
+        verbose_name_plural = "celulares com notificações"
+
+    def __str__(self):
+        return f"{self.usuario} · {self.navegador[:40]}"
+
+    @property
+    def dados(self):
+        return {"endpoint": self.endpoint, "keys": {"p256dh": self.p256dh, "auth": self.auth}}
+
+
+class Comunicado(models.Model):
+    """Aviso que o orientador manda para uma turma, um curso, uma concedente ou todos os seus estagiários."""
+
+    autor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="comunicados")
+    titulo = models.CharField("Título", max_length=120)
+    texto = models.TextField("Mensagem")
+    para = models.CharField(max_length=200, help_text="Descrição dos destinatários")
+    destinatarios = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="comunicados_recebidos")
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+
+    def __str__(self):
+        return self.titulo
+
+    def get_absolute_url(self):
+        return reverse("comunicado", args=[self.pk])
+
+
 class Configuracao(models.Model):
     """Configurações gerais (registro único), editadas pelo administrador."""
 

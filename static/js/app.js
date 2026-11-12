@@ -1,7 +1,7 @@
 // Pequenos comportamentos de interface (sem dependências)
 document.addEventListener("click", (ev) => {
   // fecha menus <details class="drop"> ao clicar fora
-  document.querySelectorAll("details.drop[open]").forEach((d) => { if (!d.contains(ev.target)) d.removeAttribute("open"); });
+  document.querySelectorAll("details.drop[open], details.nav-secao[open]").forEach((d) => { if (!d.contains(ev.target)) d.removeAttribute("open"); });
 });
 document.addEventListener("submit", (ev) => {
   const msg = (ev.submitter && ev.submitter.dataset.confirmar) || ev.target.getAttribute("data-confirmar");
@@ -179,4 +179,89 @@ document.querySelectorAll("[data-minha-posicao]").forEach((b) => {
     }, () => { b.disabled = false; b.textContent = original; window.alert("Não foi possível obter a localização. Permita o acesso no navegador."); },
     { enableHighAccuracy: true, timeout: 15000 });
   });
+});
+
+// notificações no celular (Web Push): ativar/desativar por aparelho
+(() => {
+  const cards = document.querySelectorAll("[data-push]");
+  if (!cards.length) return;
+  const suporta = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const instalado = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  const token = document.querySelector("[name=csrfmiddlewaretoken]");
+  const post = (url, corpo) => fetch(url, {
+    method: "POST", credentials: "same-origin", body: JSON.stringify(corpo || {}),
+    headers: { "Content-Type": "application/json", "X-CSRFToken": token ? token.value : "" },
+  }).then((r) => r.json());
+  const chaveBytes = (s) => {
+    const raw = atob((s + "=".repeat((4 - (s.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  };
+  let dispensado = false;
+  try { dispensado = localStorage.getItem("push-dispensado") === "1"; } catch (e) { /* sem armazenamento */ }
+  cards.forEach(async (card) => {
+    const q = (s) => card.querySelector(s);
+    const lembrete = card.hasAttribute("data-push-lembrete");
+    const texto = q("[data-push-texto]");
+    const original = texto.textContent;
+    if (!suporta) {
+      if (ios && !instalado && !lembrete) { card.hidden = false; q("[data-push-ios]").hidden = false; }
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let insc = await reg.pushManager.getSubscription();
+    if (insc) post("/push/inscrever/", insc.toJSON()).catch(() => {});  // mantém o servidor em dia
+    if (lembrete && (insc || Notification.permission === "denied" || dispensado)) return;
+    const mostrar = () => {
+      const ativo = !!insc;
+      const negado = Notification.permission === "denied";
+      q("[data-push-ativar]").hidden = ativo || negado;
+      q("[data-push-desativar]").hidden = !ativo;
+      q("[data-push-testar]").hidden = !ativo;
+      q("[data-push-bloqueado]").hidden = !negado;
+      texto.textContent = ativo ? "Notificações ativadas neste aparelho. Os avisos chegam mesmo com o app fechado." : original;
+    };
+    card.hidden = false;
+    mostrar();
+    q("[data-push-ativar]").addEventListener("click", async (ev) => {
+      ev.target.disabled = true;
+      try {
+        const permissao = await Notification.requestPermission();
+        if (permissao === "granted") {
+          const { ativo, chave } = await fetch("/push/chave/", { credentials: "same-origin" }).then((r) => r.json());
+          if (ativo) {
+            insc = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chaveBytes(chave) });
+            await post("/push/inscrever/", insc.toJSON());
+          }
+        }
+      } catch (e) {
+        texto.textContent = "Não foi possível ativar neste navegador.";
+      }
+      ev.target.disabled = false;
+      mostrar();
+    });
+    q("[data-push-desativar]").addEventListener("click", async () => {
+      if (insc) { await post("/push/cancelar/", { endpoint: insc.endpoint }).catch(() => {}); await insc.unsubscribe(); }
+      insc = null;
+      mostrar();
+    });
+    q("[data-push-testar]").addEventListener("click", async (ev) => {
+      const r = await post("/push/teste/").catch(() => ({ ok: false }));
+      ev.target.textContent = r.ok ? "Enviado! Confira as notificações" : "Não chegou: tente desativar e ativar de novo";
+    });
+    const dispensar = q("[data-push-dispensar]");
+    if (dispensar) dispensar.addEventListener("click", () => {
+      try { localStorage.setItem("push-dispensado", "1"); } catch (e) { /* ok */ }
+      card.hidden = true;
+    });
+  });
+})();
+// menu de seções: só uma aberta por vez; Esc fecha
+document.querySelectorAll("details.nav-secao").forEach((d) => {
+  d.addEventListener("toggle", () => {
+    if (d.open) document.querySelectorAll("details.nav-secao[open]").forEach((o) => { if (o !== d) o.open = false; });
+  });
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape") document.querySelectorAll("details.nav-secao[open], details.drop[open]").forEach((d) => { d.open = false; });
 });

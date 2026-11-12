@@ -154,6 +154,14 @@ RESUMO_AUTOMATICO = env_bool("RESUMO_AUTOMATICO", "test" not in sys.argv)
 # Endereço público do sistema, usado nos links dos e-mails. Vazio = o primeiro de CSRF_TRUSTED_ORIGINS.
 SITE_URL = (os.environ.get("SITE_URL") or (CSRF_TRUSTED_ORIGINS[0] if CSRF_TRUSTED_ORIGINS else "")).rstrip("/")
 
+# Notificações no celular (Web Push, pelo app instalado ou pelo navegador). As chaves VAPID são criadas
+# sozinhas em DATA_DIR/vapid_privada.pem na primeira vez; troque-as e quem ativou precisa ativar de novo.
+PUSH_ATIVO = env_bool("PUSH_ATIVO", True)
+VAPID_ARQUIVO = Path(os.environ.get("VAPID_ARQUIVO", DATA_DIR / "vapid_privada.pem"))
+# contato exigido pelos serviços de push (Google, Apple, Mozilla): mailto:… ou https://…
+VAPID_CONTATO = os.environ.get("VAPID_CONTATO") or (
+    SITE_URL if SITE_URL.startswith("https://") else f"mailto:{DEFAULT_FROM_EMAIL.split('<')[-1].strip('> ')}")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

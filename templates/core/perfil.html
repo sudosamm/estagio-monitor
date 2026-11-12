@@ -33,5 +33,6 @@
     <p class="muted mt-1" style="font-size:.85rem">Nome e matrícula são alterados pelo orientador.</p>
     <p class="mb-0"><a class="btn sec" href="{% url 'trocar_senha' %}">{% icone "chave" %} Alterar senha</a></p>
   </div>
+  {% include "core/_push.html" %}
 </div>
 {% endblock %}

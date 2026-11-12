@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}{{ c.titulo }}{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><div class="migalha"><a href="{% if autor %}{% url 'comunicados' %}{% else %}{% url 'meus_comunicados' %}{% endif %}">← Avisos</a></div>
+  <h1>{{ c.titulo }}</h1><p>{{ c.autor|default:"Escola" }} · {{ c.criado_em|date:"d/m/Y H:i" }}{% if autor %} · para {{ c.para }} ({{ n }} pessoa{{ n|pluralize }}){% endif %}</p></div></div>
+<div class="card"><p class="quebra" style="font-size:1.02rem">{{ c.texto|urlize }}</p></div>
+{% endblock %}

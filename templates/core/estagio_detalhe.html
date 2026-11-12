@@ -48,6 +48,7 @@
     {% include "core/_calendario.html" %}
   </div>
   <div>
+    {% if e_estagiario %}{% include "core/_push.html" with lembrete=True %}{% endif %}
     <div class="card destaque">
       <h3>Carga horária</h3>
       <div class="horas-num"><strong>{{ horas.cumpridas|horas }}</strong><span class="muted">de {{ horas.total|horas }}</span></div>

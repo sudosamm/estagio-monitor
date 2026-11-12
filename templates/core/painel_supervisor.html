@@ -7,6 +7,7 @@
 {% if sem_horario %}
 <a class="faixa-aviso" href="{% url 'escala_lote' %}">{% icone "relogio" %}<span><strong>{{ sem_horario|length }} estagiário{{ sem_horario|pluralize }} sem horário definido:</strong> {% for e in sem_horario %}{{ e.estagiario.primeiro_nome }}{% if not forloop.last %}, {% endif %}{% endfor %}. Os horários são definidos por você, supervisor.</span><span class="btn sm">Definir</span></a>
 {% endif %}
+{% include "core/_push.html" with lembrete=True %}
 <div class="grade grade-lado">
   <div class="card destaque">
     <h2>Hoje</h2>

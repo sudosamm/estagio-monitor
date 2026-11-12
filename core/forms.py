@@ -862,6 +862,30 @@ class EntregaForm(Formulario):
         return arq
 
 
+class ComunicadoForm(Formulario):
+    PARA = [("estagiarios", "Estagiários"), ("supervisores", "Supervisores"), ("todos", "Estagiários e supervisores")]
+    para = forms.ChoiceField(label="Para", choices=PARA, initial="estagiarios")
+    turma = forms.ModelChoiceField(queryset=Turma.objects.none(), required=False, label="Turma",
+                                   empty_label="Todas as turmas")
+    curso = forms.ModelChoiceField(queryset=Curso.objects.all(), required=False, label="Curso", empty_label="Todos os cursos")
+    local = forms.ModelChoiceField(queryset=LocalEstagio.objects.filter(ativa=True), required=False, label="Concedente",
+                                   empty_label="Todas as concedentes")
+    titulo = forms.CharField(label="Assunto", max_length=120,
+                             widget=forms.TextInput(attrs={"placeholder": "Ex.: Entrega do relatório até sexta"}))
+    texto = forms.CharField(label="Mensagem", max_length=3000, widget=forms.Textarea(attrs={"rows": 5}))
+
+    def __init__(self, *a, usuario=None, **kw):
+        super().__init__(*a, **kw)
+        from .services import ano_referencia
+
+        turmas = Turma.objects.select_related("curso").filter(ativa=True, ano_estagio=ano_referencia())
+        if usuario and usuario.is_coordenador and usuario.cursos_ids():
+            turmas = turmas.filter(curso_id__in=usuario.cursos_ids())
+            self.fields["curso"].queryset = Curso.objects.filter(pk__in=usuario.cursos_ids())
+        self.fields["turma"].queryset = turmas
+        self.fields["turma"].label_from_instance = lambda t: t.rotulo
+
+
 class TipoDocumentoForm(FormularioModelo):
     class Meta:
         model = TipoDocumento

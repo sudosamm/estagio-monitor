@@ -32,7 +32,7 @@
     <thead><tr><th>Estagiário</th>{% for t in tipos %}<th title="{{ t.nome }}">{{ t.nome|truncatechars:24 }}<small>{% if t.momento == "INICIO" %}início{% elif t.momento == "FIM" %}fim{% else %}sem prazo{% endif %}{% if not t.obrigatorio %} · opcional{% endif %}</small></th>{% endfor %}</tr></thead>
     <tbody>{% for l in linhas %}<tr>
       <td><a class="pessoa" href="{% url 'estagio_detalhe' l.e.pk %}?aba=arquivos#pasta"><span><strong>{{ l.e.estagiario }}</strong><small>{{ l.r.conferidos }}/{{ l.r.total }} conferidos</small></span></a></td>
-      {% for i in l.celulas %}<td>{% if i %}<span class="ponto {{ i.codigo }}" title="{{ i.rotulo }}{% if i.prazo %} · prazo {{ i.prazo|date:'d/m/Y' }}{% endif %}">{% if i.codigo == "conferido" %}✓{% elif i.codigo == "enviado" %}…{% elif i.codigo == "atrasado" or i.codigo == "recusado" %}!{% elif i.codigo == "pendente" %}○{% else %}–{% endif %}</span>{% else %}<span class="muted">·</span>{% endif %}</td>{% endfor %}
+      {% for i in l.celulas %}<td>{% if i %}<span class="marca-pasta {{ i.codigo }}" title="{{ i.rotulo }}{% if i.prazo %} · prazo {{ i.prazo|date:'d/m/Y' }}{% endif %}">{% if i.codigo == "conferido" %}✓{% elif i.codigo == "enviado" %}…{% elif i.codigo == "atrasado" or i.codigo == "recusado" %}!{% elif i.codigo == "pendente" %}○{% else %}–{% endif %}</span>{% else %}<span class="muted">·</span>{% endif %}</td>{% endfor %}
     </tr>{% empty %}<tr><td colspan="{{ tipos|length|add:1 }}" class="vazio">Nenhum estagiário{% if so %} com pendências{% endif %}.</td></tr>{% endfor %}</tbody>
   </table></div>
   {% if linhas %}<details class="mt-1"><summary><strong>Marcar como entregue em papel para vários</strong> (ex.: os TCEs que já estão arquivados na escola)</summary>

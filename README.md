@@ -15,6 +15,14 @@ Sistema de acompanhamento de estágio para **orientadores**, **supervisores** e 
 
 Todos recebem **notificações** (o sino no topo) quando algo muda, por exemplo: presença marcada, ausência informada, escala alterada, visita agendada, mensagem ou arquivo novo. Com o servidor de e-mail configurado, os mesmos avisos vão também por **e-mail** (ver *Avisos por e-mail*).
 
+### Menu da gestão
+Para orientador, coordenação e administrador, a barra tem **Painel** e **Estagiários** soltos e três menus:
+- **Acompanhamento:** resumo da semana, agenda de visitas, frequências, atestados, pasta de documentos, alterar dias.
+- **Comunicação:** avisos para a turma, arquivos gerais.
+- **Cadastros:** contas, concedentes, turmas e cursos, feriados e recessos, captação, banco de talentos.
+
+O número de pendências (atestados para analisar, concedentes na captação) aparece no nome do menu e no item. Cada pessoa só vê o que tem permissão de usar. Estagiários e supervisores continuam com a barra simples.
+
 ### App no celular
 O sistema pode ser **instalado como app** (PWA): ícone na tela inicial, abre em tela cheia, sem barra do navegador.
 - **Android (Chrome):** menu do usuário → *Instalar no celular*, ou o aviso “Instalar app” do próprio Chrome.
@@ -204,6 +212,18 @@ Para comparar, cadastre o **ponto de cada concedente** na ficha dela (*Localiza�
 
 **Onde ver:** no painel do supervisor (presenças a validar), na página do dia e na aba *Registros e diário*, com link para o mapa. A localização é lida só no momento da marcação, nunca em segundo plano. O celular só permite isso em endereço `https://`.
 
+### Notificações no celular
+Cada pessoa ativa em **Meus dados → Notificações no celular** (ou no lembrete que aparece na tela inicial). A partir daí, os mesmos avisos do sino chegam como notificação do celular, mesmo com o app fechado. Tocar na notificação abre a página certa.
+- **Android:** funciona no Chrome, com ou sem o app instalado.
+- **iPhone:** precisa do iOS 16.4 ou mais novo e do app instalado na tela de início (Safari → Compartilhar → *Adicionar à Tela de Início*). Depois, abra pelo ícone e ative.
+- **Computador:** Chrome, Edge e Firefox também recebem.
+- Vale por aparelho: quem usa celular e computador ativa nos dois. *Desativar neste aparelho* para de enviar, e *Enviar um teste* confere se está chegando.
+- Não há custo nem cadastro em serviço externo: o próprio navegador entrega pelos servidores do Google, da Apple ou da Mozilla. As chaves de segurança (VAPID) são criadas sozinhas no primeiro uso, em `/data/vapid_privada.pem`, e ficam no backup. Se esse arquivo for apagado, cada pessoa precisa ativar de novo.
+- Só funciona com o sistema em `https://` (no Coolify + Cloudflare isso já acontece).
+
+### Avisos para a turma
+Em **Avisos** no menu, o orientador manda um recado para os estagiários, os supervisores ou ambos, filtrando por turma, curso ou concedente (vazio = todos os seus estagiários ativos). O aviso chega no sino, no celular de quem ativou as notificações e por e-mail (com o texto completo). Quem recebe vê o histórico em *Notificações → Avisos da escola*, e o orientador vê os avisos enviados e quantas pessoas receberam cada um.
+
 ### Avisos por e-mail
 Com o servidor de e-mail configurado (variáveis `EMAIL_*` abaixo), cada aviso do sino também vai para o e-mail de quem tem e-mail cadastrado. Cada pessoa pode desligar em **Meus dados** (“Receber os avisos também por e-mail”), e o administrador pode desligar para todos em **Configurações**. Lá também há o botão *Enviar e-mail de teste para mim*. O envio roda em segundo plano: se o servidor de e-mail falhar, o sistema continua funcionando e o erro vai para o log.
 
@@ -236,6 +256,7 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Analisar atestados (aceitar/recusar) | ✔ | ✔ (cursos que coordena) |
 | Conferir documentos da pasta, marcar entregue em papel | ✔ | ✔ (cursos que coordena) |
 | Definir os documentos exigidos na pasta | ✔ | — |
+| Enviar avisos para a turma | ✔ | ✔ (cursos que coordena) |
 | Agendar visitas | ✔ | — |
 | Mudar dias em lote (cada um mantém seus horários) | ✔ | — |
 | Mudar o ano de referência | ✔ | — |
@@ -326,12 +347,12 @@ core/acompanhamento.py  Situação de cada estágio (relatório, exportação) e
 core/exportacao.py  Planilha (.xlsx) com a situação dos estagiários
 core/atestados.py   Atestados: envio, dias cobertos, aceite/recusa
 core/pasta.py       Pasta do estágio: documentos exigidos, prazos e conferência
+core/push.py        Notificações no celular (Web Push): chaves VAPID e envio
 templates/          HTML (visual inspirado no portal ce.gov.br)
 static/             CSS e JS próprios, sem frameworks
 ```
 
 ## Ideias para as próximas versões
-- Notificações no celular pelo app (Web Push), inclusive avisos do orientador para a turma
 - Painel de indicadores por curso e turma, e área de feedback do supervisor
 - Check-in por QR code mostrado pelo supervisor (confirma a chegada na hora)
 - Encerramento do ano letivo: fechar turmas, arquivar estágios e anonimizar dados após o prazo (LGPD)

@@ -93,3 +93,15 @@ class JustificativaAdmin(admin.ModelAdmin):
     list_filter = ["status", "tipo"]
     search_fields = ["estagio__estagiario__nome_completo"]
     raw_id_fields = ["estagio", "enviado_por", "decidido_por"]
+
+
+@admin.register(models.Comunicado)
+class ComunicadoAdmin(admin.ModelAdmin):
+    list_display = ["titulo", "autor", "para", "criado_em"]
+    filter_horizontal = ["destinatarios"]
+
+
+@admin.register(models.InscricaoPush)
+class InscricaoPushAdmin(admin.ModelAdmin):
+    list_display = ["usuario", "navegador", "criado_em", "ultimo_envio"]
+    readonly_fields = ["usuario", "endpoint", "p256dh", "auth", "navegador", "criado_em", "ultimo_envio"]

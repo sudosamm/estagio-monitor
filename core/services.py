@@ -187,8 +187,10 @@ def trocar_supervisor(estagio, novo, feita_por, motivo=""):
 # ---------------------------------------------------------------- notificações
 
 
-def notificar(usuarios, texto, link="", exceto=None):
-    """Aviso no sino de cada pessoa e, se estiver configurado, também por e-mail."""
+def notificar(usuarios, texto, link="", exceto=None, detalhe=""):
+    """Aviso no sino de cada pessoa, no celular (se ela ativou) e, se estiver configurado, também por e-mail.
+
+    `detalhe`: texto completo que vai só no e-mail (o sino e o celular mostram o resumo)."""
     vistos = set()
     objs, destinatarios = [], []
     for u in usuarios:
@@ -200,8 +202,12 @@ def notificar(usuarios, texto, link="", exceto=None):
             destinatarios.append(u)
     Notificacao.objects.bulk_create(objs)
     if destinatarios and email_ativo():
-        mensagens = [mensagem_aviso(u, texto, link) for u in destinatarios]
+        mensagens = [mensagem_aviso(u, texto, link, detalhe) for u in destinatarios]
         transaction.on_commit(lambda: enviar_emails(mensagens))
+    if objs:
+        from . import push
+
+        transaction.on_commit(lambda: push.enviar(objs))
 
 
 def email_ativo():
@@ -212,12 +218,12 @@ def email_ativo():
     return settings.EMAIL_ATIVO and Configuracao.atual().avisos_email
 
 
-def mensagem_aviso(usuario, texto, link=""):
+def mensagem_aviso(usuario, texto, link="", detalhe=""):
     """(assunto, corpo, remetente, [destinatário]) no formato de send_mass_mail."""
     from django.conf import settings
 
     site = settings.SITE_URL
-    corpo = [f"Olá, {usuario.primeiro_nome}.", "", texto]
+    corpo = [f"Olá, {usuario.primeiro_nome}.", "", texto] + (["", detalhe] if detalhe else [])
     if link and site:
         corpo += ["", f"Abrir no sistema: {site}{link}"]
     corpo += ["", "—", f"Aviso automático do {settings.NOME_SISTEMA}. Não responda este e-mail."]

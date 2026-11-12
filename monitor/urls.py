@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
-from core.views import agenda, atestados, captacao, comum, estagio, frequencia, importacao, orientador, pasta, pwa, relatorios, supervisor
+from core.views import agenda, atestados, avisos, captacao, comum, estagio, frequencia, importacao, orientador, pasta, pwa, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
@@ -14,6 +14,13 @@ urlpatterns = [
     path("notificacoes/", comum.notificacoes, name="notificacoes"),
     path("notificacoes/lidas/", comum.notificacoes_marcar_lidas, name="notificacoes_lidas"),
     path("notificacoes/<int:pk>/", comum.notificacao_abrir, name="notificacao_abrir"),
+    path("push/chave/", avisos.push_chave, name="push_chave"),
+    path("push/inscrever/", avisos.push_inscrever, name="push_inscrever"),
+    path("push/cancelar/", avisos.push_cancelar, name="push_cancelar"),
+    path("push/teste/", avisos.push_teste, name="push_teste"),
+    path("comunicados/", avisos.comunicados, name="comunicados"),
+    path("comunicados/recebidos/", avisos.meus_comunicados, name="meus_comunicados"),
+    path("comunicados/<int:pk>/", avisos.comunicado, name="comunicado"),
     path("usuarios/<int:pk>/foto/", comum.foto_usuario, name="foto_usuario"),
     path("usuarios/<int:pk>/curriculo/", comum.curriculo_usuario, name="curriculo_usuario"),
     path("talentos/", comum.banco_talentos, name="banco_talentos"),
