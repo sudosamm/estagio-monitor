@@ -130,6 +130,8 @@ def estagio_detalhe(request, pk):
         ctx["registros"] = estagio.registros.select_related("confirmado_por").annotate(
             n_alteracoes=Count("historico"))[:200]
         ctx["historico"] = estagio.historico_registros.select_related("usuario")[:40]
+        if ctx["e_estagiario"] or ctx["e_orientador"] or (ctx["e_supervisor"] and Configuracao.atual().atestados_supervisor):
+            ctx["atestados"] = estagio.justificativas.select_related("decidido_por")[:30]
     elif aba == "mensagens":
         ctx["mensagens"] = _mensagens_visiveis(estagio, user)
         ctx["mensagem_form"] = MensagemForm()
@@ -376,7 +378,8 @@ def estagio_dia(request, pk, data):
         "diario_form": diario_form, "e_estagiario": e_estagiario, "pode_lancar": pode_lancar,
         "futuro": dia > hoje, "pode_planejar": pode_planejar, "plano_form": plano_form,
         "ausencia_form": AusenciaForm(initial={"data": dia}), "previsao": _previsao(estagio),
-        "horarios_form": horarios_form,
+        "horarios_form": horarios_form, "hoje_data": hoje,
+        "pode_ver_atestado": bool(reg and reg.justificativa and reg.justificativa.pode_ver(user)),
         "historico": estagio.historico_registros.filter(data=dia).select_related("usuario"),
     })
 
@@ -443,6 +446,19 @@ def validar_registro(request, pk):
     status = {"confirmar": Registro.Confirmacao.CONFIRMADA, "contestar": Registro.Confirmacao.CONTESTADA}.get(acao)
     if not status:
         raise Http404
+    j = reg.justificativa
+    if j and j.pendente:
+        if not j.pode_decidir(request.user):
+            messages.error(request, "Este dia tem um atestado em análise pela escola.")
+            return redirect(destino_seguro(request, estagio.get_absolute_url()))
+        if status == Registro.Confirmacao.CONTESTADA:
+            messages.info(request, "Este dia tem atestado: para recusar, escreva o motivo no parecer.")
+            return redirect(j)
+        from ..atestados import decidir
+
+        decidir(j, request.user, aceitar=True, parecer=request.POST.get("obs", "").strip(), request=request)
+        messages.success(request, f"Atestado aceito: {len(j.dias)} dia(s) como ausência justificada.")
+        return redirect(destino_seguro(request, estagio.get_absolute_url()))
     reg.confirmar(request.user, status, request.POST.get("obs", "").strip())
     reg.anotar(request.user, HistoricoRegistro.Acao.VALIDACAO, request).save()
     texto = "confirmou" if status == Registro.Confirmacao.CONFIRMADA else "contestou"

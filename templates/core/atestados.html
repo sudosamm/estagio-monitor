@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Atestados{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Atestados e comprovantes</h1><p>Documentos que os estagiários enviaram para justificar faltas. Aceitos, os dias viram ausência justificada e não contam no limite de faltas.</p></div></div>
+<div class="grade grade-lado">
+  <div class="card destaque"><div class="card-cab"><h2>Aguardando análise</h2><span class="selo PENDENTE">{{ pendentes|length }}</span></div>
+    <ul class="lista">{% for j in pendentes %}<li><a class="cresce pessoa" href="{{ j.get_absolute_url }}">{% avatar j.estagio.estagiario "sm verde" %}<span><strong>{{ j.estagio.estagiario }}</strong><small>{{ j.get_tipo_display }} · {{ j.periodo_display }} · {{ j.dias|length }} dia{{ j.dias|length|pluralize }} · enviado {{ j.criado_em|date:"d/m H:i" }}</small></span></a><a class="btn sm" href="{{ j.get_absolute_url }}">Analisar</a></li>
+    {% empty %}<li class="vazio">Nenhum documento aguardando. 👍</li>{% endfor %}</ul>
+  </div>
+  <div class="card"><div class="card-cab"><h3>Já analisados</h3>
+      <span class="flex" style="gap:.3rem"><a class="btn sm {% if filtro %}sec{% endif %}" href="?">Todos</a><a class="btn sm {% if filtro != 'ACEITA' %}sec{% endif %}" href="?status=ACEITA">Aceitos</a><a class="btn sm {% if filtro != 'RECUSADA' %}sec{% endif %}" href="?status=RECUSADA">Recusados</a></span></div>
+    <ul class="lista compacta">{% for j in decididos %}<li><a class="cresce pessoa" href="{{ j.get_absolute_url }}"><span><strong>{{ j.estagio.estagiario }}</strong><small>{{ j.periodo_display }} · {{ j.decidido_por|default:"—" }}, {{ j.decidido_em|date:"d/m" }}</small></span></a><span class="selo {{ j.status }}">{{ j.get_status_display }}</span></li>
+    {% empty %}<li class="vazio">Nenhum ainda.</li>{% endfor %}</ul>
+  </div>
+</div>
+{% endblock %}

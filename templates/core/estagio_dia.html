@@ -26,11 +26,19 @@
           <dt>Validação</dt><dd>{{ registro.get_confirmacao_display }}{% if registro.confirmado_por %} — {{ registro.confirmado_por }} em {{ registro.confirmado_em|date:"d/m H:i" }}{% endif %}</dd>
           {% if registro.motivo %}<dt>Motivo</dt><dd class="quebra">{{ registro.motivo }}</dd>{% endif %}
           {% if registro.obs_supervisor %}<dt>Obs. supervisor</dt><dd class="quebra">{{ registro.obs_supervisor }}</dd>{% endif %}
+          {% if registro.justificativa and pode_ver_atestado %}<dt>Documento</dt><dd><a href="{{ registro.justificativa.get_absolute_url }}">{{ registro.justificativa.get_tipo_display }}</a> <span class="selo {{ registro.justificativa.status }}">{{ registro.justificativa.get_status_display }}</span></dd>
+          {% elif registro.justificativa %}<dt>Documento</dt><dd>Justificado com documento ({{ registro.justificativa.get_status_display|lower }})</dd>{% endif %}
         {% else %}
           <dt>Registro</dt><dd>Nenhum</dd>
         {% endif %}
       </dl>
-      {% if pode_lancar and registro and registro.confirmacao == "PENDENTE" %}
+      {% if e_estagiario and dia <= hoje_data and status.previsto and registro.situacao != "PRESENTE" and status.codigo != "ausencia_ok" and not registro.justificativa or e_estagiario and registro.situacao == "FALTA" and not registro.justificativa %}
+      <hr><p style="font-size:.9rem">Faltou por motivo de saúde ou compromisso oficial? Envie o comprovante: aceito, o dia não conta como falta.</p>
+      <a class="btn sec" href="{% url 'enviar_atestado' estagio.pk %}?data={{ dia|date:'Y-m-d' }}">{% icone "arquivo" %} Enviar atestado deste dia</a>
+      {% endif %}
+      {% if registro.justificativa.pendente and pode_ver_atestado and not e_estagiario %}
+      <hr><a class="btn" href="{{ registro.justificativa.get_absolute_url }}">{% icone "arquivo" %} Analisar o atestado</a>
+      {% elif pode_lancar and registro and registro.confirmacao == "PENDENTE" %}
       <hr>
       <form method="post" action="{% url 'validar_registro' registro.pk %}">{% csrf_token %}
         <input type="hidden" name="next" value="{{ request.path }}">

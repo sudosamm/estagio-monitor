@@ -20,7 +20,7 @@ CHAVE_SESSAO = "importacao_csv"
 def _opcoes_de(dados):
     return Opcoes(
         orientador=Usuario.objects.get(pk=dados["orientador"]), dias=dados["dias"],
-        horas_por_dia=Decimal(dados["horas_por_dia"]),
+        horas_por_dia=Decimal(dados["horas_por_dia"]) if dados.get("horas_por_dia") else None,
         entrada=time.fromisoformat(dados["entrada"]) if dados["entrada"] else None,
         saida_intervalo=time.fromisoformat(dados["saida_intervalo"]) if dados["saida_intervalo"] else None,
         volta_intervalo=time.fromisoformat(dados["volta_intervalo"]) if dados["volta_intervalo"] else None,
@@ -78,7 +78,7 @@ def importar_csv(request):
 
     form = ImportarCSVForm(request.POST or None, request.FILES or None, initial={
         "orientador": request.user if request.user.is_orientador else None,
-        "acompanhamento_desde": timezone.localdate(), "dias": [0, 1, 2, 3, 4], "horas_por_dia": "8",
+        "acompanhamento_desde": timezone.localdate(), "dias": [0, 1, 2, 3, 4],
     })
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
@@ -93,7 +93,7 @@ def importar_csv(request):
             form.add_error("arquivo", str(exc))
         else:
             opcoes = {
-                "orientador": d["orientador"].pk, "dias": sorted(d["dias"]), "horas_por_dia": str(d["horas_por_dia"]),
+                "orientador": d["orientador"].pk, "dias": sorted(d["dias"]), "horas_por_dia": str(d["horas_por_dia"]) if d.get("horas_por_dia") else "",
                 "entrada": _iso(d.get("horario_entrada")), "saida_intervalo": _iso(d.get("saida_intervalo")),
                 "volta_intervalo": _iso(d.get("volta_intervalo")), "saida": _iso(d.get("horario_saida")),
                 "acompanhamento_desde": _iso(d.get("acompanhamento_desde")),

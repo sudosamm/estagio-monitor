@@ -16,7 +16,7 @@ from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 
-from .models import CAMPOS_CONCEDENTE, Curso, Escala, Estagio, LocalEstagio, Usuario
+from .models import CAMPOS_CONCEDENTE, Curso, Escala, Estagio, LocalEstagio, Usuario, horas_dos_horarios
 from .services import criar_usuario, normalizar_nome, turma_para
 from .validators import cnpj_valido, cpf_valido, formatar_cnpj, formatar_cpf, so_digitos
 
@@ -34,7 +34,7 @@ COLUNAS = [
     ("data_fim", False, "Término previsto no termo (dd/mm/aaaa)"),
     ("horas_anteriores", False, "Horas já cumpridas antes do sistema"),
     ("dias", False, "Ex.: seg,ter ou seg-sex. Vazio = padrão da tela"),
-    ("horas_por_dia", False, "4, 6 ou 8. Vazio = padrão da tela"),
+    ("horas_por_dia", False, "Qualquer carga (ex.: 4, 5, 7). Vazio = pelos horários ou o da tela"),
     ("entrada", False, "HH:MM"),
     ("saida_intervalo", False, "HH:MM"),
     ("volta_intervalo", False, "HH:MM"),
@@ -173,7 +173,7 @@ def ler_csv(conteudo):
 class Opcoes:
     orientador: Usuario
     dias: list
-    horas_por_dia: Decimal
+    horas_por_dia: Decimal | None = None
     entrada: time = None
     saida_intervalo: time = None
     volta_intervalo: time = None
@@ -260,12 +260,19 @@ def _linha(n, d, op, usuario, r, senha_hash, concedentes, supervisores, cursos, 
 
     # escala (colunas do CSV ou padrão da tela)
     dias = _dias(d.get("dias", "")) or op.dias
-    horas = _decimal(d.get("horas_por_dia"), "horas_por_dia") or op.horas_por_dia
+    horas = _decimal(d.get("horas_por_dia"), "horas_por_dia")
     tem_horario = any(d.get(c) for c in ("entrada", "saida_intervalo", "volta_intervalo", "saida"))
     if tem_horario:
         turnos = [_hora(d.get(c), c) for c in ("entrada", "saida_intervalo", "volta_intervalo", "saida")]
+        horas = horas or horas_dos_horarios(*turnos)
+    elif not horas or horas == op.horas_por_dia:
+        turnos = [op.entrada, op.saida_intervalo, op.volta_intervalo, op.saida]
     else:
-        turnos = [op.entrada, op.saida_intervalo, op.volta_intervalo, op.saida] if horas == op.horas_por_dia else [None] * 4
+        turnos = [None] * 4
+    horas = horas or op.horas_por_dia or horas_dos_horarios(*turnos)
+    if not horas:
+        raise ErroImportacao("horas_por_dia: informe as horas por dia (ex.: 5 ou 7) ou os horários de entrada e saída, "
+                             "na planilha ou na tela de importação")
 
     # orientador
     login = d.get("orientador", "").strip().lower()
@@ -287,7 +294,7 @@ def _linha(n, d, op, usuario, r, senha_hash, concedentes, supervisores, cursos, 
         cursos[ck] = next((c for c in Curso.objects.all() if _chave(c.nome) == ck), None)
         if not cursos[ck]:
             cursos[ck] = Curso.objects.create(nome=nome_curso.upper() if nome_curso.isupper() else nome_curso,
-                                              carga_horaria=op.carga_cursos_novos, horas_por_dia_padrao=horas)
+                                              carga_horaria=op.carga_cursos_novos, horas_por_dia_padrao=horas)  # só referência interna
             r.cursos_novos.append(cursos[ck])
     curso = cursos[ck]
     ano_turma = d.get("ano_turma", "").strip()

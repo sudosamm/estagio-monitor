@@ -10,6 +10,12 @@ def globais(request):
         ctx["notificacoes_nao_lidas"] = user.notificacoes.filter(lida=False).count()
         ctx["CONFIG"] = Configuracao.atual()
         ctx["EMAIL_ATIVO"] = settings.EMAIL_ATIVO
+        if user.pode("painel"):
+            from .models import Justificativa
+            from .services import estagios_visiveis
+
+            ctx["atestados_pendentes"] = Justificativa.objects.filter(
+                status=Justificativa.Status.PENDENTE, estagio__in=estagios_visiveis(user)).count()
         if user.pode("candidaturas"):
             from .models import Candidatura
 

@@ -1,0 +1,5 @@
+{% load ui %}
+{% if atestados %}<div class="card"><h3>Documentos enviados</h3>
+  <ul class="lista compacta">{% for a in atestados %}<li><a class="cresce pessoa" href="{{ a.get_absolute_url }}"><span><strong>{{ a.periodo_display }}</strong><small>{{ a.get_tipo_display }}</small></span></a><span class="selo {{ a.status }}">{{ a.get_status_display }}</span></li>{% endfor %}</ul></div>
+{% else %}<div class="card"><h3>{% icone "chave" %} Quem vê o documento</h3>
+  <p style="font-size:.9rem">{% if CONFIG.atestados_supervisor %}Seu supervisor e a escola (orientador e coordenação){% else %}Só a escola (orientador e coordenação){% endif %}. Ele não aparece para mais ninguém e não vai para a folha de frequência.</p></div>{% endif %}

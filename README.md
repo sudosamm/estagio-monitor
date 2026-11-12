@@ -8,7 +8,7 @@ Sistema de acompanhamento de estágio para **orientadores**, **supervisores** e 
 
 | Perfil | Pode |
 |---|---|
-| **Orientador** | Painel do dia (quem está presente, ausente ou ainda não marcou presença); cadastro de estagiários e supervisores em lote; cadastro completo de concedentes (mesmos campos da ficha da SEDUC); carga horária por curso; dias e horários de estágio (4, 6 ou 8 h, com intervalo) com mudança a partir de uma data, individual ou em lote; feriados e eventos da escola; quem abriu e imprimiu a folha de frequência; agendar visitas e conversas; publicar arquivos; redefinir senhas; ajustar qualquer registro |
+| **Orientador** | Painel do dia (quem está presente, ausente ou ainda não marcou presença); cadastro de estagiários e supervisores em lote; cadastro completo de concedentes (mesmos campos da ficha da SEDUC); carga horária por curso; dias e horários de estágio (qualquer carga diária: 4, 5, 7 h…, com intervalo) com mudança a partir de uma data, individual ou em lote; feriados e eventos da escola; quem abriu e imprimiu a folha de frequência; agendar visitas e conversas; publicar arquivos; redefinir senhas; ajustar qualquer registro |
 | **Coordenador(a) de curso** | O mesmo que o orientador, só para os estágios dos cursos que coordena (sem curso marcado = todos): painel, estagiários, contas, concedentes, cursos, frequências e captação. **Não** agenda visitas, não muda dias/horários, não cadastra feriados e não publica arquivos gerais |
 | **Supervisor** | Ver os seus estagiários no dia; confirmar ou contestar presenças (uma a uma ou em lote); lançar um dia que o estagiário esqueceu; ver quem imprimiu a folha de frequência; completar o próprio perfil; banco de talentos (quando aberto); pedir visita ou conversa; mensagens e arquivos |
 | **Estagiário** | Marcar entrada, intervalo e saída; informar ausência (hoje, dias futuros ou até 7 dias atrás); planejar dias de reposição; ver a previsão de término mudar conforme preenche o calendário; imprimir a própria folha de frequência do mês; foto de perfil e, se habilitado, currículo; anotar como foi o dia; pedir visita ou conversa; tirar dúvidas; enviar e baixar arquivos |
@@ -39,7 +39,7 @@ O curso é sempre o mesmo; o que muda é a **turma de cada ano**. A turma de 202
 - **Estágios antigos:** quem já estava cadastrado ganhou a turma do seu curso no ano em que começou.
 
 ### Dias e horários
-- **Supervisor:** os horários são da concedente. Ele define dias, carga diária (4, 6 ou 8 h) e horários de cada estagiário, um por um (aba *Dias e horários* do estágio) ou vários de uma vez (*Dias e horários* no menu). O painel avisa quem ainda está sem horário definido.
+- **Supervisor:** os horários são da concedente. Ele define dias, carga diária (qualquer valor, como 4, 5, 7 ou 5h30, ou calculada pelos horários de entrada, intervalo e saída) e horários de cada estagiário, um por um (aba *Dias e horários* do estágio) ou vários de uma vez (*Dias e horários* no menu). O painel avisa quem ainda está sem horário definido.
 - **Estagiário:** marca entrada, intervalo e saída pelos botões ou **digita os horários do dia**, como na folha de papel (até 7 dias atrás). As horas do dia são calculadas pelos horários, e o supervisor confirma.
 - **Orientador:** muda só os **dias** em lote (ex.: “a partir de 16/11, segunda a sexta”). Cada estagiário mantém os horários que a concedente definiu.
 
@@ -65,6 +65,16 @@ Todo estágio precisa de **concedente** e **supervisor**, e o supervisor tem de 
 - **Trocar o supervisor do estagiário:** o supervisor só sai do estágio quando o orientador ou o coordenador coloca **outro no lugar**, pelo botão *Trocar supervisor* do estágio (ou ao editar o estágio). Nunca fica sem supervisor. Cada troca fica no histórico, e o novo supervisor, o anterior e o estagiário são avisados.
 - **Concedente desativada:** some dos cadastros, mas só pode ser desativada sem estagiários ativos. Dá para desativar junto as contas dos supervisores que só atuam nela. Aprovar uma nova candidatura dela na captação, ou importá-la pela planilha, reativa a concedente.
 - **Na importação (planilha ou CSV):** o supervisor fica vinculado à concedente da linha. Se a mesma pessoa já existir em outra concedente, a prévia avisa para você conferir.
+
+### Atestados e faltas justificadas
+O estagiário envia a **foto (ou PDF) do atestado** ou comprovante pelo botão *Enviar atestado* (na página do estágio, no aviso “Não vou poder ir” e na página de cada dia de falta). Ele informa o tipo (atestado médico, declaração de comparecimento, convocação oficial, outro), o primeiro e o último dia. Um atestado de 3 dias cobre os 3 de uma vez, pulando fins de semana e feriados.
+- Os dias de estágio do período ficam como **ausência em análise**. Faltas já lançadas também podem ser justificadas assim, até 30 dias depois.
+- **Quem analisa:** o orientador, a coordenação do curso e, se a opção estiver ligada em **Configurações** (*O supervisor da concedente também analisa os atestados*), o supervisor. Eles recebem um aviso, veem o documento e clicam em *Aceitar* ou *Recusar*. Para recusar, o motivo é obrigatório.
+- **Aceito:** os dias viram **ausência justificada** e não contam no limite de faltas nem nos pontos de atenção.
+- **Recusado:** os dias que já passaram viram **falta**, e os futuros voltam ao normal. O estagiário pode enviar outro documento.
+- Se o próprio orientador registrar um documento entregue em papel, ele já sai aceito.
+
+**Privacidade (LGPD):** atestado é dado de saúde. O documento só aparece para o estagiário e para quem pode decidir, não vai para a folha de frequência nem para os arquivos do estágio, e é baixado sem cache. As fotos são reduzidas e perdem os metadados (inclusive a localização do celular). O formulário lembra que o CID não é obrigatório e pode ser coberto. Se preferir que a concedente não veja atestados, desligue a opção do supervisor: ele passa a ver só que o dia foi justificado. A escola acompanha tudo em **Atestados** no menu, e os pendentes também aparecem no Painel e no resumo semanal.
 
 ### Histórico das marcações
 Toda mudança no registro de um dia fica guardada: **quem fez, quando e o que mudou**, com os horários de antes e depois (ex.: “marcou a entrada pelo botão às 07:58” e depois “digitou os horários: Entrada 07:58 → 07:30”).
@@ -200,6 +210,7 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Captação de concedentes | ✔ | ✔ |
 | Frequências impressas | ✔ | ✔ |
 | Relatório e exportação (PDF e planilha), resumo semanal, declaração de estágio | ✔ | ✔ (cursos que coordena) |
+| Analisar atestados (aceitar/recusar) | ✔ | ✔ (cursos que coordena) |
 | Agendar visitas | ✔ | — |
 | Mudar dias em lote (cada um mantém seus horários) | ✔ | — |
 | Mudar o ano de referência | ✔ | — |
@@ -293,7 +304,6 @@ static/             CSS e JS próprios, sem frameworks
 ```
 
 ## Ideias para as próximas versões
-- Faltas justificadas com atestado (foto), aceitas pelo supervisor ou orientador
 - Pasta de documentos por estagiário (TCE, plano de atividades, relatório final), com o que está faltando
 - Notificações no celular pelo app (Web Push), inclusive avisos do orientador para a turma
 - Painel de indicadores por curso e turma, e área de feedback do supervisor

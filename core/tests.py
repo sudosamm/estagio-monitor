@@ -187,6 +187,27 @@ class TurnosTests(Base):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.dados_escala()["saida_intervalo"].hour, 11)
 
+    def test_qualquer_carga_diaria(self):
+        for horas, saida, esperado in (("7", "16:00", 7), ("5", "14:00", 5), ("5,5", "14:30", Decimal("5.5"))):
+            form = EscalaForm(data=self._dados(horas_por_dia=horas, horario_saida=saida))
+            self.assertTrue(form.is_valid(), form.errors)
+            self.assertEqual(form.dados_escala()["horas_por_dia"], esperado)
+
+    def test_horas_calculadas_pelos_horarios(self):
+        form = EscalaForm(data=self._dados(horas_por_dia="", horario_saida="16:00"))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.dados_escala()["horas_por_dia"], 7)
+        form = EscalaForm(data=self._dados(horas_por_dia="", horario_entrada="13:00", saida_intervalo="",
+                                           volta_intervalo="", horario_saida="18:00"))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.dados_escala()["horas_por_dia"], 5)
+
+    def test_sem_horas_nem_horarios(self):
+        form = EscalaForm(data=self._dados(horas_por_dia="", horario_entrada="", saida_intervalo="", volta_intervalo="",
+                                           horario_saida=""))
+        self.assertFalse(form.is_valid())
+        self.assertIn("Informe as horas por dia", str(form.errors))
+
     def test_horarios_que_nao_somam_a_carga(self):
         form = EscalaForm(data=self._dados(horario_saida="16:00"))
         self.assertFalse(form.is_valid())
@@ -703,6 +724,23 @@ class SupervisorDaConcedenteTests(Base):
         self.assertEqual([(s, l) for s, l in r.supervisores_vinculados], [(self.sup, self.outro_local)])
         self.assertEqual(set(self.sup.concedentes.all()), {self.local, self.outro_local})
         self.assertEqual(Usuario.objects.filter(nome_completo="Sérgio Supervisor").count(), 1)
+
+
+    def test_importacao_com_horas_livres_ou_pelos_horarios(self):
+        from .importacao import Opcoes, importar
+
+        base = {"curso": "Informática", "data_inicio": "01/09/2026", "concedente_nome": "Empresa X",
+                "supervisor_nome": "Sérgio Supervisor"}
+        linhas = [(2, {**base, "estagiario_nome": "Ana Sete", "horas_por_dia": "7"}),
+                  (3, {**base, "estagiario_nome": "Bia Cinco", "entrada": "13:00", "saida": "18:00"}),
+                  (4, {**base, "estagiario_nome": "Caio Sem Horas"})]
+        r = importar(linhas, Opcoes(orientador=self.ori, dias=[0]), self.ori, confirmar=True)
+        self.assertIn("horas_por_dia: informe", r.erros[0][1])
+        r = importar(linhas[:2], Opcoes(orientador=self.ori, dias=[0], horas_por_dia=None), self.ori, confirmar=True)
+        self.assertTrue(r.confirmado, r.erros)
+        horas = dict(Escala.objects.filter(estagio__estagiario__nome_completo__in=["Ana Sete", "Bia Cinco"])
+                     .values_list("estagio__estagiario__nome_completo", "horas_por_dia"))
+        self.assertEqual(horas, {"Ana Sete": 7, "Bia Cinco": 5})
 
 
 class TurmasPorAnoTests(Base):
@@ -1551,3 +1589,136 @@ class DeclaracaoTests(Base):
         for u in (self.aluno, self.sup):
             self.entrar(u)
             self.assertEqual(self.client.get(reverse("declaracao_estagio", args=[self.est.pk])).status_code, 403)
+
+
+@override_settings(MEDIA_ROOT=settings.BASE_DIR / "data" / "teste-anexos")
+class AtestadoTests(Base):
+    def setUp(self):
+        super().setUp()
+        import shutil
+
+        self.addCleanup(shutil.rmtree, settings.BASE_DIR / "data" / "teste-anexos", ignore_errors=True)
+
+    def _foto(self, nome="atestado.png"):
+        buf = io.BytesIO()
+        Image.new("RGB", (3000, 2000), "white").save(buf, "PNG")
+        return SimpleUploadedFile(nome, buf.getvalue(), content_type="image/png")
+
+    def _enviar(self, quem=None, **kw):
+        self.entrar(quem or self.aluno)
+        dados = {"tipo": "ATESTADO", "data_inicio": "2026-11-09", "data_fim": "2026-11-10", "arquivo": self._foto()}
+        dados.update(kw)
+        return self.client.post(reverse("enviar_atestado", args=[self.est.pk]), dados, follow=True)
+
+    def test_envio_poe_os_dias_em_analise(self):
+        from .models import Justificativa
+
+        r = self._enviar(motivo="Gripe")
+        self.assertContains(r, "2 dias aguardando análise")
+        j = Justificativa.objects.get()
+        self.assertEqual((j.status, j.dias), ("PENDENTE", ["2026-11-09", "2026-11-10"]))
+        self.assertTrue(j.arquivo.name.endswith(".jpg"))  # foto convertida (sem metadados) e reduzida
+        with Image.open(j.arquivo.path) as img:
+            self.assertEqual(max(img.size), 2000)
+        regs = Registro.objects.filter(estagio=self.est).order_by("data")
+        self.assertEqual([(r.situacao, r.confirmacao, r.justificativa_id) for r in regs],
+                         [("AUSENCIA", "PENDENTE", j.pk)] * 2)
+        self.assertEqual(Notificacao.objects.filter(usuario__in=[self.sup, self.ori], link=j.get_absolute_url()).count(), 2)
+
+    def test_supervisor_aceita(self):
+        from .models import Justificativa
+
+        self._enviar()
+        j = Justificativa.objects.get()
+        self.entrar(self.sup)
+        self.assertContains(self.client.get(reverse("painel_supervisor")), "Atestados para analisar")
+        self.assertEqual(self.client.get(reverse("atestado_arquivo", args=[j.pk]))["Content-Type"], "image/jpeg")
+        self.client.post(reverse("decidir_atestado", args=[j.pk]), {"acao": "aceitar"})
+        j.refresh_from_db()
+        self.assertEqual(j.status, "ACEITA")
+        h = resumo_horas(self.est)
+        self.assertEqual((h["faltas"], h["ausencias"]), (0, 2))
+        self.assertEqual(set(Registro.objects.values_list("confirmacao", flat=True)), {"CONFIRMADA"})
+
+    def test_recusa_exige_motivo_e_vira_falta(self):
+        from .models import Justificativa
+
+        self._enviar(data_fim="2026-11-16")  # 9, 10 (passados) e 16 (futuro)
+        j = Justificativa.objects.get()
+        self.assertEqual(len(j.dias), 3)
+        self.entrar(self.ori)
+        r = self.client.post(reverse("decidir_atestado", args=[j.pk]), {"acao": "recusar"}, follow=True)
+        self.assertContains(r, "escreva o motivo")
+        self.client.post(reverse("decidir_atestado", args=[j.pk]), {"acao": "recusar", "parecer": "Data rasurada"})
+        j.refresh_from_db()
+        self.assertEqual(j.status, "RECUSADA")
+        self.assertEqual(list(Registro.objects.order_by("data").values_list("data", "situacao")),
+                         [(date(2026, 11, 9), "FALTA"), (date(2026, 11, 10), "FALTA")])
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="Data rasurada").exists())
+
+    def test_justifica_falta_ja_lancada(self):
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 9), situacao=Registro.Situacao.FALTA,
+                                confirmacao=Registro.Confirmacao.CONFIRMADA)
+        self._enviar(data_fim="")
+        reg = Registro.objects.get(data=date(2026, 11, 9))
+        self.assertEqual((reg.situacao, reg.confirmacao), ("AUSENCIA", "PENDENTE"))
+
+    def test_periodo_sem_dia_de_estagio(self):
+        r = self._enviar(data_inicio="2026-11-14", data_fim="2026-11-15")
+        self.assertContains(r, "Nenhum dia de estágio nesse período")
+
+    def test_arquivo_invalido_e_pdf(self):
+        from .models import Justificativa
+
+        r = self._enviar(arquivo=SimpleUploadedFile("a.txt", b"texto qualquer", content_type="text/plain"))
+        self.assertContains(r, "Formato não reconhecido")
+        self._enviar(arquivo=SimpleUploadedFile("a.pdf", b"%PDF-1.4 conteudo", content_type="application/pdf"))
+        self.assertTrue(Justificativa.objects.get().arquivo.name.endswith(".pdf"))
+
+    def test_escola_registra_ja_aceito(self):
+        from .models import Justificativa
+
+        self._enviar(quem=self.ori)
+        self.assertEqual(Justificativa.objects.get().status, "ACEITA")
+        self.assertEqual(resumo_horas(self.est)["ausencias"], 2)
+
+    def test_so_a_escola_quando_configurado(self):
+        from .models import Justificativa
+
+        c = Configuracao.atual()
+        c.atestados_supervisor = False
+        c.save()
+        self._enviar()
+        j = Justificativa.objects.get()
+        self.entrar(self.sup)
+        self.assertEqual(self.client.get(reverse("atestado_detalhe", args=[j.pk])).status_code, 403)
+        self.assertEqual(self.client.get(reverse("atestado_arquivo", args=[j.pk])).status_code, 403)
+        self.assertNotContains(self.client.get(reverse("painel_supervisor")), "Atestados para analisar")
+        reg = Registro.objects.first()
+        self.client.post(reverse("validar_registro", args=[reg.pk]), {"acao": "confirmar"})
+        reg.refresh_from_db()
+        self.assertEqual(reg.confirmacao, "PENDENTE")
+        self.client.post(reverse("confirmar_lote"), {"registros": [reg.pk]})
+        reg.refresh_from_db()
+        self.assertEqual(reg.confirmacao, "PENDENTE")
+        self.entrar(self.ori)
+        self.assertContains(self.client.get(reverse("atestados")), "Maria da Silva Souza")
+        self.assertContains(self.client.get(reverse("painel")), "1 atestado")
+
+    def test_outros_nao_veem(self):
+        from .models import Justificativa
+
+        self._enviar()
+        j = Justificativa.objects.get()
+        outro = _ativo(criar_usuario("Outro Aluno", Usuario.Papel.ESTAGIARIO))
+        self.entrar(outro)
+        self.assertEqual(self.client.get(reverse("atestado_arquivo", args=[j.pk])).status_code, 403)
+
+    def test_confirmar_o_dia_aceita_o_atestado(self):
+        from .models import Justificativa
+
+        self._enviar()
+        self.entrar(self.sup)
+        reg = Registro.objects.first()
+        self.client.post(reverse("validar_registro", args=[reg.pk]), {"acao": "confirmar"})
+        self.assertEqual(Justificativa.objects.get().status, "ACEITA")

@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
-from core.views import agenda, captacao, comum, estagio, frequencia, importacao, orientador, pwa, relatorios, supervisor
+from core.views import agenda, atestados, captacao, comum, estagio, frequencia, importacao, orientador, pwa, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
@@ -25,6 +25,11 @@ urlpatterns = [
     path("estagios/<int:pk>/presenca/", estagio.marcar_presenca, name="marcar_presenca"),
     path("estagios/<int:pk>/saida/", estagio.registrar_saida, name="registrar_saida"),
     path("estagios/<int:pk>/ausencia/", estagio.informar_ausencia, name="informar_ausencia"),
+    path("estagios/<int:pk>/atestado/", atestados.enviar_atestado, name="enviar_atestado"),
+    path("atestados/", atestados.atestados, name="atestados"),
+    path("atestados/<int:pk>/", atestados.atestado_detalhe, name="atestado_detalhe"),
+    path("atestados/<int:pk>/arquivo/", atestados.atestado_arquivo, name="atestado_arquivo"),
+    path("atestados/<int:pk>/decidir/", atestados.decidir_atestado, name="decidir_atestado"),
     path("estagios/<int:pk>/dia/<str:data>/", estagio.estagio_dia, name="estagio_dia"),
     path("estagios/<int:pk>/mensagens/", estagio.enviar_mensagem, name="enviar_mensagem"),
     path("estagios/<int:pk>/arquivos/", estagio.enviar_documento, name="enviar_documento"),

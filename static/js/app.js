@@ -4,7 +4,7 @@ document.addEventListener("click", (ev) => {
   document.querySelectorAll("details.drop[open]").forEach((d) => { if (!d.contains(ev.target)) d.removeAttribute("open"); });
 });
 document.addEventListener("submit", (ev) => {
-  const msg = ev.target.getAttribute("data-confirmar");
+  const msg = (ev.submitter && ev.submitter.dataset.confirmar) || ev.target.getAttribute("data-confirmar");
   if (msg && !window.confirm(msg)) { ev.preventDefault(); return; }
   const btn = ev.submitter;
   if (btn && !btn.dataset.semTrava) { setTimeout(() => { btn.disabled = true; }, 0); }
@@ -25,19 +25,32 @@ document.querySelectorAll("[data-filtrar]").forEach((input) => {
     document.querySelectorAll(input.dataset.filtrar + " label").forEach((l) => { l.hidden = !l.textContent.toLowerCase().includes(termo); });
   });
 });
-// carga de 4 horas não tem intervalo: esconde os campos de intervalo
-document.querySelectorAll("select[name$='horas_por_dia']").forEach((sel) => {
-  const campos = sel.form ? sel.form.querySelectorAll("input[data-intervalo]") : [];
-  const ajustar = () => {
-    const semIntervalo = sel.value === "4";
-    campos.forEach((i) => {
-      const c = i.closest(".campo");
-      if (c) c.hidden = semIntervalo;
-      if (semIntervalo) i.value = "";
-    });
+// horas por dia: livres (4, 5, 7, 5,5…). Com entrada e saída, calcula pelos horários;
+// carga de até 4 horas não tem intervalo, então os campos de intervalo somem.
+document.querySelectorAll("input[data-horas-dia]").forEach((campoHoras) => {
+  const form = campoHoras.form;
+  if (!form) return;
+  const pegar = (sufixo) => form.querySelector(`input[name$='${sufixo}']`);
+  const ent = pegar("horario_entrada"), si = pegar("saida_intervalo"), vi = pegar("volta_intervalo"), sai = pegar("horario_saida");
+  const intervalos = form.querySelectorAll("input[data-intervalo]");
+  const min = (i) => { if (!i || !i.value) return null; const [h, m] = i.value.split(":").map(Number); return h * 60 + m; };
+  let automatico = !campoHoras.value;
+  const ajustarIntervalo = () => {
+    const h = parseFloat((campoHoras.value || "").replace(",", "."));
+    const semIntervalo = h > 0 && h <= 4 && !(si && si.value) && !(vi && vi.value);
+    intervalos.forEach((i) => { const c = i.closest(".campo"); if (c) c.hidden = semIntervalo; });
   };
-  sel.addEventListener("change", ajustar);
-  ajustar();
+  const calcular = () => {
+    const e = min(ent), s = min(sai);
+    if (e == null || s == null || !automatico) return;
+    let total = s - e;
+    if (min(si) != null && min(vi) != null) total -= min(vi) - min(si);
+    if (total > 0) campoHoras.value = String(Math.round(total / 60 * 100) / 100).replace(".", ",");
+    ajustarIntervalo();
+  };
+  campoHoras.addEventListener("input", () => { automatico = !campoHoras.value; ajustarIntervalo(); });
+  [ent, si, vi, sai].forEach((i) => i && i.addEventListener("change", calcular));
+  ajustarIntervalo();
 });
 // copiar o valor de um campo
 document.querySelectorAll("[data-copiar]").forEach((btn) => {

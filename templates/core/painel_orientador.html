@@ -10,6 +10,9 @@
     {% if user|pode:"agenda" %}<a class="btn" href="{% url 'novo_agendamento' %}">{% icone "calendario" %} Agendar visita</a>{% endif %}
   </div>
 </div>
+{% if atestados_pendentes %}
+<a class="faixa-aviso" href="{% url 'atestados' %}">{% icone "arquivo" %}<span><strong>{{ atestados_pendentes }} atestado{{ atestados_pendentes|pluralize }}</strong> aguardando análise.</span><span class="btn sm">Analisar</span></a>
+{% endif %}
 {% if candidaturas_pendentes %}
 <a class="faixa-aviso" href="{% url 'captacao' %}?status=PENDENTE">{% icone "predio" %}<span><strong>{{ candidaturas_pendentes }} concedente{{ candidaturas_pendentes|pluralize }}</strong> aguardando análise na captação.</span><span class="btn sm">Analisar</span></a>
 {% endif %}

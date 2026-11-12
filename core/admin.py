@@ -85,3 +85,11 @@ class CandidaturaAdmin(admin.ModelAdmin):
 for m in (models.AvisoExterno, models.Curso, models.LocalEstagio, models.DiaSemEstagio, models.Agendamento, models.DiaPlanejado,
           models.Documento, models.Mensagem, models.Notificacao, models.Configuracao):
     admin.site.register(m)
+
+
+@admin.register(models.Justificativa)
+class JustificativaAdmin(admin.ModelAdmin):
+    list_display = ["estagio", "tipo", "data_inicio", "data_fim", "status", "criado_em", "decidido_por"]
+    list_filter = ["status", "tipo"]
+    search_fields = ["estagio__estagiario__nome_completo"]
+    raw_id_fields = ["estagio", "enviado_por", "decidido_por"]

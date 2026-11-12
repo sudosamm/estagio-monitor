@@ -49,6 +49,7 @@
       <div class="campo"><label style="color:inherit">Motivo</label><textarea name="motivo" rows="2" required placeholder="Ex.: consulta médica, prova na escola…"></textarea></div>
       <button class="btn sec" type="submit">Avisar supervisor e orientador</button>
     </form>
+    <p class="mt-1" style="font-size:.88rem">Tem atestado ou declaração? <a href="{% url 'enviar_atestado' estagio.pk %}">Envie a foto do documento</a>: aceito, o dia não conta como falta.</p>
   </details>
 {% else %}
   <h2>{{ estagio.estagiario.primeiro_nome }} hoje: {{ st.rotulo|default:"sem estágio previsto" }}</h2>

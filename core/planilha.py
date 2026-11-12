@@ -38,7 +38,7 @@ COLUNAS_ESTAGIARIOS = [
     ("data_fim", "Término previsto", False, "Data do termo de compromisso (dd/mm/aaaa).", 13, DATA),
     ("horas_anteriores", "Horas já cumpridas", False, "Horas feitas antes de começar a usar o sistema.", 11, None),
     ("dias", "Dias de estágio", False, "Ex.: seg-sex, seg,qua,sex. Vazio = padrão escolhido na tela de importação.", 14, None),
-    ("horas_por_dia", "Horas por dia", False, "4, 6 ou 8. Vazio = padrão da tela.", 9, None),
+    ("horas_por_dia", "Horas por dia", False, "Qualquer carga: 4, 5, 7, 8 (5,5 = 5h30). Vazio = calculada pelos horários ou a da tela.", 9, None),
     ("entrada", "Entrada", False, "HH:MM", 9, HORA),
     ("saida_intervalo", "Saída p/ intervalo", False, "HH:MM", 9, HORA),
     ("volta_intervalo", "Volta do intervalo", False, "HH:MM", 9, HORA),
@@ -99,7 +99,7 @@ def gerar_modelo(cursos=(), turmas=(), orientadores=()):
     listas = wb.create_sheet("Listas")
     colunas_listas = {
         "cursos": sorted(set(cursos)), "turmas": sorted(set(turmas)), "orientadores": sorted(set(orientadores)),
-        "tipos": ["Pública", "Privada"], "ufs": UFS, "horas": ["4", "6", "8"], "dias": DIAS_SUGERIDOS,
+        "tipos": ["Pública", "Privada"], "ufs": UFS, "dias": DIAS_SUGERIDOS,
     }
     refs = {}
     for i, (nome, valores) in enumerate(colunas_listas.items(), start=1):
@@ -147,8 +147,12 @@ def gerar_modelo(cursos=(), turmas=(), orientadores=()):
     lista(est, COLUNAS_ESTAGIARIOS, "curso", refs["cursos"])
     lista(est, COLUNAS_ESTAGIARIOS, "turma", refs["turmas"])
     lista(est, COLUNAS_ESTAGIARIOS, "orientador", refs["orientadores"])
-    lista(est, COLUNAS_ESTAGIARIOS, "horas_por_dia", refs["horas"], aviso=False,
-          mensagem="Use 4, 6 ou 8 horas por dia.")
+    idx_horas = [c[0] for c in COLUNAS_ESTAGIARIOS].index("horas_por_dia") + 1
+    dv = DataValidation(type="decimal", operator="between", formula1="0.5", formula2="12", allow_blank=True,
+                        errorStyle="stop", showErrorMessage=True)
+    dv.errorTitle, dv.error = "Horas por dia", "Digite as horas por dia em número, entre 0,5 e 12 (ex.: 4, 5, 7 ou 5,5)."
+    est.add_data_validation(dv)
+    dv.add(f"{get_column_letter(idx_horas)}2:{get_column_letter(idx_horas)}{LINHAS + 1}")
     lista(est, COLUNAS_ESTAGIARIOS, "dias", refs["dias"],
           mensagem="Formato livre aceito: seg, ter, qua, qui, sex, sab, dom, separados por vírgula ou com hífen (seg-sex).")
     lista(est, COLUNAS_ESTAGIARIOS, "concedente_nome", nomes_concedentes,

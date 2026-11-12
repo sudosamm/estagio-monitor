@@ -9,11 +9,10 @@ from django.utils.crypto import get_random_string
 
 from .models import (
     DIAS_SEMANA, Agendamento, Candidatura, Configuracao, Curso, DiaSemEstagio, Documento, Estagio, FolhaEnviada,
-    LocalEstagio, Mensagem, Registro, Turma, Usuario,
+    Justificativa, LocalEstagio, Mensagem, Registro, Turma, Usuario, horas_dos_horarios,
 )
 from .validators import limpar_cep, limpar_cnpj_ou_cpf, limpar_cpf
 
-HORAS_DIA = [("4", "4 horas"), ("6", "6 horas"), ("8", "8 horas")]
 MAX_FOTO_MB = 5
 MAX_CURRICULO_MB = 5
 
@@ -26,21 +25,21 @@ def horas_str(valor):
     return str(int(d)) if d == d.to_integral_value() else str(d.normalize())
 
 
-def campo_horas(label="Carga horária por dia", initial="8"):
-    return forms.TypedChoiceField(label=label, choices=HORAS_DIA, coerce=Decimal, initial=initial,
-                                  help_text="Acima de 4 horas há direito a intervalo.")
+def campo_horas(label="Horas por dia", required=True,
+                help_text="Qualquer carga: 4, 5, 6, 7, 8… (5,5 = 5h30). Com entrada e saída preenchidas, pode deixar "
+                          "vazio: é calculada pelos horários."):
+    return forms.DecimalField(
+        label=label, required=required, min_value=Decimal("0.5"), max_value=Decimal("12"), decimal_places=2,
+        help_text=help_text, localize=True,
+        widget=forms.TextInput(attrs={"inputmode": "decimal", "placeholder": "Ex.: 4, 5 ou 7", "size": 6,
+                                      "data-horas-dia": "1"}),
+    )
 
 
 def _ajustar_choices_horas(form, nome="horas_por_dia"):
-    """Garante que um valor antigo fora de 4/6/8 continue aparecendo no select."""
-    campo = form.fields.get(nome)
-    if not campo:
-        return
-    atual = horas_str(form.initial.get(nome) if form.initial.get(nome) is not None else campo.initial)
-    if atual is not None:
-        form.initial[nome] = atual
-        if atual not in {v for v, _ in campo.choices}:
-            campo.choices = [*campo.choices, (atual, f"{atual} horas")]
+    """Mostra '7' em vez de '7.00' no valor inicial."""
+    if nome in form.fields and form.initial.get(nome) is not None:
+        form.initial[nome] = horas_str(form.initial[nome]).replace(".", ",")
 
 
 def _minutos(t):
@@ -156,7 +155,8 @@ CAMPOS_ESCALA = ["dias", "horas_por_dia", "horario_entrada", "saida_intervalo", 
 
 class CamposEscalaMixin(forms.Form):
     dias = DiasField(initial=[0, 1])
-    horas_por_dia = campo_horas()
+    horas_por_dia = campo_horas(required=False)
+    horas_obrigatorias = True  # a importação aceita vazio (vale o da planilha)
     horario_entrada = forms.TimeField(label="Entrada", required=False, widget=HoraInput())
     saida_intervalo = forms.TimeField(label="Saída p/ intervalo", required=False, widget=HoraInput(attrs={"data-intervalo": "1"}))
     volta_intervalo = forms.TimeField(label="Volta do intervalo", required=False, widget=HoraInput(attrs={"data-intervalo": "1"}))
@@ -170,6 +170,13 @@ class CamposEscalaMixin(forms.Form):
         dados = super().clean()
         ent, si, vi, sai = (dados.get(k) for k in ("horario_entrada", "saida_intervalo", "volta_intervalo", "horario_saida"))
         horas = dados.get("horas_por_dia")
+        if "horas_por_dia" in self.fields and not horas and not self.errors.get("horas_por_dia"):
+            calculadas = horas_dos_horarios(ent, si, vi, sai) if bool(si) == bool(vi) else None
+            if calculadas:
+                dados["horas_por_dia"] = calculadas
+            elif self.horas_obrigatorias:
+                self.add_error("horas_por_dia", "Informe as horas por dia ou os horários de entrada e saída.")
+                return dados
         if bool(si) != bool(vi):
             self.add_error("volta_intervalo" if si else "saida_intervalo", "Informe a saída e a volta do intervalo.")
             return dados
@@ -194,7 +201,7 @@ class CamposEscalaMixin(forms.Form):
             "saida_intervalo": d.get("saida_intervalo"),
             "volta_intervalo": d.get("volta_intervalo"),
             "horario_saida": d.get("horario_saida"),
-            "horas_por_dia": d["horas_por_dia"],
+            "horas_por_dia": d.get("horas_por_dia"),
         }
 
 
@@ -425,7 +432,7 @@ class ConfiguracaoForm(FormularioModelo):
     class Meta:
         model = Configuracao
         fields = ["nome_escola", "municipio_escola", "ano_referencia", "cabecalho_folha", "logo_folha",
-                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
+                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "atestados_supervisor", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
                   "curriculos_habilitados", "banco_talentos_habilitado"]
         widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(),
                    "texto_captacao": forms.Textarea(attrs={"rows": 3})}
@@ -443,7 +450,7 @@ class ConfiguracaoForm(FormularioModelo):
 class CursoForm(FormularioModelo):
     class Meta:
         model = Curso
-        fields = ["nome", "carga_horaria", "horas_por_dia_padrao"]
+        fields = ["nome", "carga_horaria"]
 
 
 class TurmaForm(FormularioModelo):
@@ -700,10 +707,52 @@ class AusenciaForm(Formulario):
         return d
 
 
+class JustificativaForm(Formulario):
+    """Atestado ou comprovante de um ou mais dias."""
+
+    tipo = forms.ChoiceField(label="Tipo de documento", choices=Justificativa.Tipo.choices)
+    data_inicio = forms.DateField(label="Primeiro dia", widget=DataInput())
+    data_fim = forms.DateField(label="Último dia", widget=DataInput(), required=False,
+                               help_text="Vazio = só o primeiro dia. Ex.: atestado de 3 dias.")
+    arquivo = forms.FileField(
+        label="Foto ou PDF do documento",
+        widget=forms.ClearableFileInput(attrs={"accept": "image/*,application/pdf,.pdf"}),
+        help_text="Tire a foto com boa luz e o documento inteiro aparecendo. O código da doença (CID) não é "
+                  "obrigatório: você pode cobri-lo antes de fotografar.",
+    )
+    motivo = forms.CharField(label="Observação (opcional)", required=False, max_length=300,
+                             widget=forms.Textarea(attrs={"rows": 2, "placeholder": "Ex.: consulta às 9h, voltei à tarde"}))
+
+    DIAS_ATRAS = 30
+    DIAS_FRENTE = 60
+
+    def clean(self):
+        d = super().clean()
+        inicio, fim = d.get("data_inicio"), d.get("data_fim") or d.get("data_inicio")
+        if not inicio:
+            return d
+        hoje = timezone.localdate()
+        if fim < inicio:
+            self.add_error("data_fim", "O último dia não pode ser antes do primeiro.")
+        elif inicio < hoje - timedelta(days=self.DIAS_ATRAS):
+            self.add_error("data_inicio", f"Só dá para enviar documentos dos últimos {self.DIAS_ATRAS} dias. "
+                                          "Fale com o orientador.")
+        elif fim > hoje + timedelta(days=self.DIAS_FRENTE) or (fim - inicio).days > self.DIAS_FRENTE:
+            self.add_error("data_fim", f"Período longo demais (máximo de {self.DIAS_FRENTE} dias). Fale com o orientador.")
+        d["data_fim"] = fim
+        return d
+
+
+class DecisaoJustificativaForm(Formulario):
+    parecer = forms.CharField(label="Parecer", required=False, max_length=500,
+                              widget=forms.Textarea(attrs={"rows": 2, "placeholder": "Obrigatório para recusar. "
+                                                           "Ex.: documento ilegível, data não confere…"}))
+
+
 class PlanejarDiaForm(Formulario):
     """Estagiário avisa que vai estagiar num dia fora da escala (reposição) ou com outra carga."""
 
-    horas = campo_horas("Quantas horas vai estagiar")
+    horas = campo_horas("Quantas horas vai estagiar", help_text="")
     motivo = forms.CharField(label="Observação (opcional)", required=False, max_length=160,
                              widget=forms.TextInput(attrs={"placeholder": "Ex.: reposição do dia 20/11"}))
 
@@ -954,6 +1003,7 @@ class RecusarCandidaturaForm(Formulario):
 
 
 class ImportarCSVForm(CamposEscalaMixin, Formulario):
+    horas_obrigatorias = False
     arquivo = forms.FileField(label="Planilha", widget=forms.ClearableFileInput(attrs={"accept": ".xlsx,.csv,text/csv"}),
                               help_text="A planilha modelo preenchida (.xlsx) ou um CSV com uma linha por estagiário.")
     orientador = forms.ModelChoiceField(
@@ -976,6 +1026,8 @@ class ImportarCSVForm(CamposEscalaMixin, Formulario):
         super().__init__(*a, **kw)
         self.fields["dias"].label = "Dias de estágio (padrão)"
         self.fields["dias"].help_text = "Usados quando a coluna “Dias de estágio” estiver vazia."
+        self.fields["horas_por_dia"].help_text = ("Usadas nas linhas sem “Horas por dia” nem horários. Qualquer carga: "
+                                                  "4, 5, 7, 8… Vazio = cada linha precisa trazer as horas ou os horários.")
         self.fields["horario_entrada"].help_text = "Horários são opcionais: o supervisor da concedente define depois."
 
     def clean_arquivo(self):

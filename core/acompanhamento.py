@@ -125,7 +125,7 @@ def resumo_semanal(usuario, hoje=None):
     a_validar = dict(
         Registro.objects.filter(estagio__in=estagios, situacao=Registro.Situacao.PRESENTE,
                                 confirmacao=Registro.Confirmacao.PENDENTE, data__lt=hoje - timedelta(days=2))
-        .values_list("estagio").annotate(n=Count("pk"))
+        .exclude(justificativa__status="PENDENTE").values_list("estagio").annotate(n=Count("pk"))
     )
     for e in estagios:
         r = resumo_horas(e)
@@ -156,6 +156,9 @@ def resumo_semanal(usuario, hoje=None):
     s["visitas"] = list(agenda.filter(status=Agendamento.Status.AGENDADO, data_hora__gte=agora,
                                       data_hora__lt=agora + timedelta(days=7)).order_by("data_hora"))
     s["solicitacoes"] = list(agenda.filter(status=Agendamento.Status.SOLICITADO).order_by("criado_em"))
+    from .atestados import pendentes_para
+
+    s["atestados"] = pendentes_para(usuario, estagios)
     tem_algo = any(s[k] for k in s)
     return {"secoes": s, "total": len(estagios), "hoje": hoje, "desde": semana, "ate": ontem, "tem_algo": tem_algo}
 

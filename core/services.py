@@ -592,7 +592,7 @@ def horas_padrao(estagio, dia):
     if plano:
         return plano.horas
     esc = estagio.escala_em(dia)
-    return esc.horas_por_dia if esc else estagio.curso.horas_por_dia_padrao
+    return esc.horas_por_dia if esc else None
 
 
 def proximos_dias(estagio, quantidade=5, limite=None):

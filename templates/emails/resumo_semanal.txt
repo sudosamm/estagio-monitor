@@ -7,6 +7,9 @@ SEM REGISTRO DE PRESENÇA ({{ s.sem_registro|length }})
 {% endfor %}{% endif %}{% if s.faltas %}
 FALTAS NA SEMANA ({{ s.faltas|length }})
 {% for e, dias in s.faltas %}- {{ e.estagiario.nome_completo }}: {% for dia in dias %}{{ dia|date:"d/m" }}{% if not forloop.last %}, {% endif %}{% endfor %}
+{% endfor %}{% endif %}{% if s.atestados %}
+ATESTADOS AGUARDANDO ANÁLISE ({{ s.atestados|length }})
+{% for j in s.atestados %}- {{ j.estagio.estagiario.nome_completo }}: {{ j.get_tipo_display|lower }}, {{ j.periodo_display }}{% if site %} · {{ site }}{{ j.get_absolute_url }}{% endif %}
 {% endfor %}{% endif %}{% if s.a_validar %}
 PRESENÇAS HÁ MAIS DE 2 DIAS SEM VALIDAÇÃO DO SUPERVISOR ({{ s.a_validar|length }})
 {% for e, n in s.a_validar %}- {{ e.estagiario.nome_completo }}: {{ n }} dia{{ n|pluralize }} · supervisor(a) {{ e.supervisor.nome_completo|default:"não definido" }}

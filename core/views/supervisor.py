@@ -4,7 +4,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from ..models import HistoricoRegistro, Registro, Usuario
+from ..atestados import pendentes_para
+from ..models import HistoricoRegistro, Justificativa, Registro, Usuario
 from ..services import estagios_visiveis, notificar, status_hoje
 from .base import papel
 
@@ -23,9 +24,10 @@ def painel_supervisor(request):
             sem_horario.append(e)
     pendentes = Registro.objects.filter(
         estagio__in=estagios, confirmacao=Registro.Confirmacao.PENDENTE, data__lte=timezone.localdate(),
-    ).select_related("estagio__estagiario").order_by("-data")
+    ).exclude(justificativa__status=Justificativa.Status.PENDENTE).select_related("estagio__estagiario").order_by("-data")
     return render(request, "core/painel_supervisor.html", {"estagios": estagios, "pendentes": pendentes,
-                                                           "sem_horario": sem_horario})
+                                                           "sem_horario": sem_horario,
+                                                           "atestados": pendentes_para(request.user, estagios)})
 
 
 @supervisor_requerido
@@ -34,7 +36,7 @@ def confirmar_lote(request):
     ids = request.POST.getlist("registros")
     regs = Registro.objects.filter(
         pk__in=ids, estagio__supervisor=request.user, confirmacao=Registro.Confirmacao.PENDENTE
-    ).select_related("estagio__estagiario", "estagio__orientador")
+    ).exclude(justificativa__status=Justificativa.Status.PENDENTE).select_related("estagio__estagiario", "estagio__orientador")
     n = 0
     for reg in regs:
         reg.confirmar(request.user, Registro.Confirmacao.CONFIRMADA)

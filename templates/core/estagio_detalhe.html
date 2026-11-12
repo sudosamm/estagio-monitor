@@ -24,6 +24,7 @@
     {% else %}
       <a class="btn" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "mensagem" %} Pedir visita ou conversa</a>
     {% endif %}
+    {% if e_estagiario %}<a class="btn sec" href="{% url 'enviar_atestado' estagio.pk %}">{% icone "arquivo" %} Enviar atestado</a>{% endif %}
     {% if e_estagiario %}<a class="btn sec" href="{% url 'minhas_folhas' estagio.pk %}?mes={{ nav.atual|default:'' }}">{% icone "impressora" %} Folha de frequência</a>
     {% else %}<a class="btn sec" href="{% url 'folha_frequencia' estagio.pk %}?mes={{ nav.atual|default:'' }}" target="_blank" rel="noopener">{% icone "impressora" %} Folha de frequência</a>{% endif %}
     {% if e_orientador and horas.cumpridas %}<a class="btn {% if horas.pct < 100 %}sec{% endif %}" href="{% url 'declaracao_estagio' estagio.pk %}" target="_blank" rel="noopener" title="{% if horas.pct >= 100 %}Declaração de conclusão do estágio{% else %}Declaração de estágio em andamento{% endif %}">{% icone "arquivo" %} Declaração</a>{% endif %}
@@ -143,6 +144,10 @@
     </tbody>
   </table></div>
 </div>
+{% if atestados %}<div class="card">
+  <div class="card-cab"><h3>Atestados e comprovantes</h3>{% if e_estagiario or e_orientador %}<a class="btn sec sm" href="{% url 'enviar_atestado' estagio.pk %}">{% icone "mais" %} Enviar</a>{% endif %}</div>
+  <ul class="lista compacta">{% for a in atestados %}<li><a class="cresce pessoa" href="{{ a.get_absolute_url }}"><span><strong>{{ a.periodo_display }}</strong><small>{{ a.get_tipo_display }} · {{ a.dias|length }} dia{{ a.dias|length|pluralize }}{% if a.parecer %} · {{ a.parecer|truncatechars:60 }}{% endif %}</small></span></a><span class="selo {{ a.status }}">{{ a.get_status_display }}</span></li>{% endfor %}</ul>
+</div>{% endif %}
 <div class="card">
   <div class="card-cab"><h3>Histórico de marcações e alterações</h3><small>Quando cada horário foi marcado ou digitado, e para qual valor mudou.</small></div>
   {% with mostrar_dia=True %}{% include "core/_historico.html" %}{% endwith %}

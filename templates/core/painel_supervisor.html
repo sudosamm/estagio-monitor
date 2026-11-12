@@ -21,6 +21,8 @@
   </div>
   <div class="card laranja">
     <h2>Para confirmar</h2>
+    {% if atestados %}<div class="caixa-alerta" style="margin-bottom:.8rem"><strong>{% icone "arquivo" %} Atestados para analisar</strong>
+      <ul class="lista compacta mt-1">{% for j in atestados %}<li><span class="cresce"><strong>{{ j.estagio.estagiario.primeiro_nome }}</strong> · {{ j.get_tipo_display }} · {{ j.periodo_display }}</span><a class="btn sm" href="{{ j.get_absolute_url }}">Analisar</a></li>{% endfor %}</ul></div>{% endif %}
     {% if pendentes %}
     <form method="post" action="{% url 'confirmar_lote' %}">{% csrf_token %}
       <label class="flex" style="font-size:.85rem;margin-bottom:.5rem"><input type="checkbox" data-marcar-todos=".chk-reg"> Marcar todos</label>

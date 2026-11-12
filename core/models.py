@@ -435,6 +435,19 @@ class Escala(models.Model):
         return formatar_horario(self.horario_entrada, self.saida_intervalo, self.volta_intervalo, self.horario_saida)
 
 
+def horas_dos_horarios(entrada, saida_int, volta_int, saida):
+    """Horas entre entrada e saída, descontado o intervalo. None se faltar entrada/saída ou se não fechar."""
+    if not (entrada and saida):
+        return None
+    m = lambda t: t.hour * 60 + t.minute  # noqa: E731
+    minutos = m(saida) - m(entrada)
+    if saida_int and volta_int:
+        minutos -= m(volta_int) - m(saida_int)
+    if minutos <= 0:
+        return None
+    return (Decimal(minutos) / 60).quantize(Decimal("0.01"))
+
+
 def formatar_horario(entrada, saida_int, volta_int, saida):
     """'07:00–11:00 · 13:00–17:00' (dois turnos) ou '13:00–17:00'."""
     def h(t):
@@ -568,6 +581,8 @@ class Registro(models.Model):
     # localização no momento da marcação: {"lat", "lng", "precisao", "distancia"} ou {"erro": "..."}
     geo_entrada = models.JSONField("Localização da entrada", null=True, blank=True)
     geo_saida = models.JSONField("Localização da saída", null=True, blank=True)
+    justificativa = models.ForeignKey("Justificativa", null=True, blank=True, on_delete=models.SET_NULL,
+                                      related_name="registros", help_text="Atestado/comprovante que cobre este dia")
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
@@ -669,6 +684,85 @@ class Registro(models.Model):
             acao=getattr(self, "_acao", "") or "EXCLUIU", ip=getattr(self, "_ip", None),
             mudancas=[["Registro do dia", f"{self.get_situacao_display()} {self.horario_display}".strip(), "excluído"]])
         return super().delete(*args, **kwargs)
+
+
+def caminho_atestado(instance, filename):
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+    return f"atestados/{timezone.localdate():%Y/%m}/{get_random_string(20)}.{ext}"
+
+
+class Justificativa(models.Model):
+    """Atestado ou comprovante enviado pelo estagiário para justificar um ou mais dias de falta.
+
+    Os dias de estágio do período viram “ausência” aguardando análise. Aceito: ausência justificada (não conta como
+    falta). Recusado: os dias passados viram falta. Atestado é dado de saúde (LGPD): só quem decide vê o arquivo.
+    """
+
+    class Tipo(models.TextChoices):
+        ATESTADO = "ATESTADO", "Atestado médico"
+        COMPARECIMENTO = "COMPARECIMENTO", "Declaração de comparecimento (consulta, exame)"
+        OFICIAL = "OFICIAL", "Convocação ou documento oficial (justiça, alistamento, prova)"
+        OUTRO = "OUTRO", "Outro comprovante"
+
+    class Status(models.TextChoices):
+        PENDENTE = "PENDENTE", "Aguardando análise"
+        ACEITA = "ACEITA", "Aceito"
+        RECUSADA = "RECUSADA", "Recusado"
+
+    estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="justificativas")
+    tipo = models.CharField("Tipo de documento", max_length=16, choices=Tipo.choices, default=Tipo.ATESTADO)
+    data_inicio = models.DateField("Primeiro dia")
+    data_fim = models.DateField("Último dia")
+    motivo = models.TextField("Observação", blank=True)
+    arquivo = models.FileField(upload_to=caminho_atestado)
+    nome_original = models.CharField(max_length=255, blank=True)
+    dias = models.JSONField(default=list, help_text="Dias de estágio cobertos (AAAA-MM-DD)")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDENTE)
+    enviado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    criado_em = models.DateTimeField(auto_now_add=True)
+    decidido_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                     related_name="+")
+    decidido_em = models.DateTimeField(null=True, blank=True)
+    parecer = models.TextField("Parecer", blank=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "atestado / justificativa"
+        verbose_name_plural = "atestados / justificativas"
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} de {self.estagio.estagiario} ({self.periodo_display})"
+
+    def get_absolute_url(self):
+        return reverse("atestado_detalhe", args=[self.pk])
+
+    @property
+    def periodo_display(self):
+        if self.data_inicio == self.data_fim:
+            return f"{self.data_inicio:%d/%m/%Y}"
+        return f"{self.data_inicio:%d/%m} a {self.data_fim:%d/%m/%Y}"
+
+    @property
+    def datas(self):
+        return [date.fromisoformat(d) for d in self.dias]
+
+    @property
+    def eh_imagem(self):
+        return self.arquivo.name.lower().endswith((".jpg", ".jpeg", ".png"))
+
+    @property
+    def pendente(self):
+        return self.status == self.Status.PENDENTE
+
+    def pode_decidir(self, usuario):
+        """Escola (orientador, coordenação do curso, administrador) e, se a configuração permitir, o supervisor."""
+        e = self.estagio
+        if usuario.is_superuser or e.orientador_id == usuario.pk or usuario.coordena(e.curso_id):
+            return True
+        return e.supervisor_id == usuario.pk and Configuracao.atual().atestados_supervisor
+
+    def pode_ver(self, usuario):
+        return usuario.pk == self.estagio.estagiario_id or self.pode_decidir(usuario)
 
 
 class HistoricoRegistro(models.Model):
@@ -911,6 +1005,11 @@ class Configuracao(models.Model):
                   "atenção dos seus estagiários. Quem não quiser pode desligar em Meus dados.",
     )
     resumo_enviado_em = models.DateTimeField(null=True, blank=True, editable=False)
+    atestados_supervisor = models.BooleanField(
+        "O supervisor da concedente também analisa os atestados", default=True,
+        help_text="Desligado: só a escola (orientador, coordenação) vê o arquivo e decide; o supervisor vê apenas que o "
+                  "dia foi justificado. Atestados são dados de saúde: na dúvida, deixe só com a escola.",
+    )
     estagiarios_emitem_folha = models.BooleanField(
         "Estagiários emitem a própria folha de frequência", default=True,
         help_text="Desligado: o estagiário só baixa a folha que o orientador enviar para o mês.",
