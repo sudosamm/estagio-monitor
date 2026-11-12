@@ -13,7 +13,7 @@ from django.views.decorators.http import require_POST
 
 from ..forms import (
     AusenciaForm, DiarioForm, DocumentoForm, EscalaForm, EstagioForm, HorariosDiaForm, LancamentoForm, MensagemForm,
-    PlanejarDiaForm, TrocarSupervisorForm, horas_str,
+    PlanejarDiaForm, RevogarPresencaForm, TrocarSupervisorForm, horas_str,
 )
 from ..models import (
     DIAS_ABREV, Agendamento, Configuracao, DiaPlanejado, Documento, Escala, HistoricoRegistro, Registro, TrocaSupervisor,
@@ -78,7 +78,7 @@ def _avisar_previsao(request, estagio, antes):
 
 
 def _documentos_visiveis(estagio):
-    return Documento.objects.filter(
+    return Documento.objects.filter(tipo__isnull=True).filter(
         Q(estagio=estagio)
         | Q(estagio__isnull=True, orientador_id=estagio.orientador_id, curso__isnull=True)
         | Q(estagio__isnull=True, orientador_id=estagio.orientador_id, curso_id=estagio.curso_id)
@@ -108,7 +108,12 @@ def estagio_detalhe(request, pk):
         "emite_folha": estagio.estagiario_id != user.pk or Configuracao.atual().estagiarios_emitem_folha,
     }
     if aba == "visao":
+        from ..pasta import pasta_do_estagio
         from .frequencia import resumo_impressoes
+
+        quem = "ESTAGIARIO" if ctx["e_estagiario"] else "SUPERVISOR" if ctx["e_supervisor"] else None
+        ctx["pasta_falta"] = [i for i in pasta_do_estagio(estagio) if i.codigo in ("atrasado", "recusado", "pendente")
+                              and (quem is None or i.tipo.quem_envia == quem)]
 
         semanas = calendario_mes(estagio, ano, mes, limite)
         if ctx["e_orientador"] or ctx["e_supervisor"]:
@@ -136,8 +141,15 @@ def estagio_detalhe(request, pk):
         ctx["mensagens"] = _mensagens_visiveis(estagio, user)
         ctx["mensagem_form"] = MensagemForm()
     elif aba == "arquivos":
+        from ..forms import EntregaForm
+        from ..pasta import pasta_do_estagio, pode_enviar, resumo_pasta
+
         ctx["documentos"] = _documentos_visiveis(estagio)
         ctx["documento_form"] = DocumentoForm()
+        ctx["pasta"] = pasta_do_estagio(estagio)
+        ctx["pasta_resumo"] = resumo_pasta(ctx["pasta"])
+        ctx["pode_enviar_pasta"] = pode_enviar(user, estagio)
+        ctx["entrega_form"] = EntregaForm()
     elif aba == "agenda":
         ctx["agendamentos"] = estagio.agendamentos.select_related("solicitante").order_by("-criado_em")
     elif aba == "escalas":
@@ -326,6 +338,16 @@ def estagio_dia(request, pk, data):
                 )
                 return redirect(destino_seguro(request, request.path))
 
+    # ---- revogar a presença: imprevisto ou marcação por engano (supervisor/orientador, mesmo já confirmada;
+    # o estagiário só enquanto o supervisor não confirmou)
+    revogar_form = None
+    if reg and reg.situacao == Registro.Situacao.PRESENTE and (
+            pode_lancar or (e_estagiario and reg.confirmacao != Registro.Confirmacao.CONFIRMADA)):
+        revogar_form = RevogarPresencaForm(request.POST if "r-destino" in request.POST else None, prefix="r",
+                                           so_remover=not pode_lancar)
+        if request.method == "POST" and "r-destino" in request.POST and revogar_form.is_valid():
+            return _revogar_presenca(request, estagio, reg, revogar_form.cleaned_data, pode_lancar)
+
     # ---- o estagiário informa os horários do dia (como na folha de papel); o supervisor confirma
     hoje = timezone.localdate()
     horarios_form = None
@@ -378,10 +400,38 @@ def estagio_dia(request, pk, data):
         "diario_form": diario_form, "e_estagiario": e_estagiario, "pode_lancar": pode_lancar,
         "futuro": dia > hoje, "pode_planejar": pode_planejar, "plano_form": plano_form,
         "ausencia_form": AusenciaForm(initial={"data": dia}), "previsao": _previsao(estagio),
-        "horarios_form": horarios_form, "hoje_data": hoje,
+        "horarios_form": horarios_form, "hoje_data": hoje, "revogar_form": revogar_form,
         "pode_ver_atestado": bool(reg and reg.justificativa and reg.justificativa.pode_ver(user)),
         "historico": estagio.historico_registros.filter(data=dia).select_related("usuario"),
     })
+
+
+def _revogar_presenca(request, estagio, reg, dados, gestor):
+    user, dia, motivo = request.user, reg.data, dados["motivo"].strip()
+    antes = f"{reg.horario_display} · {horas_str(reg.horas)}h".strip(" ·")
+    if dados["destino"] == "remover":
+        reg._motivo_exclusao = motivo
+        reg.anotar(user, HistoricoRegistro.Acao.REVOGOU, request).delete()
+        resultado = "removida (o dia ficou sem registro)"
+    else:
+        ausencia = dados["destino"] == "ausencia"
+        reg.situacao = Registro.Situacao.AUSENCIA if ausencia else Registro.Situacao.FALTA
+        reg.horas = 0
+        reg.hora_chegada = reg.saida_intervalo = reg.volta_intervalo = reg.hora_saida = None
+        reg.motivo = motivo
+        reg.geo_entrada = reg.geo_saida = None
+        if gestor:
+            reg.confirmar(user, Registro.Confirmacao.CONFIRMADA, f"Presença revogada: {motivo}"[:500])
+        else:
+            reg.confirmacao = Registro.Confirmacao.PENDENTE
+        reg.anotar(user, HistoricoRegistro.Acao.REVOGOU, request).save()
+        resultado = ("trocada por ausência justificada" if ausencia and gestor
+                     else "trocada por ausência informada" if ausencia else "trocada por falta")
+    messages.success(request, f"Presença de {dia:%d/%m} {resultado}.")
+    notificar([estagio.estagiario, estagio.supervisor, estagio.orientador],
+              f"{user.primeiro_nome} revogou a presença de {estagio.estagiario.primeiro_nome} em {dia:%d/%m} ({antes}): "
+              f"{resultado}. Motivo: {motivo[:90]}", request.path, exceto=user)
+    return redirect(request.path)
 
 
 def _planejar_dia(request, estagio, dia, status, reg):

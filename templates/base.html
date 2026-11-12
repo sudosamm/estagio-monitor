@@ -61,6 +61,7 @@
         {% if user|pode:"escalas" %}<a href="{% url 'escala_lote' %}" class="{% if n == 'escala_lote' %}ativo{% endif %}">Alterar dias</a>{% endif %}
         {% if user|pode:"candidaturas" %}<a href="{% url 'captacao' %}" class="{% if n in 'captacao,captacao_detalhe' %}ativo{% endif %}">Captação{% if candidaturas_pendentes %} <span class="contador">{{ candidaturas_pendentes }}</span>{% endif %}</a>{% endif %}
         <a href="{% url 'frequencias' %}" class="{% if n == 'frequencias' %}ativo{% endif %}">Frequências</a>
+        <a href="{% url 'pasta_geral' %}" class="{% if n in 'pasta_geral,tipos_documento,tipo_documento_editar' %}ativo{% endif %}">Pasta</a>
         <a href="{% url 'atestados' %}" class="{% if n in 'atestados,atestado_detalhe' %}ativo{% endif %}">Atestados{% if atestados_pendentes %} <span class="contador">{{ atestados_pendentes }}</span>{% endif %}</a>
         {% if user|pode:"arquivos" %}<a href="{% url 'documentos_gerais' %}" class="{% if n == 'documentos_gerais' %}ativo{% endif %}">Arquivos</a>{% endif %}
         <a href="{% url 'usuarios' %}" class="{% if n in 'usuarios,editar_usuario,criar_supervisores,criar_orientador,criar_coordenador' %}ativo{% endif %}">Contas</a>

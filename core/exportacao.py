@@ -54,7 +54,7 @@ def gerar_planilha(linhas, tot, descricao, emitido_por, agora):
     colunas = ["Estagiário", "Matrícula", "Usuário", "Curso", "Turma", "Concedente", "Município", "Setor", "Supervisor",
                "Orientador", "Início", "Fim do termo", "Carga (h)", "Cumpridas (h)", "A validar (h)", "Faltam (h)",
                "% cumprido", "Presenças", "Ausências justificadas", "Faltas", "Dias sem registro", "Visitas realizadas",
-               "Previsão de término", "Situação", "Pontos de atenção"]
+               "Previsão de término", "Situação", "Documentos atrasados", "Pontos de atenção"]
     dados = []
     for l in linhas:
         e, r = l["e"], l["r"]
@@ -65,7 +65,7 @@ def gerar_planilha(linhas, tot, descricao, emitido_por, agora):
             e.orientador.nome_completo, e.data_inicio, e.data_fim, _num(r["total"]), _num(r["cumpridas"]),
             _num(r["pendentes"]), _num(r["faltam"]), _num(r["pct"]), r["presencas"], r["ausencias"], r["faltas"],
             l["sem_registro"], e.n_visitas, r["previsao_termino"] if e.ativo else None, l["situacao"],
-            "; ".join(l["motivos"]),
+            ", ".join(l["docs_atrasados"]), "; ".join(l["motivos"]),
         ])
     _aba(ws, colunas, dados, {"Pontos de atenção": 60, "Estagiário": 32})
 

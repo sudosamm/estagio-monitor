@@ -27,7 +27,16 @@ def painel_supervisor(request):
     ).exclude(justificativa__status=Justificativa.Status.PENDENTE).select_related("estagio__estagiario").order_by("-data")
     return render(request, "core/painel_supervisor.html", {"estagios": estagios, "pendentes": pendentes,
                                                            "sem_horario": sem_horario,
-                                                           "atestados": pendentes_para(request.user, estagios)})
+                                                           "atestados": pendentes_para(request.user, estagios),
+                                                           "documentos": _documentos_do_supervisor(estagios)})
+
+
+def _documentos_do_supervisor(estagios):
+    from ..pasta import pastas
+
+    todas = pastas(estagios)
+    return [(e, i) for e in estagios for i in todas[e.pk]
+            if i.tipo.quem_envia == "SUPERVISOR" and i.codigo in ("pendente", "atrasado", "recusado")]
 
 
 @supervisor_requerido

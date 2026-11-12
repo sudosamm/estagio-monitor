@@ -135,7 +135,10 @@ def declaracao_estagio(request, pk):
     concluido = r["pct"] >= 100
     ultimo = (estagio.registros.filter(situacao=Registro.Situacao.PRESENTE, confirmacao=Registro.Confirmacao.CONFIRMADA)
               .order_by("-data").values_list("data", flat=True).first())
+    from ..pasta import pasta_do_estagio
+
     return render(request, "core/declaracao.html", {
+        "docs_faltando": [i for i in pasta_do_estagio(estagio) if i.tipo.obrigatorio and i.codigo != "conferido"],
         "e": estagio, "r": r, "concluido": concluido, "encerrado": not estagio.ativo or concluido,
         "ultimo_dia": ultimo, "hoje": timezone.localdate(), "config": Configuracao.atual(),
     })

@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
-from core.views import agenda, atestados, captacao, comum, estagio, frequencia, importacao, orientador, pwa, relatorios, supervisor
+from core.views import agenda, atestados, captacao, comum, estagio, frequencia, importacao, orientador, pasta, pwa, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
@@ -80,6 +80,14 @@ urlpatterns = [
     path("dias-sem-estagio/importar/", orientador.importar_feriados, name="importar_feriados"),
     path("recessos/", orientador.recessos, name="recessos"),
     path("documentos/", orientador.documentos_gerais, name="documentos_gerais"),
+    path("documentos/pasta/", pasta.pasta_geral, name="pasta_geral"),
+    path("documentos/tipos/", pasta.tipos_documento, name="tipos_documento"),
+    path("documentos/tipos/<int:pk>/", pasta.tipos_documento, name="tipo_documento_editar"),
+    path("documentos/tipos/<int:pk>/modelo/", pasta.baixar_modelo, name="baixar_modelo"),
+    path("estagios/<int:pk>/pasta/<int:tipo_pk>/", pasta.enviar_para_pasta, name="enviar_para_pasta"),
+    path("estagios/<int:pk>/pasta/<int:tipo_pk>/papel/", pasta.entregue_em_papel, name="entregue_em_papel"),
+    path("documentos/pasta/papel/", pasta.entregue_em_papel_lote, name="entregue_em_papel_lote"),
+    path("arquivos/<int:pk>/conferir/", pasta.conferir_documento, name="conferir_documento"),
     # supervisor
     path("supervisao/", supervisor.painel_supervisor, name="painel_supervisor"),
     path("supervisao/confirmar/", supervisor.confirmar_lote, name="confirmar_lote"),

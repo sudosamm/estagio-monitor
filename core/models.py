@@ -682,7 +682,8 @@ class Registro(models.Model):
         HistoricoRegistro.objects.create(
             estagio_id=self.estagio_id, data=self.data, usuario=getattr(self, "_autor", None),
             acao=getattr(self, "_acao", "") or "EXCLUIU", ip=getattr(self, "_ip", None),
-            mudancas=[["Registro do dia", f"{self.get_situacao_display()} {self.horario_display}".strip(), "excluído"]])
+            mudancas=[["Registro do dia", f"{self.get_situacao_display()} {self.horario_display}".strip(), "excluído"]]
+            + ([["Motivo", "—", self._motivo_exclusao[:120]]] if getattr(self, "_motivo_exclusao", "") else []))
         return super().delete(*args, **kwargs)
 
 
@@ -779,6 +780,7 @@ class HistoricoRegistro(models.Model):
         LANCAMENTO = "LANCAMENTO", "lançou/ajustou o registro"
         VALIDACAO = "VALIDACAO", "validou"
         CANCELOU = "CANCELOU", "cancelou a ausência"
+        REVOGOU = "REVOGOU", "revogou a presença"
         CRIOU = "CRIOU", "criou o registro"
         ALTEROU = "ALTEROU", "alterou o registro"
         EXCLUIU = "EXCLUIU", "excluiu o registro"
@@ -891,7 +893,62 @@ def caminho_anexo(instance, filename):
     return f"{hoje:%Y/%m}/{filename}"
 
 
+class TipoDocumento(models.Model):
+    """Documento que cada estagiário precisa ter na pasta (TCE, plano de atividades, relatório final…)."""
+
+    class Momento(models.TextChoices):
+        INICIO = "INICIO", "No início do estágio"
+        FIM = "FIM", "No fim do estágio"
+        LIVRE = "LIVRE", "Sem prazo"
+
+    class Quem(models.TextChoices):
+        ESTAGIARIO = "ESTAGIARIO", "Estagiário"
+        SUPERVISOR = "SUPERVISOR", "Supervisor (concedente)"
+        ESCOLA = "ESCOLA", "Escola (orientador)"
+
+    nome = models.CharField(max_length=120)
+    descricao = models.TextField("Orientações", blank=True, help_text="Aparece para quem vai enviar. Ex.: assinado por "
+                                                                       "todos, em PDF ou foto legível.")
+    momento = models.CharField("Quando", max_length=6, choices=Momento.choices, default=Momento.INICIO)
+    prazo_dias = models.PositiveSmallIntegerField(
+        "Prazo (dias)", default=15,
+        help_text="No início: dias depois do início do estágio. No fim: dias depois do término previsto no termo.")
+    quem_envia = models.CharField("Quem envia", max_length=10, choices=Quem.choices, default=Quem.ESTAGIARIO)
+    obrigatorio = models.BooleanField("Obrigatório", default=True)
+    curso = models.ForeignKey(Curso, null=True, blank=True, on_delete=models.CASCADE, help_text="Vazio = todos os cursos")
+    modelo = models.FileField("Modelo para baixar (opcional)", upload_to="modelos/", blank=True,
+                              help_text="Ex.: o formulário do plano de atividades em branco.")
+    ativo = models.BooleanField("Em uso", default=True)
+    ordem = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["ordem", "nome"]
+        verbose_name = "tipo de documento"
+        verbose_name_plural = "tipos de documento"
+
+    def __str__(self):
+        return self.nome
+
+    def vale_para(self, estagio):
+        return self.ativo and (self.curso_id is None or self.curso_id == estagio.curso_id)
+
+    def prazo_para(self, estagio):
+        from datetime import timedelta
+
+        if self.momento == self.Momento.INICIO:
+            return max(estagio.data_inicio, estagio.acompanhamento_desde or estagio.data_inicio) + timedelta(
+                days=self.prazo_dias)
+        if self.momento == self.Momento.FIM and estagio.data_fim:
+            return estagio.data_fim + timedelta(days=self.prazo_dias)
+        return None
+
+
 class Documento(models.Model):
+    class Situacao(models.TextChoices):
+        ENVIADO = "ENVIADO", "Aguardando conferência"
+        APROVADO = "APROVADO", "Conferido"
+        RECUSADO = "RECUSADO", "Recusado"
+
     class Categoria(models.TextChoices):
         FREQUENCIA = "FREQUENCIA", "Folha de frequência"
         TERMO = "TERMO", "Termo / contrato"
@@ -913,6 +970,13 @@ class Documento(models.Model):
     enviado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="documentos_enviados")
     descricao = models.TextField("Descrição", blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
+    # pasta do estágio: entrega de um documento exigido, conferida pela escola
+    tipo = models.ForeignKey(TipoDocumento, null=True, blank=True, on_delete=models.SET_NULL, related_name="entregas")
+    situacao = models.CharField(max_length=10, choices=Situacao.choices, blank=True)
+    analisado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                      related_name="+")
+    analisado_em = models.DateTimeField(null=True, blank=True)
+    parecer = models.TextField(blank=True)
 
     class Meta:
         ordering = ["-criado_em"]

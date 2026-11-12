@@ -1722,3 +1722,169 @@ class AtestadoTests(Base):
         reg = Registro.objects.first()
         self.client.post(reverse("validar_registro", args=[reg.pk]), {"acao": "confirmar"})
         self.assertEqual(Justificativa.objects.get().status, "ACEITA")
+
+
+class RevogarPresencaTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.dia = date(2026, 11, 10)
+        self.reg = Registro.objects.create(estagio=self.est, data=self.dia, situacao=Registro.Situacao.PRESENTE,
+                                           horas=4, confirmacao=Registro.Confirmacao.CONFIRMADA)
+        self.url = reverse("estagio_dia", args=[self.est.pk, "2026-11-10"])
+
+    def test_supervisor_remove_presenca_confirmada(self):
+        self.entrar(self.sup)
+        self.assertContains(self.client.get(self.url), "Revogar esta presença")
+        r = self.client.post(self.url, {"r-destino": "remover", "r-motivo": ""})
+        self.assertContains(r, "obrigatório")
+        self.client.post(self.url, {"r-destino": "remover", "r-motivo": "Marcou e foi embora antes de começar"})
+        self.assertFalse(Registro.objects.filter(pk=self.reg.pk).exists())
+        h = HistoricoRegistro.objects.filter(data=self.dia).latest("em")
+        self.assertEqual(h.acao, "REVOGOU")
+        self.assertIn(["Motivo", "—", "Marcou e foi embora antes de começar"], h.mudancas)
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="revogou a presença").exists())
+        self.assertEqual(resumo_horas(self.est)["cumpridas"], 0)
+
+    def test_orientador_troca_por_ausencia_justificada_ou_falta(self):
+        self.entrar(self.ori)
+        self.client.post(self.url, {"r-destino": "ausencia", "r-motivo": "Passou mal e foi dispensado"})
+        self.reg.refresh_from_db()
+        self.assertEqual((self.reg.situacao, self.reg.confirmacao, self.reg.horas), ("AUSENCIA", "CONFIRMADA", 0))
+        self.reg.situacao = Registro.Situacao.PRESENTE
+        self.reg.horas = 4
+        self.reg.save()
+        self.client.post(self.url, {"r-destino": "falta", "r-motivo": "Não compareceu"})
+        self.reg.refresh_from_db()
+        self.assertEqual(self.reg.situacao, "FALTA")
+
+    def test_estagiario_so_desfaz_antes_da_confirmacao(self):
+        self.entrar(self.aluno)
+        self.assertNotContains(self.client.get(self.url), "Revogar esta presença")
+        self.client.post(self.url, {"r-destino": "remover", "r-motivo": "engano"})
+        self.assertTrue(Registro.objects.filter(pk=self.reg.pk).exists())
+        Registro.objects.filter(pk=self.reg.pk).update(confirmacao=Registro.Confirmacao.PENDENTE)
+        r = self.client.get(self.url)
+        self.assertContains(r, "Revogar esta presença")
+        self.assertNotContains(r, "Trocar por falta")
+        self.client.post(self.url, {"r-destino": "falta", "r-motivo": "engano"})  # opção não permitida
+        self.assertTrue(Registro.objects.filter(pk=self.reg.pk, situacao="PRESENTE").exists())
+        self.client.post(self.url, {"r-destino": "remover", "r-motivo": "Marquei no dia errado"})
+        self.assertFalse(Registro.objects.filter(pk=self.reg.pk).exists())
+
+
+@override_settings(MEDIA_ROOT=settings.BASE_DIR / "data" / "teste-anexos")
+class PastaDocumentosTests(Base):
+    def setUp(self):
+        super().setUp()
+        import shutil
+
+        from .models import TipoDocumento
+
+        self.addCleanup(shutil.rmtree, settings.BASE_DIR / "data" / "teste-anexos", ignore_errors=True)
+        TipoDocumento.objects.all().delete()
+        self.tce = TipoDocumento.objects.create(nome="TCE assinado", momento="INICIO", prazo_dias=5)
+        self.plano = TipoDocumento.objects.create(nome="Plano de atividades", momento="INICIO", prazo_dias=30,
+                                                  quem_envia="SUPERVISOR")
+        self.relatorio = TipoDocumento.objects.create(nome="Relatório final", momento="FIM", prazo_dias=10)
+
+    def _pasta(self):
+        from .pasta import pasta_do_estagio
+
+        return {i.tipo.nome: i.codigo for i in pasta_do_estagio(self.est)}
+
+    def _arquivo(self):
+        return SimpleUploadedFile("tce.pdf", b"%PDF-1.4 termo", content_type="application/pdf")
+
+    def test_situacao_por_prazo(self):
+        # início 02/11; hoje 11/11: TCE (5 dias) atrasado, plano (30 dias) pendente, relatório só no fim
+        self.assertEqual(self._pasta(), {"TCE assinado": "atrasado", "Plano de atividades": "pendente",
+                                         "Relatório final": "depois"})
+        self.est.data_fim = date(2026, 11, 10)
+        self.est.save()
+        self.assertEqual(self._pasta()["Relatório final"], "pendente")
+
+    def test_estagiario_envia_e_orientador_confere(self):
+        from .models import Documento
+
+        self.entrar(self.aluno)
+        r = self.client.get(self.est.get_absolute_url())
+        self.assertContains(r, "você precisa enviar")
+        self.assertContains(r, "TCE assinado (atrasado)")
+        self.assertNotContains(r, "Plano de atividades (")  # é o supervisor quem envia
+        self.client.post(reverse("enviar_para_pasta", args=[self.est.pk, self.tce.pk]), {"arquivo": self._arquivo()})
+        doc = Documento.objects.get(tipo=self.tce)
+        self.assertEqual(doc.situacao, "ENVIADO")
+        self.assertEqual(self._pasta()["TCE assinado"], "enviado")
+        self.assertTrue(Notificacao.objects.filter(usuario=self.ori, texto__contains="para conferência").exists())
+        self.entrar(self.ori)
+        self.assertContains(self.client.get(reverse("pasta_geral")), "Para conferir")
+        r = self.client.post(reverse("conferir_documento", args=[doc.pk]), {"acao": "recusar"}, follow=True)
+        self.assertContains(r, "escreva o que precisa ser corrigido")
+        self.client.post(reverse("conferir_documento", args=[doc.pk]), {"acao": "recusar", "parecer": "Falta assinatura"})
+        self.assertEqual(self._pasta()["TCE assinado"], "recusado")
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="Falta assinatura").exists())
+        self.entrar(self.aluno)
+        self.client.post(reverse("enviar_para_pasta", args=[self.est.pk, self.tce.pk]), {"arquivo": self._arquivo()})
+        self.entrar(self.ori)
+        novo = Documento.objects.filter(tipo=self.tce).latest("criado_em")
+        self.client.post(reverse("conferir_documento", args=[novo.pk]), {"acao": "aprovar"})
+        self.assertEqual(self._pasta()["TCE assinado"], "conferido")
+
+    def test_escola_envia_ja_conferido_e_supervisor_ve_o_que_falta(self):
+        self.entrar(self.ori)
+        self.client.post(reverse("enviar_para_pasta", args=[self.est.pk, self.tce.pk]), {"arquivo": self._arquivo()})
+        self.assertEqual(self._pasta()["TCE assinado"], "conferido")
+        self.entrar(self.sup)
+        r = self.client.get(reverse("painel_supervisor"))
+        self.assertContains(r, "Documentos que a escola precisa de você")
+        self.assertContains(r, "Plano de atividades")
+        from .models import Documento
+
+        doc = Documento.objects.get(tipo=self.tce)
+        self.assertEqual(self.client.post(reverse("conferir_documento", args=[doc.pk]), {"acao": "aprovar"}).status_code, 403)
+
+    def test_outro_estagiario_nao_envia(self):
+        outro = _ativo(criar_usuario("Outro Aluno", Usuario.Papel.ESTAGIARIO))
+        self.entrar(outro)
+        r = self.client.post(reverse("enviar_para_pasta", args=[self.est.pk, self.tce.pk]), {"arquivo": self._arquivo()})
+        self.assertEqual(r.status_code, 403)
+
+    def test_tipo_de_outro_curso_nao_aparece(self):
+        outro_curso = Curso.objects.create(nome="Enfermagem", carga_horaria=100)
+        self.plano.curso = outro_curso
+        self.plano.save()
+        self.assertNotIn("Plano de atividades", self._pasta())
+
+    def test_relatorio_e_resumo_mostram_atrasados(self):
+        from .acompanhamento import resumo_semanal
+
+        self.entrar(self.ori)
+        r = self.client.get(reverse("relatorio_turma", args=[self.turma.pk]))
+        self.assertIn("documentos da pasta atrasados: TCE assinado", dict(r.context["atencao"])[self.est])
+        self.assertEqual([i.tipo.nome for _, i in resumo_semanal(self.ori)["secoes"]["docs_atrasados"]], ["TCE assinado"])
+
+    def test_cadastro_de_tipos(self):
+        self.entrar(self.ori)
+        self.client.post(reverse("tipos_documento"), {"nome": "Seguro contra acidentes", "momento": "INICIO",
+                                                      "prazo_dias": "10", "quem_envia": "ESCOLA", "obrigatorio": "on",
+                                                      "ativo": "on", "ordem": "5"})
+        self.assertIn("Seguro contra acidentes", self._pasta())
+        self.entrar(self.sup)
+        self.assertEqual(self.client.get(reverse("tipos_documento")).status_code, 403)
+
+    def test_entregue_em_papel_individual_e_em_lote(self):
+        outro = _ativo(criar_usuario("Ana Lote", Usuario.Papel.ESTAGIARIO))
+        e2 = Estagio.objects.create(estagiario=outro, orientador=self.ori, curso=self.curso, turma=self.turma,
+                                    data_inicio=date(2026, 9, 1))
+        self.entrar(self.ori)
+        self.client.post(reverse("entregue_em_papel", args=[self.est.pk, self.plano.pk]))
+        self.assertEqual(self._pasta()["Plano de atividades"], "conferido")
+        self.client.post(reverse("entregue_em_papel_lote"), {"tipo": self.tce.pk, "estagios": [self.est.pk, e2.pk]})
+        self.assertEqual(self._pasta()["TCE assinado"], "conferido")
+        from .pasta import pasta_do_estagio
+
+        self.assertEqual({i.tipo.nome: i.codigo for i in pasta_do_estagio(e2)}["TCE assinado"], "conferido")
+        self.assertContains(self.client.get(self.est.get_absolute_url() + "?aba=arquivos"), "Em papel, na escola")
+        self.entrar(self.aluno)
+        r = self.client.post(reverse("entregue_em_papel", args=[self.est.pk, self.relatorio.pk]))
+        self.assertEqual(r.status_code, 403)

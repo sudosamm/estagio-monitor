@@ -159,6 +159,8 @@ def baixar_documento(request, pk):
     doc = get_object_or_404(Documento.objects.select_related("estagio"), pk=pk)
     if not doc.pode_ver(request.user):
         raise PermissionDenied
+    if not doc.arquivo:
+        raise Http404("Documento entregue em papel")
     try:
         arquivo = doc.arquivo.open("rb")
     except FileNotFoundError as exc:

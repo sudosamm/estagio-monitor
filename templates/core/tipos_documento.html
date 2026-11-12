@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Documentos exigidos{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><div class="migalha"><a href="{% url 'pasta_geral' %}">← Pasta de documentos</a></div><h1>Documentos exigidos na pasta</h1><p>O que cada estagiário precisa entregar, quem envia e até quando. Vale para todos os estágios (ou só um curso), inclusive os que já começaram.</p></div></div>
+<div class="grade grade-lado">
+  <div class="card"><div class="tabela-wrap"><table class="tabela">
+    <thead><tr><th>Documento</th><th>Quando</th><th>Quem envia</th><th>Entregas</th><th></th></tr></thead>
+    <tbody>{% for t in itens %}<tr{% if not t.ativo %} class="muted"{% endif %}>
+      <td><strong>{{ t.nome }}</strong>{% if not t.obrigatorio %} <span class="etiqueta">opcional</span>{% endif %}{% if not t.ativo %} <span class="etiqueta">fora de uso</span>{% endif %}{% if t.curso %}<small style="display:block">Só {{ t.curso }}</small>{% endif %}{% if t.modelo %}<small style="display:block">{% icone "arquivo" %} com modelo</small>{% endif %}</td>
+      <td>{{ t.get_momento_display }}{% if t.momento != "LIVRE" %}<small style="display:block">{{ t.prazo_dias }} dias {% if t.momento == "INICIO" %}após o início{% else %}após o término{% endif %}</small>{% endif %}</td>
+      <td>{{ t.get_quem_envia_display }}</td><td>{{ t.n }}</td>
+      <td><a class="btn sec sm" href="{% url 'tipo_documento_editar' t.pk %}">Editar</a></td></tr>
+    {% empty %}<tr><td colspan="5" class="vazio">Nenhum documento cadastrado.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="muted" style="font-size:.82rem">Para deixar de exigir um documento, desmarque “Em uso”: as entregas já feitas continuam guardadas.</p></div>
+  <div class="card destaque"><h3>{% if editando %}Editar {{ editando }}{% else %}Novo documento{% endif %}</h3>
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}{% include "core/_form.html" %}<div class="acoes"><button class="btn" type="submit">Salvar</button>{% if editando %}<a class="btn sec" href="{% url 'tipos_documento' %}">Cancelar</a>{% endif %}</div></form></div>
+</div>
+{% endblock %}

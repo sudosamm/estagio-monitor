@@ -9,7 +9,7 @@ from django.utils.crypto import get_random_string
 
 from .models import (
     DIAS_SEMANA, Agendamento, Candidatura, Configuracao, Curso, DiaSemEstagio, Documento, Estagio, FolhaEnviada,
-    Justificativa, LocalEstagio, Mensagem, Registro, Turma, Usuario, horas_dos_horarios,
+    Justificativa, LocalEstagio, Mensagem, Registro, TipoDocumento, Turma, Usuario, horas_dos_horarios,
 )
 from .validators import limpar_cep, limpar_cnpj_ou_cpf, limpar_cpf
 
@@ -812,6 +812,25 @@ class LancamentoForm(FormularioModelo):
         return d
 
 
+class RevogarPresencaForm(Formulario):
+    """Desfaz uma presença (mesmo já confirmada) quando houve imprevisto ou engano."""
+
+    DESTINOS = [
+        ("remover", "Remover o registro (marcado por engano, o dia fica sem registro)"),
+        ("ausencia", "Trocar por ausência justificada (imprevisto: passou mal, foi dispensado…)"),
+        ("falta", "Trocar por falta (não compareceu)"),
+    ]
+    destino = forms.ChoiceField(label="O que fazer", choices=DESTINOS, widget=forms.RadioSelect, initial="remover")
+    motivo = forms.CharField(label="Motivo", max_length=300, widget=forms.Textarea(attrs={"rows": 2}),
+                             help_text="Obrigatório. Fica no histórico do dia e vai no aviso às outras pessoas.")
+
+    def __init__(self, *a, so_remover=False, **kw):
+        super().__init__(*a, **kw)
+        if so_remover:  # estagiário: só desfaz a própria marcação ainda não confirmada
+            self.fields["destino"].choices = [self.DESTINOS[0], ("ausencia", "Trocar por ausência informada (o "
+                                                                 "supervisor confirma)")]
+
+
 class MensagemForm(FormularioModelo):
     class Meta:
         model = Mensagem
@@ -830,6 +849,30 @@ class DocumentoForm(FormularioModelo):
         if arq and arq.size > settings.TAMANHO_MAX_ANEXO_MB * 1024 * 1024:
             raise forms.ValidationError(f"O arquivo deve ter no máximo {settings.TAMANHO_MAX_ANEXO_MB} MB.")
         return arq
+
+
+class EntregaForm(Formulario):
+    arquivo = forms.FileField(label="Arquivo", widget=forms.ClearableFileInput(attrs={"accept": "image/*,application/pdf,.pdf,.doc,.docx,.odt"}))
+    observacao = forms.CharField(label="Observação (opcional)", required=False, max_length=300)
+
+    def clean_arquivo(self):
+        arq = self.cleaned_data["arquivo"]
+        if arq.size > settings.TAMANHO_MAX_ANEXO_MB * 1024 * 1024:
+            raise forms.ValidationError(f"O arquivo deve ter no máximo {settings.TAMANHO_MAX_ANEXO_MB} MB.")
+        return arq
+
+
+class TipoDocumentoForm(FormularioModelo):
+    class Meta:
+        model = TipoDocumento
+        fields = ["nome", "descricao", "momento", "prazo_dias", "quem_envia", "obrigatorio", "curso", "modelo", "ativo",
+                  "ordem"]
+        widgets = {"descricao": forms.Textarea(attrs={"rows": 2})}
+        labels = {"ordem": "Ordem na lista"}
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.fields["curso"].empty_label = "Todos os cursos"
 
 
 class DocumentoGeralForm(DocumentoForm):

@@ -21,6 +21,8 @@
   </div>
   <div class="card laranja">
     <h2>Para confirmar</h2>
+    {% if documentos %}<div class="caixa-info" style="margin-bottom:.8rem"><strong>{% icone "maleta" %} Documentos que a escola precisa de você</strong>
+      <ul class="lista compacta mt-1">{% for e, i in documentos %}<li><span class="cresce"><strong>{{ e.estagiario.primeiro_nome }}</strong> · {{ i.tipo.nome }}{% if i.codigo == "atrasado" %} <span class="selo pasta-atrasado">atrasado</span>{% elif i.codigo == "recusado" %} <span class="selo pasta-recusado">recusado</span>{% elif i.prazo %} · até {{ i.prazo|date:"d/m" }}{% endif %}</span><a class="btn sm" href="{% url 'estagio_detalhe' e.pk %}?aba=arquivos#pasta">Enviar</a></li>{% endfor %}</ul></div>{% endif %}
     {% if atestados %}<div class="caixa-alerta" style="margin-bottom:.8rem"><strong>{% icone "arquivo" %} Atestados para analisar</strong>
       <ul class="lista compacta mt-1">{% for j in atestados %}<li><span class="cresce"><strong>{{ j.estagio.estagiario.primeiro_nome }}</strong> · {{ j.get_tipo_display }} · {{ j.periodo_display }}</span><a class="btn sm" href="{{ j.get_absolute_url }}">Analisar</a></li>{% endfor %}</ul></div>{% endif %}
     {% if pendentes %}

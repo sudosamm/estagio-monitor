@@ -10,6 +10,12 @@ FALTAS NA SEMANA ({{ s.faltas|length }})
 {% endfor %}{% endif %}{% if s.atestados %}
 ATESTADOS AGUARDANDO ANÁLISE ({{ s.atestados|length }})
 {% for j in s.atestados %}- {{ j.estagio.estagiario.nome_completo }}: {{ j.get_tipo_display|lower }}, {{ j.periodo_display }}{% if site %} · {{ site }}{{ j.get_absolute_url }}{% endif %}
+{% endfor %}{% endif %}{% if s.docs_conferir %}
+DOCUMENTOS DA PASTA PARA CONFERIR ({{ s.docs_conferir|length }})
+{% for e, i in s.docs_conferir %}- {{ e.estagiario.nome_completo }}: {{ i.tipo.nome }}
+{% endfor %}{% endif %}{% if s.docs_atrasados %}
+DOCUMENTOS DA PASTA ATRASADOS ({{ s.docs_atrasados|length }})
+{% for e, i in s.docs_atrasados %}- {{ e.estagiario.nome_completo }}: {{ i.tipo.nome }}{% if i.codigo == "recusado" %} (recusado, aguardando reenvio){% elif i.prazo %} (prazo {{ i.prazo|date:"d/m" }}){% endif %} · envia: {{ i.tipo.get_quem_envia_display|lower }}
 {% endfor %}{% endif %}{% if s.a_validar %}
 PRESENÇAS HÁ MAIS DE 2 DIAS SEM VALIDAÇÃO DO SUPERVISOR ({{ s.a_validar|length }})
 {% for e, n in s.a_validar %}- {{ e.estagiario.nome_completo }}: {{ n }} dia{{ n|pluralize }} · supervisor(a) {{ e.supervisor.nome_completo|default:"não definido" }}

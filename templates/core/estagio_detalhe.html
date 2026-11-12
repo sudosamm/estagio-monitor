@@ -41,6 +41,7 @@
 </nav>
 
 {% if aba == "visao" %}
+{% if pasta_falta %}<a class="faixa-aviso" href="?aba=arquivos#pasta">{% icone "arquivo" %}<span><strong>Pasta do estágio:</strong> {% if e_estagiario or e_supervisor %}você precisa enviar{% else %}faltam{% endif %} {% for i in pasta_falta %}{{ i.tipo.nome }}{% if i.codigo == "atrasado" %} (atrasado){% elif i.codigo == "recusado" %} (recusado){% elif i.prazo %} (até {{ i.prazo|date:"d/m" }}){% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}.</span><span class="btn sm">Enviar</span></a>{% endif %}
 <div class="grade grade-lado">
   <div>
     {% include "core/_hoje.html" %}
@@ -178,9 +179,44 @@
 </div>
 
 {% elif aba == "arquivos" %}
+{% if pasta %}
+<div class="card" id="pasta">
+  <div class="card-cab"><h2>{% icone "maleta" %} Pasta do estágio</h2><span class="muted" style="font-size:.85rem">{{ pasta_resumo.conferidos }} de {{ pasta_resumo.total }} obrigatório{{ pasta_resumo.total|pluralize }} conferido{{ pasta_resumo.total|pluralize }}</span></div>
+  <ul class="lista pasta">
+  {% for i in pasta %}
+    <li>
+      <span class="cresce"><strong>{{ i.tipo.nome }}</strong>{% if not i.tipo.obrigatorio %} <span class="etiqueta">opcional</span>{% endif %}
+        <small style="display:block">Envia: {{ i.tipo.get_quem_envia_display }}{% if i.prazo %} · prazo {{ i.prazo|date:"d/m/Y" }}{% elif i.tipo.momento == "FIM" %} · no fim do estágio{% endif %}{% if i.tipo.descricao %} · {{ i.tipo.descricao }}{% endif %}</small>
+        {% if i.doc %}<small style="display:block">{% if i.doc.arquivo %}<a href="{% url 'baixar_documento' i.doc.pk %}" target="_blank" rel="noopener">{% icone "arquivo" %} {{ i.doc.nome_original|default:"arquivo"|truncatechars:40 }}</a>{% else %}Em papel, na escola{% endif %} · {{ i.doc.enviado_por.primeiro_nome }}, {{ i.doc.criado_em|date:"d/m/Y" }}{% if i.doc.analisado_por %} · conferido por {{ i.doc.analisado_por.primeiro_nome }}{% endif %}{% if i.doc.descricao %} · “{{ i.doc.descricao|truncatechars:60 }}”{% endif %}</small>{% endif %}
+        {% if i.codigo == "recusado" and i.doc.parecer %}<small class="alerta-txt" style="display:block">Motivo: {{ i.doc.parecer }}</small>{% endif %}
+        {% if i.tipo.modelo %}<small style="display:block"><a href="{% url 'baixar_modelo' i.tipo.pk %}">{% icone "download" %} Baixar modelo</a></small>{% endif %}
+      </span>
+      <span class="selo pasta-{{ i.codigo }}">{{ i.rotulo }}</span>
+      {% if e_orientador and i.codigo == "enviado" %}
+        <details class="drop"><summary class="btn sm">Conferir</summary><div class="drop-menu" style="min-width:260px">
+          <form method="post" action="{% url 'conferir_documento' i.doc.pk %}">{% csrf_token %}
+            <button class="btn bloco sm" name="acao" value="aprovar" type="submit">{% icone "check" %} Está certo</button>
+            <textarea name="parecer" rows="2" placeholder="Para recusar: o que precisa corrigir" style="margin-top:.4rem"></textarea>
+            <button class="btn perigo bloco sm" name="acao" value="recusar" type="submit">{% icone "x" %} Recusar</button></form></div></details>
+      {% endif %}
+      {% if pode_enviar_pasta and i.codigo != "conferido" %}
+        <details class="drop"><summary class="btn sec sm">{% icone "upload" %} {% if i.doc %}Reenviar{% else %}Enviar{% endif %}</summary><div class="drop-menu" style="min-width:280px">
+          <form method="post" action="{% url 'enviar_para_pasta' estagio.pk i.tipo.pk %}" enctype="multipart/form-data">{% csrf_token %}
+            <input type="file" name="arquivo" required accept="image/*,application/pdf,.pdf,.doc,.docx,.odt">
+            <input type="text" name="observacao" maxlength="300" placeholder="Observação (opcional)" style="margin-top:.4rem">
+            <button class="btn bloco sm" type="submit" style="margin-top:.4rem">Enviar</button></form>
+          {% if e_orientador %}<form method="post" action="{% url 'entregue_em_papel' estagio.pk i.tipo.pk %}" style="margin-top:.5rem;border-top:1px solid var(--cinza-200);padding-top:.5rem">{% csrf_token %}
+            <button class="btn sec bloco sm" type="submit">Já está na escola, em papel</button></form>{% endif %}</div></details>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+  {% if e_orientador %}<p class="muted" style="font-size:.82rem">O que a escola envia já entra como conferido. Os documentos exigidos são definidos em <a href="{% url 'pasta_geral' %}">Pasta de documentos</a>.</p>{% endif %}
+</div>
+{% endif %}
 <div class="grade grade-lado">
   <div class="card">
-    <h2>Arquivos</h2>
+    <h2>Outros arquivos</h2>
     <ul class="lista">
     {% for d in documentos %}
       <li>

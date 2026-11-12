@@ -76,6 +76,29 @@ O estagiário envia a **foto (ou PDF) do atestado** ou comprovante pelo botão *
 
 **Privacidade (LGPD):** atestado é dado de saúde. O documento só aparece para o estagiário e para quem pode decidir, não vai para a folha de frequência nem para os arquivos do estágio, e é baixado sem cache. As fotos são reduzidas e perdem os metadados (inclusive a localização do celular). O formulário lembra que o CID não é obrigatório e pode ser coberto. Se preferir que a concedente não veja atestados, desligue a opção do supervisor: ele passa a ver só que o dia foi justificado. A escola acompanha tudo em **Atestados** no menu, e os pendentes também aparecem no Painel e no resumo semanal.
 
+### Revogar presença
+Para imprevistos, na página do dia há o quadro **Revogar esta presença**, com motivo obrigatório. Ele serve quando o estagiário marcou e não ficou, teve de sair ou a presença foi confirmada por engano. Há três opções:
+- **remover o registro:** o dia fica sem registro;
+- **trocar por ausência justificada;**
+- **trocar por falta.**
+
+O supervisor e o orientador podem revogar mesmo depois de confirmada. O estagiário só desfaz a própria marcação enquanto o supervisor não confirmou. Fica tudo no histórico do dia (quem, quando, o que era e o motivo), e as outras pessoas são avisadas. Se ele só saiu mais cedo, basta ajustar a hora de saída em *Ajustar registro*.
+
+### Pasta de documentos
+Cada estágio tem uma **pasta** (aba *Arquivos*) com os documentos exigidos. Para cada um, a pasta mostra quem envia, o prazo e a situação: pendente, atrasado, aguardando conferência, conferido ou recusado. Os documentos exigidos ficam em **Pasta → Documentos exigidos**. Já vêm sugeridos, e você pode editar:
+- TCE assinado (estagiário, até 15 dias após o início);
+- plano de atividades (supervisor, 30 dias);
+- relatório final (estagiário, 15 dias após o término);
+- avaliação pelo supervisor (15 dias após o término);
+- termo de realização (opcional).
+
+Cada documento pode valer só para um curso e ter um **modelo para baixar**.
+- O estagiário ou o supervisor envia o arquivo (foto, PDF ou Word), e o orientador **confere** (*Está certo*) ou **recusa** com o motivo. A pessoa é avisada e reenvia.
+- O que a escola envia já entra como conferido. Documento que já está na escola em papel: *Já está na escola, em papel*, individualmente ou em lote no quadro (ex.: todos os TCEs da turma).
+- O quadro **Pasta** no menu mostra um estagiário por linha e um documento por coluna, com filtros por turma e “só com pendências”, e a lista do que está para conferir.
+- O estagiário e o supervisor veem um aviso do que precisam enviar (na página do estágio e no painel do supervisor).
+- Documentos atrasados entram nos pontos de atenção do relatório, na planilha, no resumo semanal e num aviso na declaração de estágio.
+
 ### Histórico das marcações
 Toda mudança no registro de um dia fica guardada: **quem fez, quando e o que mudou**, com os horários de antes e depois (ex.: “marcou a entrada pelo botão às 07:58” e depois “digitou os horários: Entrada 07:58 → 07:30”).
 - Também ficam registrados ausências informadas e canceladas, ajustes do supervisor/orientador e validações.
@@ -211,6 +234,8 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Frequências impressas | ✔ | ✔ |
 | Relatório e exportação (PDF e planilha), resumo semanal, declaração de estágio | ✔ | ✔ (cursos que coordena) |
 | Analisar atestados (aceitar/recusar) | ✔ | ✔ (cursos que coordena) |
+| Conferir documentos da pasta, marcar entregue em papel | ✔ | ✔ (cursos que coordena) |
+| Definir os documentos exigidos na pasta | ✔ | — |
 | Agendar visitas | ✔ | — |
 | Mudar dias em lote (cada um mantém seus horários) | ✔ | — |
 | Mudar o ano de referência | ✔ | — |
@@ -299,12 +324,13 @@ core/views/         Telas por área (comum, estágio, orientador, supervisor, ag
 core/planilha.py    Planilha modelo (Excel) de importação: gerar e ler
 core/acompanhamento.py  Situação de cada estágio (relatório, exportação) e resumo semanal por e-mail
 core/exportacao.py  Planilha (.xlsx) com a situação dos estagiários
+core/atestados.py   Atestados: envio, dias cobertos, aceite/recusa
+core/pasta.py       Pasta do estágio: documentos exigidos, prazos e conferência
 templates/          HTML (visual inspirado no portal ce.gov.br)
 static/             CSS e JS próprios, sem frameworks
 ```
 
 ## Ideias para as próximas versões
-- Pasta de documentos por estagiário (TCE, plano de atividades, relatório final), com o que está faltando
 - Notificações no celular pelo app (Web Push), inclusive avisos do orientador para a turma
 - Painel de indicadores por curso e turma, e área de feedback do supervisor
 - Check-in por QR code mostrado pelo supervisor (confirma a chegada na hora)

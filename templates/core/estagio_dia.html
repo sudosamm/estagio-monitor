@@ -113,6 +113,16 @@
       {% endif %}
     </div>
     {% endif %}
+    {% if revogar_form %}
+    <div class="card">
+      <details{% if revogar_form.is_bound %} open{% endif %}>
+        <summary><strong>{% icone "x" %} Revogar esta presença</strong></summary>
+        <p class="muted" style="font-size:.85rem">{% if e_estagiario %}Marcou por engano ou teve de ir embora? Desfaça a marcação. Depois que o supervisor confirma, só ele ou o orientador podem revogar.{% else %}Para imprevistos: o estagiário marcou e não ficou, teve de sair, ou a presença foi confirmada por engano{% if registro.confirmacao == "CONFIRMADA" %} (vale mesmo já confirmada){% endif %}. Se ele só saiu mais cedo, ajuste a hora de saída em “Ajustar registro”.{% endif %}</p>
+        <form method="post" data-confirmar="Revogar a presença deste dia? Fica registrado no histórico.">{% csrf_token %}{% with form=revogar_form %}{% include "core/_form.html" %}{% endwith %}
+          <button class="btn perigo bloco" type="submit">Revogar presença</button></form>
+      </details>
+    </div>
+    {% endif %}
     <div class="card">
       <h3>Histórico deste dia</h3>
       <p class="muted" style="font-size:.85rem;margin-top:0">Quando cada horário foi marcado ou digitado e para qual valor mudou.</p>

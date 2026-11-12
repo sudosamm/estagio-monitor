@@ -47,6 +47,7 @@
 </div>
 <p class="dica">Confira os dados. Se precisar, clique no texto da declaração para ajustar antes de imprimir (a alteração não fica salva). Para o PDF, escolha <strong>Salvar como PDF</strong> e desmarque “cabeçalhos e rodapés”.</p>
 {% if not concluido %}<p class="dica aviso">A carga horária ainda não foi cumprida ({{ r.cumpridas|horas }} de {{ r.total|horas }}): a declaração informa as horas feitas até agora{% if e.ativo %} e que o estágio está em andamento{% endif %}.</p>{% endif %}
+{% if docs_faltando %}<p class="dica aviso">Pasta do estágio incompleta: {% for i in docs_faltando %}{{ i.tipo.nome }} ({{ i.rotulo|lower }}){% if not forloop.last %}; {% endif %}{% endfor %}.</p>{% endif %}
 {% if not e.estagiario.cpf %}<p class="dica aviso">O CPF do estagiário não está cadastrado. Preencha em Contas para que apareça na declaração.</p>{% endif %}
 
 <div class="papel-wrap"><div class="papel">

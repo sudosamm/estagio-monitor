@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Pasta de documentos{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><h1>Pasta de documentos</h1><p>{{ total }} estagiário{{ total|pluralize }}{% if ano %} · turmas que estagiam em {{ ano }}{% endif %} · o que cada um já entregou e o que falta.</p></div>
+  <div class="acoes">{% include "core/_seletor_ano.html" %}{% if user|pode:"arquivos" %}<a class="btn sec" href="{% url 'tipos_documento' %}">{% icone "engrenagem" %} Documentos exigidos</a>{% endif %}</div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="valor">{{ tot.completos }}</div><div class="rotulo">Pastas completas</div></div>
+  <div class="kpi azul"><div class="valor">{{ tot.enviados }}</div><div class="rotulo">Aguardando conferência</div></div>
+  <div class="kpi vermelho"><div class="valor">{{ tot.atrasados }}</div><div class="rotulo">Atrasados ou recusados</div></div>
+</div>
+<form class="filtros card" method="get">{% if ano %}<input type="hidden" name="ano" value="{{ ano }}">{% endif %}
+  <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ f.q }}" placeholder="Nome"></div>
+  <div><label class="rotulo">Turma</label><select name="turma"><option value="">Todas</option>{% for t in turmas %}<option value="{{ t.pk }}"{% if f.turma == t.pk|stringformat:"s" %} selected{% endif %}>{{ t.nome|default:t.curso.nome }} · {{ t.curso }}</option>{% endfor %}</select></div>
+  <div><label class="rotulo">Mostrar</label><select name="so"><option value="">Todos</option><option value="pendencias"{% if so == "pendencias" %} selected{% endif %}>Só com pendências</option></select></div>
+  <div><label class="rotulo">Situação</label><select name="situacao"><option value="">Ativos</option><option value="inativos"{% if f.situacao == "inativos" %} selected{% endif %}>Encerrados</option><option value="todos"{% if f.situacao == "todos" %} selected{% endif %}>Todos</option></select></div>
+  <button class="btn" type="submit">Filtrar</button>
+</form>
+{% if conferir %}
+<div class="card destaque"><h2>{% icone "check" %} Para conferir</h2>
+  <ul class="lista">{% for e, i in conferir %}<li><span class="cresce"><strong>{{ e.estagiario }}</strong> · {{ i.tipo.nome }}<small style="display:block">Enviado por {{ i.doc.enviado_por.primeiro_nome }} em {{ i.doc.criado_em|date:"d/m H:i" }}{% if i.doc.descricao %} · “{{ i.doc.descricao|truncatechars:60 }}”{% endif %}</small></span>
+    {% if i.doc.arquivo %}<a class="btn sec sm" href="{% url 'baixar_documento' i.doc.pk %}" target="_blank" rel="noopener">{% icone "arquivo" %} Abrir</a>{% endif %}
+    <form method="post" action="{% url 'conferir_documento' i.doc.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn sm" name="acao" value="aprovar" type="submit">{% icone "check" %} Está certo</button></form>
+    <a class="btn sec sm" href="{% url 'estagio_detalhe' e.pk %}?aba=arquivos#pasta">Recusar…</a></li>{% endfor %}</ul>
+</div>
+{% endif %}
+<div class="card">
+  {% if tipos %}
+  <div class="tabela-wrap"><table class="tabela quadro-pasta">
+    <thead><tr><th>Estagiário</th>{% for t in tipos %}<th title="{{ t.nome }}">{{ t.nome|truncatechars:24 }}<small>{% if t.momento == "INICIO" %}início{% elif t.momento == "FIM" %}fim{% else %}sem prazo{% endif %}{% if not t.obrigatorio %} · opcional{% endif %}</small></th>{% endfor %}</tr></thead>
+    <tbody>{% for l in linhas %}<tr>
+      <td><a class="pessoa" href="{% url 'estagio_detalhe' l.e.pk %}?aba=arquivos#pasta"><span><strong>{{ l.e.estagiario }}</strong><small>{{ l.r.conferidos }}/{{ l.r.total }} conferidos</small></span></a></td>
+      {% for i in l.celulas %}<td>{% if i %}<span class="ponto {{ i.codigo }}" title="{{ i.rotulo }}{% if i.prazo %} · prazo {{ i.prazo|date:'d/m/Y' }}{% endif %}">{% if i.codigo == "conferido" %}✓{% elif i.codigo == "enviado" %}…{% elif i.codigo == "atrasado" or i.codigo == "recusado" %}!{% elif i.codigo == "pendente" %}○{% else %}–{% endif %}</span>{% else %}<span class="muted">·</span>{% endif %}</td>{% endfor %}
+    </tr>{% empty %}<tr><td colspan="{{ tipos|length|add:1 }}" class="vazio">Nenhum estagiário{% if so %} com pendências{% endif %}.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% if linhas %}<details class="mt-1"><summary><strong>Marcar como entregue em papel para vários</strong> (ex.: os TCEs que já estão arquivados na escola)</summary>
+    <form method="post" action="{% url 'entregue_em_papel_lote' %}" class="mt-1 flex" style="gap:.5rem;flex-wrap:wrap;align-items:flex-end">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      {% for l in linhas %}<input type="hidden" name="estagios" value="{{ l.e.pk }}">{% endfor %}
+      <div><label class="rotulo">Documento</label><select name="tipo">{% for t in tipos %}<option value="{{ t.pk }}">{{ t.nome }}</option>{% endfor %}</select></div>
+      <button class="btn sec" type="submit" data-confirmar="Marcar como entregue em papel para os {{ linhas|length }} estagiários desta lista que ainda não entregaram?">Marcar para os {{ linhas|length }} da lista</button>
+    </form></details>{% endif %}
+  <p class="muted" style="font-size:.82rem">✓ conferido · … aguardando conferência · ! atrasado ou recusado · ○ pendente, dentro do prazo · – no fim do estágio ou opcional. Passe o mouse para ver o prazo.</p>
+  {% else %}<p class="vazio">Nenhum documento exigido. {% if user|pode:"arquivos" %}<a href="{% url 'tipos_documento' %}">Cadastre os documentos da pasta</a>.{% endif %}</p>{% endif %}
+</div>
+{% endblock %}

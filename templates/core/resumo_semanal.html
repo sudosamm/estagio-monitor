@@ -28,6 +28,11 @@
   {% if s.atestados %}<div class="card destaque"><h2>{% icone "arquivo" %} Atestados aguardando análise</h2>
     <ul class="lista">{% for j in s.atestados %}<li><a class="cresce pessoa" href="{{ j.get_absolute_url }}"><span><strong>{{ j.estagio.estagiario }}</strong><small>{{ j.get_tipo_display }} · {{ j.periodo_display }}</small></span></a><a class="btn sm" href="{{ j.get_absolute_url }}">Analisar</a></li>{% endfor %}</ul></div>{% endif %}
 
+  {% if s.docs_conferir or s.docs_atrasados %}<div class="card"><h2>{% icone "maleta" %} Pasta de documentos</h2>
+    <ul class="lista">{% for e, i in s.docs_conferir %}<li><a class="cresce pessoa" href="{% url 'estagio_detalhe' e.pk %}?aba=arquivos#pasta"><span><strong>{{ e.estagiario }}</strong><small>{{ i.tipo.nome }}</small></span></a><span class="selo pasta-enviado">para conferir</span></li>{% endfor %}
+    {% for e, i in s.docs_atrasados %}<li><a class="cresce pessoa" href="{% url 'estagio_detalhe' e.pk %}?aba=arquivos#pasta"><span><strong>{{ e.estagiario }}</strong><small>{{ i.tipo.nome }} · envia: {{ i.tipo.get_quem_envia_display|lower }}{% if i.prazo %} · prazo {{ i.prazo|date:"d/m" }}{% endif %}</small></span></a><span class="selo pasta-{{ i.codigo }}">{{ i.rotulo }}</span></li>{% endfor %}</ul>
+    <a class="btn sec sm" href="{% url 'pasta_geral' %}?so=pendencias">Ver o quadro completo</a></div>{% endif %}
+
   {% if s.a_validar %}<div class="card"><h2>{% icone "relogio" %} Presenças sem validação há mais de 2 dias</h2>
     <ul class="lista">{% for e, n in s.a_validar %}<li><a class="cresce pessoa" href="{{ e.get_absolute_url }}?aba=registros"><span><strong>{{ e.estagiario }}</strong><small>Supervisor(a): {{ e.supervisor|default:"não definido" }}</small></span></a><span class="selo aguardando">{{ n }}</span></li>{% endfor %}</ul></div>{% endif %}
 

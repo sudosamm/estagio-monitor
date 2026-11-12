@@ -33,9 +33,14 @@ def com_contagens(qs):
     )
 
 
-def situacao_estagio(e, hoje=None):
+def situacao_estagio(e, hoje=None, pasta=None):
     """Linha do relatório: {e, r (resumo_horas), sem_registro, situacao, motivos}. Precisa de com_contagens()."""
     hoje = hoje or timezone.localdate()
+    if pasta is None:
+        from .pasta import pasta_do_estagio
+
+        pasta = pasta_do_estagio(e, hoje)
+    docs_atrasados = [i.tipo.nome for i in pasta if i.tipo.obrigatorio and i.codigo in ("atrasado", "recusado")]
     ontem = hoje - timedelta(days=1)
     r = resumo_horas(e)
     sem_registro = 0
@@ -69,8 +74,10 @@ def situacao_estagio(e, hoje=None):
             motivos.append(f"{e.n_pendentes} presença{'s' if e.n_pendentes > 1 else ''} aguardando o supervisor")
         if not e.n_visitas:
             motivos.append("nenhuma visita ou conversa realizada")
+    if docs_atrasados:
+        motivos.append("documentos da pasta atrasados: " + ", ".join(docs_atrasados))
     return {"e": e, "r": r, "sem_registro": sem_registro, "situacao": situacao, "concluido": concluido,
-            "motivos": motivos}
+            "motivos": motivos, "docs_atrasados": docs_atrasados}
 
 
 def consolidar(estagios, hoje=None):
@@ -79,8 +86,11 @@ def consolidar(estagios, hoje=None):
     linhas, atencao = [], []
     tot = {"ativos": 0, "concluidos": 0, "faltas": 0, "sem_registro": 0, "pendentes": 0, "visitas": 0, "atrasados": 0,
            "pct": 0}
+    from .pasta import pastas
+
+    todas = pastas(estagios, hoje)
     for e in estagios:
-        linha = situacao_estagio(e, hoje)
+        linha = situacao_estagio(e, hoje, todas[e.pk])
         r = linha["r"]
         linhas.append(linha)
         if e.ativo:
@@ -159,6 +169,16 @@ def resumo_semanal(usuario, hoje=None):
     from .atestados import pendentes_para
 
     s["atestados"] = pendentes_para(usuario, estagios)
+    from .pasta import pastas
+
+    s["docs_conferir"], s["docs_atrasados"] = [], []
+    todas = pastas(estagios, hoje)
+    for e in estagios:
+        for i in todas[e.pk]:
+            if i.codigo == "enviado":
+                s["docs_conferir"].append((e, i))
+            elif i.tipo.obrigatorio and i.codigo in ("atrasado", "recusado"):
+                s["docs_atrasados"].append((e, i))
     tem_algo = any(s[k] for k in s)
     return {"secoes": s, "total": len(estagios), "hoje": hoje, "desde": semana, "ate": ontem, "tem_algo": tem_algo}
 
