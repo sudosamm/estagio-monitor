@@ -2044,3 +2044,35 @@ class MenuSecoesTests(Base):
         r = self.client.get(self.est.get_absolute_url())
         self.assertNotIn("MENU", r.context)
         self.assertContains(r, "Meu estágio")
+
+
+class IndicadoresTests(Base):
+    def test_frequencia_por_semana_e_por_turma(self):
+        from .indicadores import calcular
+
+        # escala seg/ter desde 02/11; hoje (mock) quarta 11/11 → dias previstos: 02, 03, 09, 10
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 2), situacao=Registro.Situacao.PRESENTE, horas=4,
+                                confirmacao=Registro.Confirmacao.CONFIRMADA)
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 3), situacao=Registro.Situacao.PRESENTE, horas=4)
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 9), situacao=Registro.Situacao.AUSENCIA,
+                                confirmacao=Registro.Confirmacao.CONFIRMADA)
+        d = calcular(self.ori, 2026, semanas=4)
+        self.assertEqual(d["geral"]["frequencia"], 50.0)  # 2 presenças em 4 dias previstos
+        semanas = {s["semana"]: s for s in d["tendencia"]}
+        self.assertEqual((semanas["2026-11-02"]["taxa"], semanas["2026-11-09"]["avisadas"], semanas["2026-11-09"]["faltas"]),
+                         (100.0, 1, 1))
+        self.assertIsNone(semanas["2026-10-19"]["taxa"])
+        turma = d["turmas"][0]
+        self.assertEqual((turma["ativos"], turma["frequencia"], turma["com_visita"]), (1, 50.0, 0.0))
+        self.assertEqual(d["situacoes"], [{"rotulo": "Em andamento", "n": 1, "pct": 100.0}])
+
+    def test_pagina_e_permissoes(self):
+        self.entrar(self.ori)
+        r = self.client.get(reverse("indicadores"), {"semanas": "12", "curso": self.curso.pk})
+        self.assertContains(r, "Frequência semana a semana")
+        self.assertContains(r, "dados-tendencia")
+        self.assertEqual(r.context["semanas"], 12)
+        outro = Curso.objects.create(nome="Enfermagem", carga_horaria=100)
+        self.assertContains(self.client.get(reverse("indicadores"), {"curso": outro.pk}), "Nenhum estagiário ativo")
+        self.entrar(self.sup)
+        self.assertEqual(self.client.get(reverse("indicadores")).status_code, 403)

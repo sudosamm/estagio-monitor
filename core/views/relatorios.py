@@ -142,3 +142,24 @@ def declaracao_estagio(request, pk):
         "e": estagio, "r": r, "concluido": concluido, "encerrado": not estagio.ativo or concluido,
         "ultimo_dia": ultimo, "hoje": timezone.localdate(), "config": Configuracao.atual(),
     })
+
+
+# ---------------------------------------------------------------- indicadores
+
+
+@orientador_requerido
+def indicadores(request):
+    from ..indicadores import calcular
+    from .orientador import contexto_ano
+
+    ano = ano_em_uso(request)
+    cursos = Curso.objects.all()
+    if request.user.is_coordenador and request.user.cursos_ids():
+        cursos = cursos.filter(pk__in=request.user.cursos_ids())
+    curso = cursos.filter(pk=request.GET["curso"]).first() if request.GET.get("curso", "").isdigit() else None
+    semanas = int(request.GET["semanas"]) if request.GET.get("semanas") in ("4", "8", "12", "26") else 8
+    dados = calcular(request.user, ano, curso, semanas)
+    return render(request, "core/indicadores.html", {
+        **contexto_ano(request, ano), "d": dados, "g": dados["geral"], "cursos": cursos, "curso": curso,
+        "semanas": semanas, "opcoes_semanas": [4, 8, 12, 26],
+    })

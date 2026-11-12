@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load ui static %}
+{% block titulo %}Indicadores{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><h1>Indicadores</h1><p>Andamento dos estagiários{% if ano %} das turmas que estagiam em {{ ano }}{% endif %}{% if curso %} · {{ curso }}{% endif %}. Frequência das últimas {{ semanas }} semanas.</p></div>
+  <div class="acoes"><a class="btn sec" href="{% url 'exportar_estagios' %}?formato=pdf{% if curso %}&amp;curso={{ curso.pk }}{% endif %}" target="_blank" rel="noopener">{% icone "impressora" %} Relatório completo</a></div>
+</div>
+
+<form class="filtros-linha" method="get" data-autoenvio>
+  <label>Ano <select name="ano">{% for a in anos %}<option value="{{ a }}"{% if a == ano %} selected{% endif %}>{{ a }}{% if a == ano_ref %} · referência{% endif %}</option>{% endfor %}<option value="todos"{% if not ano %} selected{% endif %}>Todos os anos</option></select></label>
+  <label>Curso <select name="curso"><option value="">Todos</option>{% for c in cursos %}<option value="{{ c.pk }}"{% if curso == c %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
+  <label>Frequência <select name="semanas">{% for s in opcoes_semanas %}<option value="{{ s }}"{% if s == semanas %} selected{% endif %}>últimas {{ s }} semanas</option>{% endfor %}</select></label>
+  <noscript><button class="btn sm" type="submit">Aplicar</button></noscript>
+</form>
+
+{% if not g.ativos %}
+<div class="card"><p class="vazio">Nenhum estagiário ativo com esses filtros.</p></div>
+{% else %}
+<div class="kpis">
+  <div class="kpi"><div class="valor">{{ g.ativos }}</div><div class="rotulo">estagiários ativos</div></div>
+  <div class="kpi"><div class="valor">{% if g.frequencia is not None %}{{ g.frequencia|floatformat:0 }}%{% else %}—{% endif %}</div><div class="rotulo">dos dias de estágio com presença</div></div>
+  <div class="kpi"><div class="valor">{{ g.carga|floatformat:0 }}%</div><div class="rotulo">da carga horária cumprida, em média</div></div>
+  <div class="kpi"><div class="valor">{{ g.concluidos }}</div><div class="rotulo">já cumpriram a carga</div></div>
+  <div class="kpi"><div class="valor">{{ g.com_visita|floatformat:0 }}%</div><div class="rotulo">receberam visita ou conversa</div></div>
+  <div class="kpi{% if d.pendencias.presencas or d.pendencias.atestados or d.pendencias.documentos %} laranja{% endif %}"><div class="valor">{{ d.pendencias.presencas|add:d.pendencias.atestados|add:d.pendencias.documentos }}</div>
+    <div class="rotulo">pendências: {{ d.pendencias.presencas }} presença{{ d.pendencias.presencas|pluralize }} a validar, {{ d.pendencias.atestados }} atestado{{ d.pendencias.atestados|pluralize }}, {{ d.pendencias.documentos }} documento{{ d.pendencias.documentos|pluralize }}</div></div>
+</div>
+
+<div class="grade grade-lado">
+  <div class="card">
+    <div class="card-cab"><h2>Frequência semana a semana</h2><small class="muted">dias de estágio com presença</small></div>
+    <div class="grafico-linha" id="grafico-frequencia" tabindex="0" role="img" aria-label="Frequência semanal, em porcentagem dos dias de estágio com presença. A tabela abaixo traz os mesmos valores."></div>
+    {{ d.tendencia|json_script:"dados-tendencia" }}
+    <details class="mt-1"><summary class="muted" style="cursor:pointer;font-size:.88rem">Ver como tabela</summary>
+      <div class="tabela-wrap"><table class="tabela compacta">
+        <thead><tr><th>Semana de</th><th class="num">Frequência</th><th class="num">Presenças</th><th class="num">Ausências avisadas</th><th class="num">Faltas / sem registro</th></tr></thead>
+        <tbody>{% for s in d.tendencia %}<tr><td>{{ s.rotulo }}{% if forloop.last %} <small class="muted">(em curso)</small>{% endif %}</td><td class="num">{% if s.taxa is not None %}{{ s.taxa|floatformat:0 }}%{% else %}—{% endif %}</td><td class="num">{{ s.presentes }} de {{ s.previstos }}</td><td class="num">{{ s.avisadas }}</td><td class="num">{{ s.faltas }}</td></tr>{% endfor %}</tbody>
+      </table></div></details>
+  </div>
+  <div class="card">
+    <h2>Situação</h2>
+    <p class="muted" style="font-size:.85rem;margin-top:0">{{ d.total }} estágio{{ d.total|pluralize }}{% if ano %} de {{ ano }}{% endif %}, incluindo encerrados.</p>
+    <div class="barra-segmentada" role="img" aria-label="{% for s in d.situacoes %}{{ s.rotulo }}: {{ s.n }}{% if not forloop.last %}; {% endif %}{% endfor %}">
+      {% for s in d.situacoes %}<div class="segmento sit-{{ s.rotulo|slugify }}" style="flex-grow:{{ s.n }}" title="{{ s.rotulo }}: {{ s.n }} ({{ s.pct|floatformat:0 }}%)"><span>{{ s.n }}</span></div>{% endfor %}
+    </div>
+    <ul class="legenda-lista">{% for s in d.situacoes %}<li><span class="chave sit-{{ s.rotulo|slugify }}"></span><span class="cresce">{{ s.rotulo }}</span><strong>{{ s.n }}</strong><small class="muted">{{ s.pct|floatformat:0 }}%</small></li>{% endfor %}</ul>
+    <p class="muted" style="font-size:.8rem">“Termina após o termo”: pela previsão, a carga só fecha depois do fim do termo de compromisso. Renove o termo ou programe reposição.</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-cab"><h2>Por turma</h2><small class="muted">clique na turma para ver os estagiários</small></div>
+  <div class="tabela-wrap"><table class="tabela medidores">
+    <thead><tr><th>Turma</th><th class="num">Ativos</th><th>Carga cumprida (média)</th><th>Frequência</th><th>Com visita</th><th>Pasta conferida</th><th class="num">Pontos de atenção</th></tr></thead>
+    <tbody>{% for t in d.turmas %}<tr>
+      <td><strong>{% if t.turma %}<a href="{% url 'estagios_lista' %}?turma={{ t.turma.pk }}">{{ t.rotulo }}</a>{% else %}{{ t.rotulo }}{% endif %}</strong>{% if t.turma %}<small style="display:block"><a href="{% url 'relatorio_turma' t.turma.pk %}" target="_blank" rel="noopener">relatório</a></small>{% endif %}</td>
+      <td class="num">{{ t.ativos }}</td>
+      <td>{% include "core/_medidor.html" with v=t.carga %}</td>
+      <td>{% include "core/_medidor.html" with v=t.frequencia alerta=75 %}</td>
+      <td>{% include "core/_medidor.html" with v=t.com_visita %}</td>
+      <td>{% include "core/_medidor.html" with v=t.documentos %}</td>
+      <td class="num">{% if t.atencao %}<a href="{% url 'relatorio_turma' t.turma.pk %}#atencao" target="_blank" rel="noopener">{{ t.atencao }}</a>{% else %}0{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+
+<div class="card">
+  <div class="card-cab"><h2>Por concedente</h2><small class="muted">menor frequência primeiro</small></div>
+  <div class="tabela-wrap"><table class="tabela medidores">
+    <thead><tr><th>Concedente</th><th class="num">Estagiários</th><th>Frequência</th><th class="num">Faltas</th><th class="num">Presenças sem validar</th></tr></thead>
+    <tbody>{% for c in d.concedentes %}<tr>
+      <td><strong>{% if c.local %}<a href="{% url 'estagios_lista' %}?local={{ c.local.pk }}">{{ c.rotulo }}</a>{% else %}{{ c.rotulo }}{% endif %}</strong>{% if c.local.cidade %}<small style="display:block" class="muted">{{ c.local.cidade }}</small>{% endif %}</td>
+      <td class="num">{{ c.ativos }}</td>
+      <td>{% include "core/_medidor.html" with v=c.frequencia alerta=75 %}</td>
+      <td class="num">{{ c.faltas }}</td>
+      <td class="num">{% if c.a_validar %}<span class="alerta-txt">{{ c.a_validar }}</span>{% else %}0{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="muted" style="font-size:.8rem">Frequência = dias de estágio com presença (confirmada ou aguardando o supervisor) ÷ dias de estágio previstos no período, sem contar feriados e recessos. Ausências avisadas e atestados entram como dia sem presença, mas aparecem separados no gráfico.</p>
+</div>
+{% endif %}
+<script src="{% static 'js/indicadores.js' %}" defer></script>
+{% endblock %}

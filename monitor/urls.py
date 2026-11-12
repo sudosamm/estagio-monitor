@@ -75,6 +75,7 @@ urlpatterns = [
     path("estagios/exportar/", relatorios.exportar_estagios, name="exportar_estagios"),
     path("estagios/<int:pk>/declaracao/", relatorios.declaracao_estagio, name="declaracao_estagio"),
     path("resumo/", relatorios.resumo_semanal_view, name="resumo_semanal"),
+    path("indicadores/", relatorios.indicadores, name="indicadores"),
     path("turmas/", orientador.turmas, name="turmas"),
     path("turmas/<int:pk>/", orientador.turmas, name="turma_editar"),
     path("configuracoes/", orientador.configuracoes, name="configuracoes"),

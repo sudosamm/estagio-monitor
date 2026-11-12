@@ -1,0 +1,1 @@
+{% if v is None %}<span class="muted">—</span>{% else %}<div class="medidor"><div class="trilho"><span style="width:{{ v|stringformat:'.1f' }}%"></span></div><span class="valor-medidor">{{ v|floatformat:0 }}%{% if alerta and v < alerta %} <span class="alerta-txt" title="Abaixo de {{ alerta }}%">⚠ baixa</span>{% endif %}</span></div>{% endif %}

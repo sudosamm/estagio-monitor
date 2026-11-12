@@ -115,7 +115,7 @@
   </table>
   <p class="legenda">Horas cumpridas = presenças validadas pelo supervisor + horas anteriores ao sistema. “Sem registro”: dias de estágio já passados sem presença, ausência ou falta lançada. “A validar”: presenças que o supervisor ainda não confirmou. A previsão de término considera a escala atual, feriados e recessos.</p>
 
-  <h2>Pontos de atenção</h2>
+  <h2 id="atencao">Pontos de atenção</h2>
   {% if atencao %}<ul class="atencao">{% for e, motivos in atencao %}<li><strong>{{ e.estagiario.nome_completo }}</strong>: {{ motivos|join:"; " }}.</li>{% endfor %}</ul>
   {% else %}<p class="vazio">Nenhum ponto de atenção.</p>{% endif %}
 

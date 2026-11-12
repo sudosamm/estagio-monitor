@@ -17,7 +17,7 @@ Todos recebem **notificações** (o sino no topo) quando algo muda, por exemplo:
 
 ### Menu da gestão
 Para orientador, coordenação e administrador, a barra tem **Painel** e **Estagiários** soltos e três menus:
-- **Acompanhamento:** resumo da semana, agenda de visitas, frequências, atestados, pasta de documentos, alterar dias.
+- **Acompanhamento:** indicadores, resumo da semana, agenda de visitas, frequências, atestados, pasta de documentos, alterar dias.
 - **Comunicação:** avisos para a turma, arquivos gerais.
 - **Cadastros:** contas, concedentes, turmas e cursos, feriados e recessos, captação, banco de talentos.
 
@@ -180,6 +180,16 @@ Clique em *Salvar PDF / imprimir* e escolha **Salvar como PDF** (funciona també
 
 A **planilha (.xlsx)**, também disponível pelo botão *Baixar planilha* do relatório, traz quatro abas: *Resumo*, *Estagiários* (uma linha por estágio, com horas, faltas, dias sem registro, visitas, previsão, situação e pontos de atenção), *Horas por mês* (horas validadas em cada mês) e *Visitas e conversas* (com o relato). Serve para prestar contas à escola, à CREDE ou à SEDUC sem redigitar. O CPF não vai para a planilha.
 
+### Indicadores
+Em **Acompanhamento → Indicadores**, um painel do andamento, filtrado por ano, curso e período (últimas 4, 8, 12 ou 26 semanas):
+- **Números principais:** estagiários ativos, frequência (dias de estágio com presença), carga média cumprida, quem já cumpriu, quem recebeu visita e as pendências (presenças a validar, atestados, documentos).
+- **Frequência semana a semana:** gráfico com o valor de cada semana ao passar o mouse (ou com as setas do teclado). Também dá para ver como tabela.
+- **Situação:** quantos estão em andamento, já cumpriram a carga, terminam depois do termo ou foram encerrados.
+- **Por turma:** carga média, frequência, quem recebeu visita e quanto da pasta está conferido, com atalho para a lista e o relatório da turma. Frequência abaixo de 75% ganha um aviso.
+- **Por concedente:** frequência, faltas e presenças que o supervisor ainda não validou, com a menor frequência primeiro, para achar onde agir.
+
+Frequência = dias de estágio com presença (confirmada ou aguardando o supervisor) ÷ dias de estágio previstos, sem contar feriados e recessos. Ausências avisadas e atestados aparecem separados.
+
 ### Resumo semanal
 No **Painel**, o botão *Resumo da semana* mostra os pontos de atenção dos últimos 7 dias: quem ficou sem registro de presença, faltas, presenças há mais de 2 dias sem validação do supervisor, termos que vencem nos próximos 30 dias, previsões de término depois do termo, quem está perto de cumprir (90% ou mais) ou já cumpriu a carga, visitas dos próximos 7 dias e pedidos de agendamento sem resposta.
 
@@ -252,7 +262,7 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Contas, concedentes, cursos e turmas (inclui desativar/reativar) | ✔ | ✔ |
 | Captação de concedentes | ✔ | ✔ |
 | Frequências impressas | ✔ | ✔ |
-| Relatório e exportação (PDF e planilha), resumo semanal, declaração de estágio | ✔ | ✔ (cursos que coordena) |
+| Relatório e exportação (PDF e planilha), resumo semanal, indicadores, declaração de estágio | ✔ | ✔ (cursos que coordena) |
 | Analisar atestados (aceitar/recusar) | ✔ | ✔ (cursos que coordena) |
 | Conferir documentos da pasta, marcar entregue em papel | ✔ | ✔ (cursos que coordena) |
 | Definir os documentos exigidos na pasta | ✔ | — |
@@ -348,12 +358,13 @@ core/exportacao.py  Planilha (.xlsx) com a situação dos estagiários
 core/atestados.py   Atestados: envio, dias cobertos, aceite/recusa
 core/pasta.py       Pasta do estágio: documentos exigidos, prazos e conferência
 core/push.py        Notificações no celular (Web Push): chaves VAPID e envio
+core/indicadores.py Indicadores por turma, por concedente e semana a semana
 templates/          HTML (visual inspirado no portal ce.gov.br)
 static/             CSS e JS próprios, sem frameworks
 ```
 
 ## Ideias para as próximas versões
-- Painel de indicadores por curso e turma, e área de feedback do supervisor
+- Área de feedback do supervisor
 - Check-in por QR code mostrado pelo supervisor (confirma a chegada na hora)
 - Encerramento do ano letivo: fechar turmas, arquivar estágios e anonimizar dados após o prazo (LGPD)
 - Integração com o SICE por API oficial da SEDUC (dados dos estagiários, avaliações e certificado)

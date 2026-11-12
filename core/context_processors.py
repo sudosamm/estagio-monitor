@@ -10,6 +10,7 @@ def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0):
     """Barra da área de gestão: dois atalhos soltos e três seções (o que a pessoa não pode usar não aparece)."""
     pode = user.pode
     acompanhamento = [
+        _item("Indicadores", "indicadores", {"indicadores"}, url_atual),
         _item("Resumo da semana", "resumo_semanal", {"resumo_semanal"}, url_atual),
         pode("agenda") and _item("Agenda de visitas", "agendamentos",
                                  {"agendamentos", "novo_agendamento", "agendamento_detalhe", "assinar_agenda"}, url_atual),

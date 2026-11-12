@@ -77,7 +77,7 @@ def situacao_estagio(e, hoje=None, pasta=None):
     if docs_atrasados:
         motivos.append("documentos da pasta atrasados: " + ", ".join(docs_atrasados))
     return {"e": e, "r": r, "sem_registro": sem_registro, "situacao": situacao, "concluido": concluido,
-            "motivos": motivos, "docs_atrasados": docs_atrasados}
+            "motivos": motivos, "docs_atrasados": docs_atrasados, "pasta": pasta}
 
 
 def consolidar(estagios, hoje=None):
