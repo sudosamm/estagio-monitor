@@ -35,6 +35,7 @@ PERMISSOES = {
     "feriados": "Feriados e eventos da escola",
     "arquivos": "Publicar arquivos gerais",
     "folhas": "Emitir e enviar folhas de frequência; decidir se os estagiários emitem a própria",
+    "encerramento": "Encerrar o ano letivo e anonimizar dados antigos (LGPD)",
 }
 PERMISSOES_POR_PAPEL = {
     "ORIENTADOR": set(PERMISSOES),
@@ -84,6 +85,8 @@ class Usuario(AbstractUser):
         help_text="Vazio = todos os cursos.",
     )
     deve_trocar_senha = models.BooleanField(default=True)
+    anonimizado_em = models.DateTimeField(null=True, blank=True, editable=False,
+                                          help_text="Dados pessoais apagados (LGPD) nesta data")
     criado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
@@ -1031,6 +1034,37 @@ class Notificacao(models.Model):
         ordering = ["-criado_em"]
 
 
+class Encerramento(models.Model):
+    """Registro de um encerramento de ano letivo, com o necessário para desfazê-lo."""
+
+    ano = models.PositiveIntegerField("Ano do estágio")
+    feito_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    feito_em = models.DateTimeField(auto_now_add=True)
+    resumo = models.JSONField(default=dict, help_text="O que foi feito: ids de estágios, contas e turmas alterados")
+    desfeito_em = models.DateTimeField(null=True, blank=True)
+    desfeito_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                     related_name="+")
+
+    class Meta:
+        ordering = ["-feito_em"]
+
+    def __str__(self):
+        return f"Encerramento de {self.ano}"
+
+
+class Anonimizacao(models.Model):
+    """Registro (sem dados pessoais) de cada anonimização feita."""
+
+    feita_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    feita_em = models.DateTimeField(auto_now_add=True)
+    anos = models.CharField(max_length=60, help_text="Anos de estágio anonimizados")
+    pessoas = models.PositiveIntegerField(default=0)
+    arquivos = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-feita_em"]
+
+
 class Feedback(models.Model):
     """Feedback mensal do supervisor sobre o estagiário: notas por critério e comentários."""
 
@@ -1163,6 +1197,11 @@ class Configuracao(models.Model):
                   "atenção dos seus estagiários. Quem não quiser pode desligar em Meus dados.",
     )
     resumo_enviado_em = models.DateTimeField(null=True, blank=True, editable=False)
+    retencao_anos = models.PositiveSmallIntegerField(
+        "Guardar dados pessoais por (anos)", default=5,
+        help_text="Depois desse prazo, contado do fim do ano do estágio, os dados de estagiários encerrados podem ser "
+                  "anonimizados em Encerramento do ano. Os números (horas, frequência) continuam nos indicadores.",
+    )
     feedback_mensal = models.BooleanField(
         "Pedir feedback mensal aos supervisores", default=True,
         help_text="A partir do dia 20, quem ainda não deu o feedback do mês sobre seus estagiários recebe um lembrete.",

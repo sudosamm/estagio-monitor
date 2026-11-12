@@ -2149,3 +2149,100 @@ class FeedbackSupervisorTests(Base):
         self.assertTrue(any("abaixo de “bom”" in m for m in dict(r.context["atencao"])[self.est]))
         d = calcular(self.ori, 2026)
         self.assertEqual((d["geral"]["feedback"], d["geral"]["feedback_mes"]), (2.0, 100.0))
+
+
+@override_settings(MEDIA_ROOT=settings.BASE_DIR / "data" / "teste-anexos")
+class EncerramentoTests(Base):
+    def setUp(self):
+        super().setUp()
+        import shutil
+
+        self.addCleanup(shutil.rmtree, settings.BASE_DIR / "data" / "teste-anexos", ignore_errors=True)
+        self.est.horas_anteriores = 100  # cumpriu a carga (100h)
+        self.est.save()
+        self.aluno2 = _ativo(criar_usuario("Bruno Incompleto", Usuario.Papel.ESTAGIARIO))
+        self.est2 = Estagio.objects.create(estagiario=self.aluno2, orientador=self.ori, supervisor=self.sup,
+                                           curso=self.curso, turma=self.turma, local=self.local,
+                                           data_inicio=date(2026, 11, 2))
+        c = Configuracao.atual()
+        c.ano_referencia = 2026
+        c.save()
+
+    def test_diagnostico_e_encerramento_padrao(self):
+        self.entrar(self.ori)
+        r = self.client.get(reverse("encerramento"), {"ano": 2026})
+        self.assertEqual(([e for e, _ in r.context["d"]["concluidos"]], [e for e, _ in r.context["d"]["incompletos"]]),
+                         ([self.est], [self.est2]))
+        self.client.post(reverse("encerramento"), {"acao": "encerrar", "ano": 2026, "desativar_contas": "on",
+                                                   "inativar_turmas": "on", "avancar_ano": "on"})
+        self.est.refresh_from_db(); self.est2.refresh_from_db(); self.aluno.refresh_from_db(); self.turma.refresh_from_db()
+        self.assertEqual((self.est.ativo, self.est2.ativo, self.aluno.is_active), (False, True, False))
+        self.assertTrue(self.turma.ativa)  # Bruno continua ativo na turma
+        self.assertEqual(Configuracao.atual().ano_referencia, 2027)
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="foi encerrado").exists())
+
+    def test_encerrar_todos_e_desfazer(self):
+        from .models import Encerramento
+
+        self.entrar(self.ori)
+        self.client.post(reverse("encerramento"), {"acao": "encerrar", "ano": 2026, "incluir_incompletos": "on",
+                                                   "desativar_contas": "on", "desativar_supervisores": "on",
+                                                   "inativar_turmas": "on", "avancar_ano": "on"})
+        self.turma.refresh_from_db(); self.sup.refresh_from_db()
+        self.assertEqual((self.turma.ativa, self.sup.is_active), (False, False))
+        e = Encerramento.objects.get()
+        self.client.post(reverse("encerramento"), {"acao": "desfazer", "encerramento": e.pk})
+        for o in (self.est, self.est2, self.aluno, self.sup, self.turma):
+            o.refresh_from_db()
+        self.assertEqual((self.est.ativo, self.est2.ativo, self.aluno.is_active, self.sup.is_active, self.turma.ativa),
+                         (True, True, True, True, True))
+        self.assertEqual(Configuracao.atual().ano_referencia, 2026)
+        e.refresh_from_db()
+        self.assertIsNotNone(e.desfeito_em)
+
+    def test_anonimizacao_depois_do_prazo(self):
+        from datetime import datetime
+
+        from .encerramento import anonimizar, candidatos_anonimizacao
+        from .models import Documento, Feedback, Justificativa, Mensagem
+
+        antiga = Turma.objects.create(curso=self.curso, nome="3º A", ano_ingresso=2017, ano_estagio=2019)
+        velho = _ativo(criar_usuario("Antônio Antigo", Usuario.Papel.ESTAGIARIO, cpf="001.000.000-37",
+                                     email="antonio@exemplo.br"))
+        e = Estagio.objects.create(estagiario=velho, orientador=self.ori, supervisor=self.sup, curso=self.curso,
+                                   turma=antiga, local=self.local, data_inicio=date(2019, 3, 1), ativo=False)
+        Registro.objects.create(estagio=e, data=date(2019, 3, 4), situacao=Registro.Situacao.AUSENCIA,
+                                motivo="Consulta no psiquiatra", horas=0)
+        Registro.objects.create(estagio=e, data=date(2019, 3, 5), situacao=Registro.Situacao.PRESENTE, horas=4,
+                                diario="Conheci a equipe")
+        Mensagem.objects.create(estagio=e, autor=velho, texto="Meu telefone novo é 85 99999-0000")
+        Justificativa.objects.create(estagio=e, data_inicio=date(2019, 3, 4), data_fim=date(2019, 3, 4),
+                                     arquivo=SimpleUploadedFile("a.pdf", b"%PDF-1.4"), motivo="CID F41")
+        Documento.objects.create(titulo="TCE", arquivo=SimpleUploadedFile("t.pdf", b"%PDF-1.4"), estagio=e,
+                                 orientador=self.ori, enviado_por=velho)
+        Feedback.objects.create(estagio=e, mes=date(2019, 3, 1), qualidade=4, reservado="Problemas em casa")
+        self.assertEqual(candidatos_anonimizacao(self.ori), [e])  # 2019 + 5 anos < 2026; os de 2026 ficam
+        self.entrar(self.ori)
+        r = self.client.post(reverse("encerramento"), {"acao": "anonimizar", "confirmacao": "sim"}, follow=True)
+        self.assertContains(r, "digite ANONIMIZAR")
+        self.client.post(reverse("encerramento"), {"acao": "anonimizar", "confirmacao": "anonimizar"})
+        velho.refresh_from_db()
+        self.assertEqual((velho.cpf, velho.email, velho.is_active, velho.has_usable_password()), ("", "", False, False))
+        self.assertTrue(velho.nome_completo.startswith("Estagiário anonimizado"))
+        self.assertFalse(Registro.objects.filter(estagio=e).exclude(motivo="", diario="").exists())
+        self.assertEqual(sum(Registro.objects.filter(estagio=e).values_list("horas", flat=True)), 4)  # horas ficam
+        self.assertFalse(Mensagem.objects.filter(estagio=e).exists())
+        self.assertFalse(Documento.objects.filter(estagio=e).exists())
+        j = Justificativa.objects.get(estagio=e)
+        self.assertEqual((j.arquivo.name, j.motivo), ("", ""))
+        f = Feedback.objects.get(estagio=e)
+        self.assertEqual((f.reservado, f.qualidade), ("", 4))
+        self.assertEqual(candidatos_anonimizacao(self.ori), [])
+        self.est.refresh_from_db()
+        self.assertEqual(self.est.estagiario.nome_completo, "Maria da Silva Souza")  # estágios recentes intactos
+
+    def test_so_quem_tem_permissao(self):
+        coord = _ativo(criar_usuario("Carla Coord", Usuario.Papel.COORDENADOR))
+        for u in (coord, self.sup, self.aluno):
+            self.entrar(u)
+            self.assertEqual(self.client.get(reverse("encerramento")).status_code, 403)

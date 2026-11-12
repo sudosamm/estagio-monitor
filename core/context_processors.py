@@ -38,6 +38,7 @@ def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0):
                                        url_atual, candidaturas),
         (config.banco_talentos_habilitado or config.curriculos_habilitados)
         and _item("Banco de talentos", "banco_talentos", {"banco_talentos"}, url_atual),
+        pode("encerramento") and _item("Encerramento do ano", "encerramento", {"encerramento"}, url_atual),
     ]
     soltos = [
         _item("Painel", "painel", {"painel"}, url_atual),

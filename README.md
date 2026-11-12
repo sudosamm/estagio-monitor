@@ -19,7 +19,7 @@ Todos recebem **notificações** (o sino no topo) quando algo muda, por exemplo:
 Para orientador, coordenação e administrador, a barra tem **Painel** e **Estagiários** soltos e três menus:
 - **Acompanhamento:** indicadores, resumo da semana, agenda de visitas, frequências, feedback dos supervisores, atestados, pasta de documentos, alterar dias.
 - **Comunicação:** avisos para a turma, arquivos gerais.
-- **Cadastros:** contas, concedentes, turmas e cursos, feriados e recessos, captação, banco de talentos.
+- **Cadastros:** contas, concedentes, turmas e cursos, feriados e recessos, captação, banco de talentos, encerramento do ano.
 
 O número de pendências (atestados para analisar, concedentes na captação) aparece no nome do menu e no item. Cada pessoa só vê o que tem permissão de usar. Estagiários e supervisores continuam com a barra simples.
 
@@ -247,6 +247,28 @@ Com o servidor de e-mail configurado (variáveis `EMAIL_*` abaixo), cada aviso d
 
 **WhatsApp automático** exige a API oficial do WhatsApp Business (Meta): número próprio, empresa verificada, mensagens-modelo aprovadas e cobrança por conversa. Ferramentas não oficiais que “automatizam o WhatsApp Web” violam os termos e podem banir o número, por isso não são usadas. Por enquanto há atalhos que abrem o WhatsApp com a conversa pronta (captação e telefone do supervisor na página do estágio).
 
+### Encerramento do ano letivo
+Em **Cadastros → Encerramento do ano** (orientador e administrador), escolha o ano das turmas. A página mostra, antes de qualquer ação:
+- quem já cumpriu a carga e quem não cumpriu (com horas faltando e previsão);
+- as pendências: presenças a validar, atestados e documentos a conferir;
+- quem está com a pasta incompleta.
+
+Há atalhos para as declarações e para a planilha do ano.
+
+Ao encerrar, você escolhe:
+- encerrar os estágios que cumpriram a carga (sempre) e, se quiser, também os que **não** cumpriram (por padrão eles continuam ativos para terminar no ano seguinte);
+- desativar a conta dos estagiários encerrados (deixam de entrar; o histórico fica);
+- desativar os supervisores que ficarem sem estagiário (desmarcado por padrão, porque costumam continuar no ano seguinte);
+- arquivar as turmas que ficarem vazias;
+- passar o ano de referência para o seguinte.
+
+Os estagiários recebem um aviso de encerramento. Nada é apagado, e por **30 dias** dá para **desfazer**: o sistema reativa exatamente o que aquele encerramento desativou.
+
+**Dados antigos (LGPD):** em **Configurações**, *Guardar dados pessoais por* define o prazo (padrão: 5 anos depois do ano do estágio). Passado o prazo, a mesma página oferece **anonimizar** os estágios encerrados daqueles anos (é preciso digitar ANONIMIZAR).
+- **Sai:** nome, usuário, CPF, matrícula, e-mail e telefone viram “Estagiário anonimizado nº…”. São apagados foto, currículo, atestados, documentos da pasta, mensagens, diário, motivos e comentários, além dos IPs e das localizações.
+- **Fica:** datas, horas, presenças e notas, para os indicadores e o histórico da escola.
+- Não dá para desfazer. Fica registrado quando foi feita, por quem e quantas pessoas, sem dado pessoal.
+
 ### Captação de concedentes
 Em **Configurações**, abra a captação, escolha o ano letivo e, se quiser, um prazo. A página pública **/seja-concedente/** (link também na tela de login) recebe os cadastros:
 - dados da ficha de concedente;
@@ -274,6 +296,7 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Analisar atestados (aceitar/recusar) | ✔ | ✔ (cursos que coordena) |
 | Conferir documentos da pasta, marcar entregue em papel | ✔ | ✔ (cursos que coordena) |
 | Definir os documentos exigidos na pasta | ✔ | — |
+| Encerrar o ano letivo e anonimizar dados antigos | ✔ | — |
 | Enviar avisos para a turma | ✔ | ✔ (cursos que coordena) |
 | Ver o feedback dos supervisores (inclusive o comentário reservado) | ✔ | ✔ (cursos que coordena) |
 | Agendar visitas | ✔ | — |
@@ -369,14 +392,13 @@ core/pasta.py       Pasta do estágio: documentos exigidos, prazos e conferênci
 core/push.py        Notificações no celular (Web Push): chaves VAPID e envio
 core/indicadores.py Indicadores por turma, por concedente e semana a semana
 core/feedback.py    Feedback mensal do supervisor: meses abertos, pendências e lembrete
+core/encerramento.py Encerramento do ano (com desfazer) e anonimização (LGPD)
 templates/          HTML (visual inspirado no portal ce.gov.br)
 static/             CSS e JS próprios, sem frameworks
 ```
 
 ## Ideias para as próximas versões
 - Check-in por QR code mostrado pelo supervisor (confirma a chegada na hora)
-- Encerramento do ano letivo: fechar turmas, arquivar estágios e anonimizar dados após o prazo (LGPD)
 - Integração com o SICE por API oficial da SEDUC (dados dos estagiários, avaliações e certificado)
-- Avaliação do estagiário pelo supervisor (formulário periódico)
 - Autoavaliação do estagiário e avaliação do orientador, com texto pronto para copiar no SICE
 - WhatsApp automático pela API oficial do WhatsApp Business

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Encerramento do ano{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><h1>Encerramento do ano letivo</h1><p>Feche as turmas que terminaram o estágio: os estágios ficam guardados como encerrados, as contas deixam de entrar e as listas passam para o próximo ano.</p></div>
+  <form method="get" class="filtros-linha" data-autoenvio style="margin:0"><label>Turmas que estagiam em <select name="ano">{% for a in anos %}<option value="{{ a }}"{% if a == ano %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></label></form>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="valor">{{ d.concluidos|length }}</div><div class="rotulo">ativos que já cumpriram a carga</div></div>
+  <div class="kpi{% if d.incompletos %} laranja{% endif %}"><div class="valor">{{ d.incompletos|length }}</div><div class="rotulo">ativos que ainda não cumpriram</div></div>
+  <div class="kpi"><div class="valor">{{ d.ja_encerrados }}</div><div class="rotulo">já encerrados</div></div>
+  <div class="kpi{% if d.pendencias.presencas or d.pendencias.atestados or d.pendencias.documentos %} vermelho{% endif %}"><div class="valor">{{ d.pendencias.presencas|add:d.pendencias.atestados|add:d.pendencias.documentos }}</div><div class="rotulo">pendências: {{ d.pendencias.presencas }} registro{{ d.pendencias.presencas|pluralize }} a validar, {{ d.pendencias.atestados }} atestado{{ d.pendencias.atestados|pluralize }}, {{ d.pendencias.documentos }} documento{{ d.pendencias.documentos|pluralize }} a conferir</div></div>
+</div>
+
+<div class="grade grade-lado">
+  <div>
+    <div class="card">
+      <h2>Antes de encerrar, confira</h2>
+      {% if not d.concluidos and not d.incompletos %}<p class="vazio">Nenhum estágio ativo nas turmas de {{ ano }}.</p>{% endif %}
+      {% if d.incompletos %}
+      <h3>Ainda não cumpriram a carga ({{ d.incompletos|length }})</h3>
+      <p class="muted" style="font-size:.85rem;margin-top:0">Por padrão eles continuam ativos (podem terminar no ano seguinte). Marque a opção ao lado para encerrar mesmo assim.</p>
+      <ul class="lista compacta">{% for e, r in d.incompletos %}<li><a class="cresce pessoa" href="{{ e.get_absolute_url }}"><span><strong>{{ e.estagiario }}</strong><small>{{ e.turma.rotulo }} · {{ r.cumpridas|horas }} de {{ r.total|horas }} · faltam {{ r.faltam|horas }}{% if r.previsao_termino %} · previsão {{ r.previsao_termino|date:"d/m/Y" }}{% endif %}</small></span></a><span class="selo pasta-pendente">{{ r.pct|floatformat:0 }}%</span></li>{% endfor %}</ul>
+      {% endif %}
+      {% if d.docs_faltando %}
+      <h3 class="mt-1">Pasta incompleta ({{ d.docs_faltando|length }})</h3>
+      <ul class="lista compacta">{% for e, faltam in d.docs_faltando %}<li><a class="cresce pessoa" href="{{ e.get_absolute_url }}?aba=arquivos#pasta"><span><strong>{{ e.estagiario }}</strong><small>{{ faltam|join:", " }}</small></span></a></li>{% endfor %}</ul>
+      {% endif %}
+      {% if d.concluidos %}
+      <details class="mt-1"><summary><strong>Cumpriram a carga ({{ d.concluidos|length }})</strong></summary>
+        <ul class="lista compacta">{% for e, r in d.concluidos %}<li><span class="cresce">{{ e.estagiario }} <small class="muted">· {{ r.cumpridas|horas }}</small></span><a class="btn sec sm" href="{% url 'declaracao_estagio' e.pk %}" target="_blank" rel="noopener">Declaração</a></li>{% endfor %}</ul></details>
+      {% endif %}
+      <p class="muted mt-1" style="font-size:.82rem">Dica: emita as declarações e baixe o <a href="{% url 'exportar_estagios' %}?ano={{ ano }}&amp;situacao=todos&amp;formato=xlsx">relatório em planilha do ano</a> antes de encerrar; depois as contas dos estagiários deixam de entrar.</p>
+    </div>
+  </div>
+
+  <div>
+    {% if d.concluidos or d.incompletos %}
+    <div class="card destaque">
+      <h2>Encerrar {{ ano }}</h2>
+      {% if ja_encerrado %}<div class="caixa-info" style="font-size:.85rem">O ano {{ ano }} já foi encerrado antes. Encerrar de novo fecha só quem ainda está ativo.</div>{% endif %}
+      <form method="post" data-confirmar="Encerrar o ano {{ ano }} com as opções marcadas? Dá para desfazer por {{ dias_desfazer }} dias.">{% csrf_token %}
+        <input type="hidden" name="acao" value="encerrar"><input type="hidden" name="ano" value="{{ ano }}">
+        <label class="check"><input type="checkbox" checked disabled> <span>Encerrar os {{ d.concluidos|length }} estágio{{ d.concluidos|length|pluralize }} que cumpriram a carga</span></label>
+        <label class="check"><input type="checkbox" name="incluir_incompletos"{% if not d.incompletos %} disabled{% endif %}> <span>Encerrar também os {{ d.incompletos|length }} que <strong>não</strong> cumpriram</span></label>
+        <label class="check"><input type="checkbox" name="desativar_contas" checked> <span>Desativar a conta dos estagiários encerrados (deixam de entrar; o histórico fica)</span></label>
+        <label class="check"><input type="checkbox" name="desativar_supervisores"> <span>Desativar supervisores que ficarem sem estagiário ativo</span></label>
+        <label class="check"><input type="checkbox" name="inativar_turmas" checked> <span>Arquivar as turmas que ficarem sem estagiário ativo</span></label>
+        <label class="check"><input type="checkbox" name="avancar_ano" checked> <span>Passar o ano de referência para {{ ano|add:1 }}</span></label>
+        <button class="btn bloco mt-1" type="submit">Encerrar o ano {{ ano }}</button>
+      </form>
+      <p class="muted" style="font-size:.8rem">Os estagiários recebem um aviso de encerramento. Nada é apagado: os estágios continuam no sistema, em “Encerrados”.</p>
+    </div>
+    {% endif %}
+    {% if historico %}
+    <div class="card"><h3>Encerramentos feitos</h3>
+      <ul class="lista compacta">{% for h in historico %}<li><span class="cresce"><strong>{{ h.ano }}</strong> · {{ h.feito_em|date:"d/m/Y H:i" }} · {{ h.feito_por.primeiro_nome|default:"—" }}
+        <small style="display:block">{{ h.resumo.estagios|length }} estágio{{ h.resumo.estagios|length|pluralize }}, {{ h.n_contas }} conta{{ h.n_contas|pluralize }}, {{ h.resumo.turmas|length }} turma{{ h.resumo.turmas|length|pluralize }}{% if h.desfeito_em %} · <strong>desfeito</strong> em {{ h.desfeito_em|date:"d/m" }} por {{ h.desfeito_por.primeiro_nome|default:"—" }}{% endif %}</small></span>
+        {% if h.desfazivel %}<form method="post" data-confirmar="Desfazer o encerramento de {{ h.ano }}? Estágios, contas e turmas voltam a ficar ativos.">{% csrf_token %}<input type="hidden" name="acao" value="desfazer"><input type="hidden" name="encerramento" value="{{ h.pk }}"><button class="btn sec sm" type="submit">Desfazer</button></form>{% endif %}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card" id="lgpd">
+  <h2>{% icone "chave" %} Dados antigos (LGPD)</h2>
+  <p style="font-size:.9rem">Dados pessoais devem ser guardados só pelo tempo necessário. O prazo configurado é de <strong>{{ config.retencao_anos }} ano{{ config.retencao_anos|pluralize }}</strong> depois do ano do estágio (muda em <a href="{% url 'configuracoes' %}">Configurações</a>): hoje podem ser anonimizados os estágios encerrados das turmas que estagiaram até <strong>{{ limite }}</strong>.</p>
+  <p style="font-size:.88rem">A anonimização troca nome, usuário, CPF, matrícula, e-mail e telefone por “Estagiário anonimizado nº…”, apaga foto, currículo, atestados, documentos da pasta, mensagens, diário e comentários, e tira IPs e localizações. Ficam as datas, horas, presenças e notas, para os indicadores e o histórico da escola continuarem certos. <strong>Não dá para desfazer.</strong></p>
+  {% if n_candidatos %}
+  <p><strong>{{ n_candidatos }} estagiário{{ n_candidatos|pluralize }}</strong> pode{{ n_candidatos|pluralize:"m" }} ser anonimizado{{ n_candidatos|pluralize }}: {% for a, n in candidatos_por_ano %}{{ n }} de {{ a }}{% if not forloop.last %}, {% endif %}{% endfor %}.</p>
+  <form method="post" class="flex" style="gap:.5rem;flex-wrap:wrap;align-items:flex-end">{% csrf_token %}<input type="hidden" name="acao" value="anonimizar">
+    <div><label class="rotulo">Digite ANONIMIZAR para confirmar</label><input type="text" name="confirmacao" autocomplete="off" style="max-width:220px"></div>
+    <button class="btn perigo" type="submit">Anonimizar agora</button></form>
+  {% else %}<p class="vazio">Nada para anonimizar por enquanto.</p>{% endif %}
+  {% if anonimizacoes %}<p class="muted mt-1" style="font-size:.8rem">Feitas: {% for a in anonimizacoes %}{{ a.feita_em|date:"d/m/Y" }} ({{ a.pessoas }} pessoa{{ a.pessoas|pluralize }}, anos {{ a.anos }}, por {{ a.feita_por.primeiro_nome|default:"—" }}){% if not forloop.last %}; {% endif %}{% endfor %}.</p>{% endif %}
+</div>
+<script>document.querySelectorAll("form[data-autoenvio] select").forEach((s) => s.addEventListener("change", () => s.form.submit()));</script>
+{% endblock %}
