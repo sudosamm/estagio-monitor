@@ -28,7 +28,26 @@ def painel_supervisor(request):
     return render(request, "core/painel_supervisor.html", {"estagios": estagios, "pendentes": pendentes,
                                                            "sem_horario": sem_horario,
                                                            "atestados": pendentes_para(request.user, estagios),
-                                                           "documentos": _documentos_do_supervisor(estagios)})
+                                                           "documentos": _documentos_do_supervisor(estagios),
+                                                           **_feedback_do_mes(estagios)})
+
+
+def _feedback_do_mes(estagios):
+    from ..feedback import inicio_mes, meses_abertos, nome_mes
+    from ..models import Configuracao, Feedback
+
+    if not Configuracao.atual().feedback_mensal:
+        return {}
+    mes = inicio_mes(timezone.localdate())
+    feitos = {f.estagio_id: f for f in Feedback.objects.filter(estagio__in=estagios, mes=mes)}
+    anterior = meses_abertos()[1:]
+    faltam_anterior = set()
+    if anterior:
+        com = set(Feedback.objects.filter(estagio__in=estagios, mes=anterior[0]).values_list("estagio_id", flat=True))
+        faltam_anterior = {e.pk for e in estagios if e.pk not in com and e.data_inicio < mes}
+    return {"feedback_mes": nome_mes(mes), "feedback_itens": [(e, feitos.get(e.pk)) for e in estagios],
+            "feedback_faltam": sum(1 for e in estagios if e.pk not in feitos),
+            "feedback_anterior": anterior[0] if faltam_anterior else None, "faltam_anterior": faltam_anterior}
 
 
 def _documentos_do_supervisor(estagios):

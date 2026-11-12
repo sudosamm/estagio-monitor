@@ -9,7 +9,7 @@ from django.utils.crypto import get_random_string
 
 from .models import (
     DIAS_SEMANA, Agendamento, Candidatura, Configuracao, Curso, DiaSemEstagio, Documento, Estagio, FolhaEnviada,
-    Justificativa, LocalEstagio, Mensagem, Registro, TipoDocumento, Turma, Usuario, horas_dos_horarios,
+    Feedback, Justificativa, LocalEstagio, Mensagem, Registro, TipoDocumento, Turma, Usuario, horas_dos_horarios,
 )
 from .validators import limpar_cep, limpar_cnpj_ou_cpf, limpar_cpf
 
@@ -432,7 +432,7 @@ class ConfiguracaoForm(FormularioModelo):
     class Meta:
         model = Configuracao
         fields = ["nome_escola", "municipio_escola", "ano_referencia", "cabecalho_folha", "logo_folha",
-                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "atestados_supervisor", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
+                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "feedback_mensal", "atestados_supervisor", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
                   "curriculos_habilitados", "banco_talentos_habilitado"]
         widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(),
                    "texto_captacao": forms.Textarea(attrs={"rows": 3})}
@@ -860,6 +860,30 @@ class EntregaForm(Formulario):
         if arq.size > settings.TAMANHO_MAX_ANEXO_MB * 1024 * 1024:
             raise forms.ValidationError(f"O arquivo deve ter no máximo {settings.TAMANHO_MAX_ANEXO_MB} MB.")
         return arq
+
+
+class FeedbackForm(FormularioModelo):
+    class Meta:
+        model = Feedback
+        fields = [c for c, _ in Feedback.CRITERIOS] + ["pontos_fortes", "melhorar", "reservado", "visivel_estagiario"]
+        widgets = {
+            **{c: forms.RadioSelect for c, _ in Feedback.CRITERIOS},
+            "pontos_fortes": forms.Textarea(attrs={"rows": 2, "placeholder": "Ex.: atencioso no atendimento, aprende rápido"}),
+            "melhorar": forms.Textarea(attrs={"rows": 2, "placeholder": "Ex.: chegar no horário, pedir ajuda quando travar"}),
+            "reservado": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        escala = [(str(v), r) for v, r in reversed(Feedback.NOTAS)] + [("", "Não observei")]
+        for c, _ in Feedback.CRITERIOS:
+            self.fields[c].choices = escala
+
+    def clean(self):
+        d = super().clean()
+        if not any(d.get(c) for c, _ in Feedback.CRITERIOS) and not (d.get("pontos_fortes") or d.get("melhorar")):
+            raise forms.ValidationError("Dê ao menos uma nota ou escreva um comentário.")
+        return d
 
 
 class ComunicadoForm(Formulario):

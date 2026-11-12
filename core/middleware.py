@@ -43,8 +43,10 @@ class ResumoSemanalMiddleware:
             self.proxima = agora + self.INTERVALO
             try:
                 from .acompanhamento import disparar_resumo_se_preciso
+                from .feedback import disparar_lembrete
 
                 disparar_resumo_se_preciso()
+                disparar_lembrete()
             except Exception:  # noqa: BLE001 — nunca atrapalhar a página
                 import logging
 

@@ -2076,3 +2076,76 @@ class IndicadoresTests(Base):
         self.assertContains(self.client.get(reverse("indicadores"), {"curso": outro.pk}), "Nenhum estagiário ativo")
         self.entrar(self.sup)
         self.assertEqual(self.client.get(reverse("indicadores")).status_code, 403)
+
+
+class FeedbackSupervisorTests(Base):
+    NOTAS = {"assiduidade": "5", "responsabilidade": "4", "iniciativa": "", "relacionamento": "5", "qualidade": "4",
+             "aprendizado": "4", "pontos_fortes": "Atenciosa", "melhorar": "Pedir ajuda mais cedo",
+             "reservado": "Comentou que pensa em desistir", "visivel_estagiario": "on"}
+
+    def test_supervisor_da_feedback_e_estagiario_ve_sem_o_reservado(self):
+        from .models import Feedback
+
+        self.entrar(self.sup)
+        self.assertContains(self.client.get(reverse("painel_supervisor")), "Feedback de novembro de 2026")
+        self.client.post(reverse("dar_feedback", args=[self.est.pk]), self.NOTAS)
+        f = Feedback.objects.get()
+        self.assertEqual((f.mes, f.iniciativa, f.media), (date(2026, 11, 1), None, 4.4))
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="feedback de novembro").exists())
+        self.assertTrue(Notificacao.objects.filter(usuario=self.ori, texto__contains="média 4,4").exists())
+        self.client.post(reverse("dar_feedback", args=[self.est.pk]), {**self.NOTAS, "assiduidade": "3"})
+        self.assertEqual(Feedback.objects.count(), 1)  # o mesmo mês é atualizado
+        self.entrar(self.aluno)
+        r = self.client.get(self.est.get_absolute_url() + "?aba=feedback")
+        self.assertContains(r, "Pedir ajuda mais cedo")
+        self.assertNotContains(r, "pensa em desistir")
+        self.entrar(self.ori)
+        self.assertContains(self.client.get(self.est.get_absolute_url() + "?aba=feedback"), "pensa em desistir")
+
+    def test_oculto_e_vazio(self):
+        from .models import Feedback
+
+        self.entrar(self.sup)
+        r = self.client.post(reverse("dar_feedback", args=[self.est.pk]), {})
+        self.assertContains(r, "Dê ao menos uma nota")
+        self.client.post(reverse("dar_feedback", args=[self.est.pk]), {"qualidade": "2", "melhorar": "Atenção aos prazos"})
+        self.assertFalse(Feedback.objects.get().visivel_estagiario)
+        self.entrar(self.aluno)
+        self.assertNotContains(self.client.get(self.est.get_absolute_url() + "?aba=feedback"), "Atenção aos prazos")
+
+    def test_so_o_supervisor_do_estagio_e_mes_fechado(self):
+        outro = _ativo(criar_usuario("Outro Supervisor", Usuario.Papel.SUPERVISOR, concedente=self.local))
+        self.entrar(outro)
+        self.assertEqual(self.client.get(reverse("dar_feedback", args=[self.est.pk])).status_code, 403)
+        self.entrar(self.ori)
+        self.assertEqual(self.client.get(reverse("dar_feedback", args=[self.est.pk])).status_code, 403)
+        from .models import Feedback
+
+        self.entrar(self.sup)
+        self.client.post(reverse("dar_feedback", args=[self.est.pk]) + "?mes=2026-09", {"qualidade": "5"})
+        self.assertEqual(Feedback.objects.get().mes, date(2026, 11, 1))  # setembro já fechou: vale o mês atual
+
+    def test_lembrete_do_dia_20_uma_vez(self):
+        from datetime import datetime
+
+        from .feedback import disparar_lembrete
+
+        tz = timezone.get_current_timezone()
+        self.assertEqual(disparar_lembrete(datetime(2026, 11, 19, 10, tzinfo=tz)), 0)
+        self.assertEqual(disparar_lembrete(datetime(2026, 11, 20, 8, tzinfo=tz)), 1)
+        self.assertTrue(Notificacao.objects.filter(usuario=self.sup, texto__contains="Falta o feedback de novembro").exists())
+        self.assertEqual(disparar_lembrete(datetime(2026, 11, 25, 8, tzinfo=tz)), 0)
+
+    def test_quadro_indicadores_e_pontos_de_atencao(self):
+        from .indicadores import calcular
+
+        self.entrar(self.sup)
+        self.client.post(reverse("dar_feedback", args=[self.est.pk]), {"qualidade": "2", "assiduidade": "2"})
+        self.entrar(self.ori)
+        r = self.client.get(reverse("feedback_geral"))
+        self.assertEqual(r.context["baixos"], 1)
+        self.assertContains(r, "nota-media baixa")
+        r = self.client.get(reverse("relatorio_turma", args=[self.turma.pk]))
+        self.assertTrue(any("abaixo de “bom”" in m for m in dict(r.context["atencao"])[self.est]))
+        d = calcular(self.ori, 2026)
+        self.assertEqual((d["geral"]["feedback"], d["geral"]["feedback_mes"]), (2.0, 100.0))

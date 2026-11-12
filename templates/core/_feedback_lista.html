@@ -1,0 +1,14 @@
+{% load ui %}
+{# Feedbacks de um estágio. Precisa de: feedbacks, ver_reservado #}
+{% for f in feedbacks %}
+<div class="card feedback-card">
+  <div class="card-cab"><h3>{{ f.mes|date:"F \d\e Y"|capfirst }}</h3>{% if f.media %}<span class="nota-media" title="Média das notas dadas">{{ f.media|floatformat:1 }} <small>/ 5</small></span>{% endif %}</div>
+  <ul class="notas-lista">{% for rotulo, nota, texto in f.notas %}<li><span class="cresce">{{ rotulo }}</span>{% if nota %}<span class="pontos-nota" aria-hidden="true">{% for i in "12345" %}<i class="{% if forloop.counter <= nota %}cheio{% endif %}"></i>{% endfor %}</span><strong>{{ texto }}</strong>{% else %}<span class="muted">não observado</span>{% endif %}</li>{% endfor %}</ul>
+  {% if f.pontos_fortes %}<p><strong>Pontos fortes:</strong> {{ f.pontos_fortes|linebreaksbr }}</p>{% endif %}
+  {% if f.melhorar %}<p><strong>O que pode melhorar:</strong> {{ f.melhorar|linebreaksbr }}</p>{% endif %}
+  {% if ver_reservado and f.reservado %}<div class="caixa-alerta"><strong>Só para a escola:</strong> {{ f.reservado|linebreaksbr }}</div>{% endif %}
+  <p class="muted" style="font-size:.8rem;margin-bottom:0">{{ f.autor|default:"Supervisor" }} · {{ f.atualizado_em|date:"d/m/Y H:i" }}{% if not f.visivel_estagiario %} · <span class="etiqueta">não visível ao estagiário</span>{% endif %}</p>
+</div>
+{% empty %}
+<div class="card"><p class="vazio">Nenhum feedback do supervisor ainda.</p></div>
+{% endfor %}

@@ -37,6 +37,7 @@
   <a href="?aba=mensagens" class="{% if aba == 'mensagens' %}ativo{% endif %}">Dúvidas e mensagens</a>
   <a href="?aba=arquivos" class="{% if aba == 'arquivos' %}ativo{% endif %}">Arquivos</a>
   <a href="?aba=agenda" class="{% if aba == 'agenda' %}ativo{% endif %}">Visitas</a>
+  <a href="?aba=feedback" class="{% if aba == 'feedback' %}ativo{% endif %}">Feedback</a>
   <a href="?aba=escalas" class="{% if aba == 'escalas' %}ativo{% endif %}">Dias e horários</a>
 </nav>
 
@@ -242,6 +243,12 @@
   </div>
 </div>
 
+{% elif aba == "feedback" %}
+<div class="titulo-secao flex" style="justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem">
+  <p class="muted" style="margin:0">Feedback mensal do supervisor: notas de 1 (insuficiente) a 5 (excelente) e comentários.</p>
+  {% if e_supervisor %}<a class="btn" href="{% url 'dar_feedback' estagio.pk %}">{% icone "estrela" %} Dar o feedback deste mês</a>{% endif %}
+</div>
+{% include "core/_feedback_lista.html" %}
 {% elif aba == "agenda" %}
 <div class="card">
   <div class="card-cab"><h2>Visitas e conversas</h2>{% if pode_agenda %}<a class="btn sm" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "mais" %} {% if e_orientador %}Agendar{% else %}Solicitar{% endif %}</a>{% endif %}</div>

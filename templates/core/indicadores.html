@@ -23,6 +23,7 @@
   <div class="kpi"><div class="valor">{{ g.carga|floatformat:0 }}%</div><div class="rotulo">da carga horária cumprida, em média</div></div>
   <div class="kpi"><div class="valor">{{ g.concluidos }}</div><div class="rotulo">já cumpriram a carga</div></div>
   <div class="kpi"><div class="valor">{{ g.com_visita|floatformat:0 }}%</div><div class="rotulo">receberam visita ou conversa</div></div>
+  <div class="kpi"><div class="valor">{% if g.feedback %}{{ g.feedback|floatformat:1 }}{% else %}—{% endif %}</div><div class="rotulo">média do feedback dos supervisores · {{ g.feedback_mes|floatformat:0 }}% já responderam este mês</div></div>
   <div class="kpi{% if d.pendencias.presencas or d.pendencias.atestados or d.pendencias.documentos %} laranja{% endif %}"><div class="valor">{{ d.pendencias.presencas|add:d.pendencias.atestados|add:d.pendencias.documentos }}</div>
     <div class="rotulo">pendências: {{ d.pendencias.presencas }} presença{{ d.pendencias.presencas|pluralize }} a validar, {{ d.pendencias.atestados }} atestado{{ d.pendencias.atestados|pluralize }}, {{ d.pendencias.documentos }} documento{{ d.pendencias.documentos|pluralize }}</div></div>
 </div>
@@ -52,7 +53,7 @@
 <div class="card">
   <div class="card-cab"><h2>Por turma</h2><small class="muted">clique na turma para ver os estagiários</small></div>
   <div class="tabela-wrap"><table class="tabela medidores">
-    <thead><tr><th>Turma</th><th class="num">Ativos</th><th>Carga cumprida (média)</th><th>Frequência</th><th>Com visita</th><th>Pasta conferida</th><th class="num">Pontos de atenção</th></tr></thead>
+    <thead><tr><th>Turma</th><th class="num">Ativos</th><th>Carga cumprida (média)</th><th>Frequência</th><th>Com visita</th><th>Pasta conferida</th><th class="num">Feedback (média)</th><th class="num">Pontos de atenção</th></tr></thead>
     <tbody>{% for t in d.turmas %}<tr>
       <td><strong>{% if t.turma %}<a href="{% url 'estagios_lista' %}?turma={{ t.turma.pk }}">{{ t.rotulo }}</a>{% else %}{{ t.rotulo }}{% endif %}</strong>{% if t.turma %}<small style="display:block"><a href="{% url 'relatorio_turma' t.turma.pk %}" target="_blank" rel="noopener">relatório</a></small>{% endif %}</td>
       <td class="num">{{ t.ativos }}</td>
@@ -60,6 +61,7 @@
       <td>{% include "core/_medidor.html" with v=t.frequencia alerta=75 %}</td>
       <td>{% include "core/_medidor.html" with v=t.com_visita %}</td>
       <td>{% include "core/_medidor.html" with v=t.documentos %}</td>
+      <td class="num">{% if t.feedback %}<a href="{% url 'feedback_geral' %}{% if t.turma %}?turma={{ t.turma.pk }}{% endif %}" class="nota-media{% if t.feedback < 3 %} baixa{% endif %}">{{ t.feedback|floatformat:1 }}</a><small style="display:block" class="muted">{{ t.feedback_mes|floatformat:0 }}% neste mês</small>{% else %}<span class="muted">—</span>{% endif %}</td>
       <td class="num">{% if t.atencao %}<a href="{% url 'relatorio_turma' t.turma.pk %}#atencao" target="_blank" rel="noopener">{{ t.atencao }}</a>{% else %}0{% endif %}</td>
     </tr>{% endfor %}</tbody>
   </table></div>

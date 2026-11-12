@@ -1031,6 +1031,57 @@ class Notificacao(models.Model):
         ordering = ["-criado_em"]
 
 
+class Feedback(models.Model):
+    """Feedback mensal do supervisor sobre o estagiário: notas por critério e comentários."""
+
+    NOTAS = [(5, "Excelente"), (4, "Muito bom"), (3, "Bom"), (2, "Regular"), (1, "Insuficiente")]
+    CRITERIOS = [
+        ("assiduidade", "Assiduidade e pontualidade"),
+        ("responsabilidade", "Responsabilidade e compromisso"),
+        ("iniciativa", "Iniciativa e proatividade"),
+        ("relacionamento", "Relacionamento com a equipe"),
+        ("qualidade", "Qualidade do trabalho"),
+        ("aprendizado", "Aprendizado e evolução"),
+    ]
+
+    estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="feedbacks")
+    autor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    mes = models.DateField(help_text="Primeiro dia do mês a que se refere")
+    assiduidade = models.PositiveSmallIntegerField("Assiduidade e pontualidade", choices=NOTAS, null=True, blank=True)
+    responsabilidade = models.PositiveSmallIntegerField("Responsabilidade e compromisso", choices=NOTAS, null=True, blank=True)
+    iniciativa = models.PositiveSmallIntegerField("Iniciativa e proatividade", choices=NOTAS, null=True, blank=True)
+    relacionamento = models.PositiveSmallIntegerField("Relacionamento com a equipe", choices=NOTAS, null=True, blank=True)
+    qualidade = models.PositiveSmallIntegerField("Qualidade do trabalho", choices=NOTAS, null=True, blank=True)
+    aprendizado = models.PositiveSmallIntegerField("Aprendizado e evolução", choices=NOTAS, null=True, blank=True)
+    pontos_fortes = models.TextField("Pontos fortes", blank=True)
+    melhorar = models.TextField("O que pode melhorar", blank=True)
+    reservado = models.TextField("Comentário só para a escola", blank=True,
+                                 help_text="O estagiário não vê. Use para algo que a escola precisa saber.")
+    visivel_estagiario = models.BooleanField("O estagiário pode ver este feedback", default=True,
+                                             help_text="Notas, pontos fortes e o que melhorar.")
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-mes"]
+        constraints = [models.UniqueConstraint(fields=["estagio", "mes"], name="feedback_unico_por_mes")]
+
+    def __str__(self):
+        return f"Feedback de {self.estagio.estagiario} em {self.mes:%m/%Y}"
+
+    @property
+    def notas(self):
+        """[(rótulo, nota, texto da nota)] na ordem dos critérios."""
+        textos = dict(self.NOTAS)
+        return [(rotulo, getattr(self, campo), textos.get(getattr(self, campo), "não observado"))
+                for campo, rotulo in self.CRITERIOS]
+
+    @property
+    def media(self):
+        valores = [getattr(self, c) for c, _ in self.CRITERIOS if getattr(self, c)]
+        return round(sum(valores) / len(valores), 1) if valores else None
+
+
 class InscricaoPush(models.Model):
     """Um celular/navegador que aceitou receber notificações (Web Push). Uma pessoa pode ter vários."""
 
@@ -1112,6 +1163,11 @@ class Configuracao(models.Model):
                   "atenção dos seus estagiários. Quem não quiser pode desligar em Meus dados.",
     )
     resumo_enviado_em = models.DateTimeField(null=True, blank=True, editable=False)
+    feedback_mensal = models.BooleanField(
+        "Pedir feedback mensal aos supervisores", default=True,
+        help_text="A partir do dia 20, quem ainda não deu o feedback do mês sobre seus estagiários recebe um lembrete.",
+    )
+    lembrete_feedback_em = models.DateTimeField(null=True, blank=True, editable=False)
     atestados_supervisor = models.BooleanField(
         "O supervisor da concedente também analisa os atestados", default=True,
         help_text="Desligado: só a escola (orientador, coordenação) vê o arquivo e decide; o supervisor vê apenas que o "

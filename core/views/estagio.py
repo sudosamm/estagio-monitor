@@ -150,6 +150,12 @@ def estagio_detalhe(request, pk):
         ctx["pasta_resumo"] = resumo_pasta(ctx["pasta"])
         ctx["pode_enviar_pasta"] = pode_enviar(user, estagio)
         ctx["entrega_form"] = EntregaForm()
+    elif aba == "feedback":
+        qs = estagio.feedbacks.select_related("autor")
+        if ctx["e_estagiario"]:
+            qs = qs.filter(visivel_estagiario=True)
+        ctx["feedbacks"] = qs
+        ctx["ver_reservado"] = ctx["e_orientador"] or ctx["e_supervisor"]
     elif aba == "agenda":
         ctx["agendamentos"] = estagio.agendamentos.select_related("solicitante").order_by("-criado_em")
     elif aba == "escalas":

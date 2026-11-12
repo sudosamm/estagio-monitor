@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Feedback · {{ e.estagiario }}{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><div class="migalha"><a href="{% url 'painel_supervisor' %}#feedback">← Meus estagiários</a></div>
+    <h1>Feedback de {{ e.estagiario.primeiro_nome }} · {{ nome_mes }}</h1>
+    <p>{{ e.estagiario }} · {{ e.local|default:"" }}{% if atual %} · você já respondeu este mês e pode ajustar{% endif %}</p></div>
+  {% if abertos|length > 1 %}<div class="acoes">{% for m in abertos %}<a class="btn sm {% if m != mes %}sec{% endif %}" href="?mes={{ m|date:'Y-m' }}">{{ m|date:"F" }}</a>{% endfor %}</div>{% endif %}
+</div>
+<div class="grade grade-lado">
+  <div class="card destaque">
+    <p class="muted" style="font-size:.88rem;margin-top:0">Como foi o mês? Marque o que você observou; o que não deu para observar pode ficar em “Não observei”. Leva uns 2 minutos.</p>
+    <form method="post" novalidate>{% csrf_token %}
+      {% if form.non_field_errors %}<div class="aviso error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+      {% for campo in campos_notas %}
+      <fieldset class="criterio"><legend>{{ campo.label }}</legend>
+        <div class="escala-notas">{% for r in campo %}<label class="{% if not r.data.value %}nao-obs{% endif %}">{{ r.tag }}<span>{{ r.choice_label }}</span></label>{% endfor %}</div>
+      </fieldset>
+      {% endfor %}
+      {% with campo=form.pontos_fortes %}{% include "core/_campo.html" %}{% endwith %}
+      {% with campo=form.melhorar %}{% include "core/_campo.html" %}{% endwith %}
+      {% with campo=form.reservado %}{% include "core/_campo.html" %}{% endwith %}
+      {% with campo=form.visivel_estagiario %}{% include "core/_campo.html" %}{% endwith %}
+      <button class="btn" type="submit">{% icone "check" %} {% if atual %}Atualizar feedback{% else %}Enviar feedback{% endif %}</button>
+    </form>
+  </div>
+  <div>
+    <div class="card"><h3>Para que serve</h3>
+      <p style="font-size:.9rem">O orientador acompanha a evolução mês a mês e conversa com o estagiário quando algo não vai bem. Ele mesmo vê as notas e os comentários (menos o “só para a escola”), o que ajuda a melhorar.</p></div>
+    {% if anteriores %}<div class="card"><h3>Meses anteriores</h3>
+      <ul class="lista compacta">{% for f in anteriores %}<li><span class="cresce"><strong>{{ f.mes|date:"F/Y" }}</strong>{% if f.melhorar %}<small style="display:block">Melhorar: {{ f.melhorar|truncatechars:80 }}</small>{% endif %}</span>{% if f.media %}<span class="nota-media">{{ f.media|floatformat:1 }}</span>{% endif %}</li>{% endfor %}</ul></div>{% endif %}
+  </div>
+</div>
+{% endblock %}

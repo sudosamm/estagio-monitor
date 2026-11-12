@@ -20,7 +20,8 @@ def _pct(parte, todo):
 
 def _grupo():
     return {"ativos": 0, "pct_soma": 0, "concluidos": 0, "previstos": 0, "presentes": 0, "faltas": 0,
-            "visitados": 0, "docs_ok": 0, "docs_total": 0, "atencao": 0, "a_validar": 0}
+            "visitados": 0, "docs_ok": 0, "docs_total": 0, "atencao": 0, "a_validar": 0, "fb_soma": 0, "fb_n": 0,
+            "fb_mes": 0}
 
 
 def _fechar(g):
@@ -28,6 +29,8 @@ def _fechar(g):
     g["frequencia"] = _pct(g["presentes"], g["previstos"])
     g["com_visita"] = _pct(g["visitados"], g["ativos"])
     g["documentos"] = _pct(g["docs_ok"], g["docs_total"])
+    g["feedback"] = round(g["fb_soma"] / g["fb_n"], 1) if g["fb_n"] else None
+    g["feedback_mes"] = _pct(g["fb_mes"], g["ativos"])
     return g
 
 
@@ -62,6 +65,7 @@ def calcular(usuario, ano, curso=None, semanas=8, hoje=None):
                     alvo[tipo] += 1
         freq[e.pk] = c
 
+    mes_atual = hoje.replace(day=1)
     por_turma, por_concedente = {}, {}
     situacoes = Counter()
     geral = _grupo()
@@ -90,6 +94,11 @@ def calcular(usuario, ano, curso=None, semanas=8, hoje=None):
             g["docs_total"] += len(obrig)
             g["atencao"] += e.pk in atencao_ids
             g["a_validar"] += e.n_pendentes
+            fb = l["feedback"]
+            if fb and fb.media:
+                g["fb_soma"] += fb.media
+                g["fb_n"] += 1
+            g["fb_mes"] += bool(fb and fb.mes == mes_atual)
     turmas = [_fechar(g) for _, g in sorted(por_turma.items())]
     concedentes = sorted((_fechar(g) for g in por_concedente.values()),
                          key=lambda g: (g["frequencia"] is None, g["frequencia"] or 0, g["rotulo"]))

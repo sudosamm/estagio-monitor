@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
-from core.views import agenda, atestados, avisos, captacao, comum, estagio, frequencia, importacao, orientador, pasta, pwa, relatorios, supervisor
+from core.views import agenda, atestados, avisos, captacao, comum, estagio, feedback, frequencia, importacao, orientador, pasta, pwa, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
@@ -33,6 +33,8 @@ urlpatterns = [
     path("estagios/<int:pk>/saida/", estagio.registrar_saida, name="registrar_saida"),
     path("estagios/<int:pk>/ausencia/", estagio.informar_ausencia, name="informar_ausencia"),
     path("estagios/<int:pk>/atestado/", atestados.enviar_atestado, name="enviar_atestado"),
+    path("estagios/<int:pk>/feedback/", feedback.dar_feedback, name="dar_feedback"),
+    path("feedback/", feedback.feedback_geral, name="feedback_geral"),
     path("atestados/", atestados.atestados, name="atestados"),
     path("atestados/<int:pk>/", atestados.atestado_detalhe, name="atestado_detalhe"),
     path("atestados/<int:pk>/arquivo/", atestados.atestado_arquivo, name="atestado_arquivo"),

@@ -33,7 +33,7 @@ def com_contagens(qs):
     )
 
 
-def situacao_estagio(e, hoje=None, pasta=None):
+def situacao_estagio(e, hoje=None, pasta=None, feedback=None):
     """Linha do relatório: {e, r (resumo_horas), sem_registro, situacao, motivos}. Precisa de com_contagens()."""
     hoje = hoje or timezone.localdate()
     if pasta is None:
@@ -76,8 +76,11 @@ def situacao_estagio(e, hoje=None, pasta=None):
             motivos.append("nenhuma visita ou conversa realizada")
     if docs_atrasados:
         motivos.append("documentos da pasta atrasados: " + ", ".join(docs_atrasados))
+    if e.ativo and feedback and feedback.media and feedback.media < 3:
+        motivos.append(f"último feedback do supervisor abaixo de “bom” ({str(feedback.media).replace('.', ',')} em "
+                       f"{feedback.mes:%m/%Y})")
     return {"e": e, "r": r, "sem_registro": sem_registro, "situacao": situacao, "concluido": concluido,
-            "motivos": motivos, "docs_atrasados": docs_atrasados, "pasta": pasta}
+            "motivos": motivos, "docs_atrasados": docs_atrasados, "pasta": pasta, "feedback": feedback}
 
 
 def consolidar(estagios, hoje=None):
@@ -88,9 +91,12 @@ def consolidar(estagios, hoje=None):
            "pct": 0}
     from .pasta import pastas
 
+    from .feedback import ultimos
+
     todas = pastas(estagios, hoje)
+    feedbacks = ultimos(estagios)
     for e in estagios:
-        linha = situacao_estagio(e, hoje, todas[e.pk])
+        linha = situacao_estagio(e, hoje, todas[e.pk], feedbacks.get(e.pk))
         r = linha["r"]
         linhas.append(linha)
         if e.ativo:

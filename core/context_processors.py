@@ -15,6 +15,7 @@ def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0):
         pode("agenda") and _item("Agenda de visitas", "agendamentos",
                                  {"agendamentos", "novo_agendamento", "agendamento_detalhe", "assinar_agenda"}, url_atual),
         _item("Frequências", "frequencias", {"frequencias"}, url_atual),
+        _item("Feedback dos supervisores", "feedback_geral", {"feedback_geral"}, url_atual),
         _item("Atestados", "atestados", {"atestados", "atestado_detalhe", "enviar_atestado"}, url_atual, atestados),
         _item("Pasta de documentos", "pasta_geral", {"pasta_geral", "tipos_documento", "tipo_documento_editar"},
               url_atual),

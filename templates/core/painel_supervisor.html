@@ -8,6 +8,15 @@
 <a class="faixa-aviso" href="{% url 'escala_lote' %}">{% icone "relogio" %}<span><strong>{{ sem_horario|length }} estagiário{{ sem_horario|pluralize }} sem horário definido:</strong> {% for e in sem_horario %}{{ e.estagiario.primeiro_nome }}{% if not forloop.last %}, {% endif %}{% endfor %}. Os horários são definidos por você, supervisor.</span><span class="btn sm">Definir</span></a>
 {% endif %}
 {% include "core/_push.html" with lembrete=True %}
+{% if feedback_itens %}
+<div class="card" id="feedback">
+  <div class="card-cab"><h2>{% icone "estrela" %} Feedback de {{ feedback_mes }}</h2>{% if feedback_faltam %}<span class="selo pasta-pendente">faltam {{ feedback_faltam }}</span>{% else %}<span class="selo pasta-conferido">todos respondidos</span>{% endif %}</div>
+  <p class="muted" style="font-size:.85rem;margin-top:0">Uma vez por mês, conte à escola como está cada estagiário. Leva uns 2 minutos por pessoa.</p>
+  <ul class="lista compacta">{% for e, f in feedback_itens %}<li><span class="cresce"><strong>{{ e.estagiario }}</strong>{% if f %}<small style="display:block">Enviado em {{ f.atualizado_em|date:"d/m" }}{% if f.media %} · média {{ f.media|floatformat:1 }}{% endif %}</small>{% elif e.pk in faltam_anterior %}<small class="alerta-txt" style="display:block">falta também o de {{ feedback_anterior|date:"F" }}</small>{% endif %}</span>
+    {% if e.pk in faltam_anterior %}<a class="btn sec sm" href="{% url 'dar_feedback' e.pk %}?mes={{ feedback_anterior|date:'Y-m' }}">{{ feedback_anterior|date:"F" }}</a>{% endif %}
+    <a class="btn sm {% if f %}sec{% endif %}" href="{% url 'dar_feedback' e.pk %}">{% if f %}Ajustar{% else %}Dar feedback{% endif %}</a></li>{% endfor %}</ul>
+</div>
+{% endif %}
 <div class="grade grade-lado">
   <div class="card destaque">
     <h2>Hoje</h2>

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Feedback dos supervisores{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><h1>Feedback dos supervisores</h1><p>Média das notas que cada supervisor deu, mês a mês (1 = insuficiente, 5 = excelente).</p></div>
+  <div class="acoes">{% include "core/_seletor_ano.html" %}</div>
+</div>
+<div class="kpis">
+  <div class="kpi{% if sem_feedback %} laranja{% endif %}"><div class="valor">{{ sem_feedback }}</div><div class="rotulo">ainda sem o feedback de {{ nomes_meses|last }}</div></div>
+  <div class="kpi{% if baixos %} vermelho{% endif %}"><div class="valor">{{ baixos }}</div><div class="rotulo">com o último feedback abaixo de “bom”</div></div>
+</div>
+<form class="filtros card" method="get">{% if ano %}<input type="hidden" name="ano" value="{{ ano }}">{% endif %}
+  <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ f.q }}" placeholder="Nome"></div>
+  <div><label class="rotulo">Turma</label><select name="turma"><option value="">Todas</option>{% for t in turmas %}<option value="{{ t.pk }}"{% if f.turma == t.pk|stringformat:"s" %} selected{% endif %}>{{ t.nome|default:t.curso.nome }} · {{ t.curso }}</option>{% endfor %}</select></div>
+  <button class="btn" type="submit">Filtrar</button>
+</form>
+<div class="card"><div class="tabela-wrap"><table class="tabela quadro-pasta">
+  <thead><tr><th>Estagiário</th><th>Supervisor</th>{% for m in meses %}<th>{{ m|date:"M/Y"|capfirst }}</th>{% endfor %}</tr></thead>
+  <tbody>{% for l in linhas %}<tr>
+    <td><a class="pessoa" href="{% url 'estagio_detalhe' l.e.pk %}?aba=feedback"><span><strong>{{ l.e.estagiario }}</strong>{% if l.ultimo.melhorar %}<small title="{{ l.ultimo.melhorar }}">Melhorar: {{ l.ultimo.melhorar|truncatechars:50 }}</small>{% endif %}</span></a></td>
+    <td><small>{{ l.e.supervisor|default:"—" }}</small></td>
+    {% for c in l.celulas %}<td>{% if c %}<a href="{% url 'estagio_detalhe' l.e.pk %}?aba=feedback" class="nota-media{% if c.media and c.media < 3 %} baixa{% endif %}" title="{{ c.mes|date:'F' }}: média {{ c.media|default:'—' }}">{{ c.media|floatformat:1|default:"✓" }}</a>{% elif forloop.last and l.e.ativo and l.e.supervisor %}<span class="selo pasta-pendente">pendente</span>{% else %}<span class="muted">·</span>{% endif %}</td>{% endfor %}
+  </tr>{% empty %}<tr><td colspan="{{ meses|length|add:2 }}" class="vazio">Nenhum estagiário.</td></tr>{% endfor %}</tbody>
+</table></div>
+<p class="muted" style="font-size:.82rem">O supervisor responde pelo painel dele. A partir do dia 20, quem ainda não respondeu recebe um lembrete (sino, celular e e-mail). Notas abaixo de 3 aparecem em vermelho e nos pontos de atenção do relatório.</p></div>
+{% endblock %}

@@ -528,3 +528,23 @@ ul.pasta details.drop > summary { color: inherit; }
 .medidor .trilho { flex: 1; height: 8px; background: var(--verde-claro); border-radius: 4px; overflow: hidden; min-width: 60px; }
 .medidor .trilho span { display: block; height: 100%; background: var(--verde); border-radius: 0 4px 4px 0; }
 .medidor .valor-medidor { font-variant-numeric: tabular-nums; font-size: .88rem; white-space: nowrap; color: var(--cinza-900); }
+
+/* feedback do supervisor */
+fieldset.criterio { border: 0; padding: 0; margin: 0 0 .9rem; }
+fieldset.criterio legend { font-weight: 600; font-size: .92rem; margin-bottom: .35rem; padding: 0; }
+.escala-notas { display: flex; flex-wrap: wrap; gap: .35rem; }
+.escala-notas label { position: relative; margin: 0; }
+.escala-notas input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.escala-notas span { display: inline-block; padding: .45rem .7rem; border: 1px solid var(--cinza-300); border-radius: 999px; font-size: .85rem; background: #fff; cursor: pointer; }
+.escala-notas label.nao-obs span { color: var(--cinza-500); border-style: dashed; }
+.escala-notas input:checked + span { background: var(--verde); border-color: var(--verde); color: #fff; font-weight: 600; }
+.escala-notas label.nao-obs input:checked + span { background: var(--cinza-100); border-color: var(--cinza-300); color: var(--cinza-700); }
+.escala-notas input:focus-visible + span { outline: 2px solid var(--verde-escuro); outline-offset: 2px; }
+.nota-media { display: inline-block; min-width: 2.4rem; text-align: center; font-weight: 700; padding: .15rem .45rem; border-radius: 6px; background: var(--verde-claro); color: var(--verde-escuro); text-decoration: none; font-variant-numeric: tabular-nums; }
+.nota-media.baixa { background: #fbe4e2; color: var(--st-falta); }
+.notas-lista { list-style: none; padding: 0; margin: 0 0 .6rem; font-size: .9rem; }
+.notas-lista li { display: flex; align-items: center; gap: .6rem; padding: .3rem 0; border-bottom: 1px solid var(--cinza-100); }
+.notas-lista strong { min-width: 6.5rem; font-weight: 600; font-size: .85rem; }
+.pontos-nota { display: inline-flex; gap: 3px; flex: none; }
+.pontos-nota i { width: 10px; height: 10px; border-radius: 50%; background: var(--cinza-200); }
+.pontos-nota i.cheio { background: var(--verde); }

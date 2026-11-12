@@ -17,7 +17,7 @@ Todos recebem **notificações** (o sino no topo) quando algo muda, por exemplo:
 
 ### Menu da gestão
 Para orientador, coordenação e administrador, a barra tem **Painel** e **Estagiários** soltos e três menus:
-- **Acompanhamento:** indicadores, resumo da semana, agenda de visitas, frequências, atestados, pasta de documentos, alterar dias.
+- **Acompanhamento:** indicadores, resumo da semana, agenda de visitas, frequências, feedback dos supervisores, atestados, pasta de documentos, alterar dias.
 - **Comunicação:** avisos para a turma, arquivos gerais.
 - **Cadastros:** contas, concedentes, turmas e cursos, feriados e recessos, captação, banco de talentos.
 
@@ -180,6 +180,14 @@ Clique em *Salvar PDF / imprimir* e escolha **Salvar como PDF** (funciona també
 
 A **planilha (.xlsx)**, também disponível pelo botão *Baixar planilha* do relatório, traz quatro abas: *Resumo*, *Estagiários* (uma linha por estágio, com horas, faltas, dias sem registro, visitas, previsão, situação e pontos de atenção), *Horas por mês* (horas validadas em cada mês) e *Visitas e conversas* (com o relato). Serve para prestar contas à escola, à CREDE ou à SEDUC sem redigitar. O CPF não vai para a planilha.
 
+### Feedback do supervisor
+Uma vez por mês, o supervisor conta à escola como está cada estagiário, pelo card **Feedback do mês** no painel dele. Leva uns 2 minutos por pessoa.
+- **Notas de 1 a 5** (insuficiente, regular, bom, muito bom, excelente) em seis critérios: assiduidade e pontualidade, responsabilidade, iniciativa, relacionamento com a equipe, qualidade do trabalho e aprendizado. O que ele não conseguiu observar fica como “Não observei”.
+- **Comentários:** pontos fortes, o que pode melhorar e um campo **só para a escola**, que o estagiário não vê. O supervisor também pode deixar o feedback inteiro oculto do estagiário.
+- O feedback do mês pode ser ajustado até o fim do mês, e o do mês anterior até o dia 10.
+- **Lembrete:** a partir do dia 20, quem ainda não respondeu recebe um aviso (sino, celular e e-mail). Dá para desligar em **Configurações**.
+- **Onde aparece:** aba *Feedback* de cada estágio, para estagiário, supervisor e escola. O quadro **Acompanhamento → Feedback dos supervisores** mostra a média de cada estagiário nos últimos 4 meses e quem está pendente. Também entra nos **Indicadores** (média por turma e quantos já responderam no mês), na planilha exportada e nos pontos de atenção do relatório, quando a média fica abaixo de 3 (“bom”).
+
 ### Indicadores
 Em **Acompanhamento → Indicadores**, um painel do andamento, filtrado por ano, curso e período (últimas 4, 8, 12 ou 26 semanas):
 - **Números principais:** estagiários ativos, frequência (dias de estágio com presença), carga média cumprida, quem já cumpriu, quem recebeu visita e as pendências (presenças a validar, atestados, documentos).
@@ -267,6 +275,7 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Conferir documentos da pasta, marcar entregue em papel | ✔ | ✔ (cursos que coordena) |
 | Definir os documentos exigidos na pasta | ✔ | — |
 | Enviar avisos para a turma | ✔ | ✔ (cursos que coordena) |
+| Ver o feedback dos supervisores (inclusive o comentário reservado) | ✔ | ✔ (cursos que coordena) |
 | Agendar visitas | ✔ | — |
 | Mudar dias em lote (cada um mantém seus horários) | ✔ | — |
 | Mudar o ano de referência | ✔ | — |
@@ -359,12 +368,12 @@ core/atestados.py   Atestados: envio, dias cobertos, aceite/recusa
 core/pasta.py       Pasta do estágio: documentos exigidos, prazos e conferência
 core/push.py        Notificações no celular (Web Push): chaves VAPID e envio
 core/indicadores.py Indicadores por turma, por concedente e semana a semana
+core/feedback.py    Feedback mensal do supervisor: meses abertos, pendências e lembrete
 templates/          HTML (visual inspirado no portal ce.gov.br)
 static/             CSS e JS próprios, sem frameworks
 ```
 
 ## Ideias para as próximas versões
-- Área de feedback do supervisor
 - Check-in por QR code mostrado pelo supervisor (confirma a chegada na hora)
 - Encerramento do ano letivo: fechar turmas, arquivar estágios e anonimizar dados após o prazo (LGPD)
 - Integração com o SICE por API oficial da SEDUC (dados dos estagiários, avaliações e certificado)
