@@ -260,6 +260,27 @@ def dias_sem_estagio(estagio, inicio, fim):
     return dias
 
 
+def cadastrar_dias(usuario, abrangencia, data, descricao, ate=None, municipio="", anual=False, curso=None,
+                   origem="manual"):
+    """Cadastra um dia (ou um período) sem estágio sem duplicar. Devolve quantos dias novos foram criados."""
+    A = DiaSemEstagio.Abrangencia
+    municipio = (municipio or "").strip() if abrangencia == A.MUNICIPIO else ""
+    chave = chave_municipio(municipio)
+    if abrangencia != A.ESCOLA:
+        curso = None
+    n, dia = 0, data
+    while dia <= (ate or data):
+        busca = {"data": dia, "abrangencia": abrangencia, "municipio_chave": chave, "curso": curso}
+        if abrangencia == A.ESCOLA:
+            busca["orientador"] = usuario
+        _, criado = DiaSemEstagio.objects.get_or_create(**busca, defaults={
+            "descricao": descricao[:120], "orientador": usuario, "municipio": municipio, "anual": anual,
+            "origem": origem})
+        n += criado
+        dia += timedelta(days=1)
+    return n
+
+
 # ---------------------------------------------------------------- calendário de feriados
 
 

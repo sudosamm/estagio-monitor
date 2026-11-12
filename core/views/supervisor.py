@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from ..models import Registro, Usuario
+from ..models import HistoricoRegistro, Registro, Usuario
 from ..services import estagios_visiveis, notificar, status_hoje
 from .base import papel
 
@@ -38,7 +38,7 @@ def confirmar_lote(request):
     n = 0
     for reg in regs:
         reg.confirmar(request.user, Registro.Confirmacao.CONFIRMADA)
-        reg.save()
+        reg.anotar(request.user, HistoricoRegistro.Acao.VALIDACAO, request).save()
         n += 1
         notificar([reg.estagio.estagiario], f"Seu registro de {reg.data:%d/%m} foi confirmado pelo supervisor.",
                   reverse("estagio_dia", args=[reg.estagio_id, reg.data.isoformat()]))

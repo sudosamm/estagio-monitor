@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,7 +15,9 @@ from ..forms import (
     AusenciaForm, DiarioForm, DocumentoForm, EscalaForm, EstagioForm, HorariosDiaForm, LancamentoForm, MensagemForm,
     PlanejarDiaForm, TrocarSupervisorForm, horas_str,
 )
-from ..models import DIAS_ABREV, Agendamento, Configuracao, DiaPlanejado, Documento, Escala, Registro, TrocaSupervisor
+from ..models import (
+    DIAS_ABREV, Agendamento, Configuracao, DiaPlanejado, Documento, Escala, HistoricoRegistro, Registro, TrocaSupervisor,
+)
 from ..services import (
     calendario_mes, horas_padrao, limite_calendario, notificar, proximos_dias, resumo_horas,
     status_hoje, status_periodo, trocar_supervisor,
@@ -124,7 +126,9 @@ def estagio_detalhe(request, pk):
             ).order_by("data_hora")[:3],
         )
     elif aba == "registros":
-        ctx["registros"] = estagio.registros.select_related("confirmado_por")[:200]
+        ctx["registros"] = estagio.registros.select_related("confirmado_por").annotate(
+            n_alteracoes=Count("historico"))[:200]
+        ctx["historico"] = estagio.historico_registros.select_related("usuario")[:40]
     elif aba == "mensagens":
         ctx["mensagens"] = _mensagens_visiveis(estagio, user)
         ctx["mensagem_form"] = MensagemForm()
@@ -162,12 +166,12 @@ def marcar_presenca(request, pk):
         raise PermissionDenied
     hoje = timezone.localdate()
     agora = timezone.localtime().time().replace(second=0, microsecond=0)
-    reg, criado = Registro.objects.get_or_create(
-        estagio=estagio, data=hoje,
-        defaults={"situacao": Registro.Situacao.PRESENTE, "horas": horas_padrao(estagio, hoje),
-                  "hora_chegada": agora, "registrado_por": request.user},
-    )
-    if not criado:
+    reg = Registro.objects.filter(estagio=estagio, data=hoje).first()
+    if reg is None:
+        reg = Registro(estagio=estagio, data=hoje, situacao=Registro.Situacao.PRESENTE,
+                       horas=horas_padrao(estagio, hoje), hora_chegada=agora, registrado_por=request.user)
+        reg.anotar(request.user, HistoricoRegistro.Acao.ENTRADA, request).save()
+    else:
         if reg.confirmacao == Registro.Confirmacao.CONFIRMADA:
             messages.info(request, "O registro de hoje já foi validado pelo supervisor.")
             return redirect(estagio)
@@ -175,7 +179,7 @@ def marcar_presenca(request, pk):
         reg.hora_chegada = reg.hora_chegada or agora
         reg.horas = reg.horas or horas_padrao(estagio, hoje)
         reg.confirmacao = Registro.Confirmacao.PENDENTE
-        reg.save()
+        reg.anotar(request.user, HistoricoRegistro.Acao.ENTRADA, request).save()
     diario = request.POST.get("diario", "").strip()
     if diario:
         reg.diario = diario
@@ -214,7 +218,7 @@ def registrar_saida(request, pk):
     if ponto == "hora_saida" and reg.calcular_horas():
         reg.horas = reg.calcular_horas()
         campos.append("horas")
-    reg.save(update_fields=campos)
+    reg.anotar(request.user, HistoricoRegistro.Acao.PONTO, request).save(update_fields=campos)
     messages.success(request, f"{PONTOS[ponto]} às {agora:%H:%M}."
                      + (f" Total do dia: {horas_str(reg.horas)}h." if ponto == "hora_saida" else ""))
     return redirect(estagio)
@@ -243,7 +247,7 @@ def informar_ausencia(request, pk):
     reg.motivo = motivo
     reg.confirmacao = Registro.Confirmacao.PENDENTE
     reg.registrado_por = request.user
-    reg.save()
+    reg.anotar(request.user, HistoricoRegistro.Acao.AUSENCIA, request).save()
     DiaPlanejado.objects.filter(estagio=estagio, data=dia).delete()
     messages.success(request, f"Ausência em {dia:%d/%m} informada ao supervisor e ao orientador.")
     _avisar_previsao(request, estagio, antes)
@@ -293,7 +297,7 @@ def estagio_dia(request, pk, data):
                     novo.horas = 0
                 if novo.confirmacao != Registro.Confirmacao.PENDENTE:
                     novo.confirmar(user, novo.confirmacao)
-                novo.save()
+                novo.anotar(user, HistoricoRegistro.Acao.LANCAMENTO, request).save()
                 messages.success(request, "Registro salvo.")
                 notificar(
                     [estagio.estagiario, estagio.supervisor, estagio.orientador],
@@ -321,7 +325,7 @@ def estagio_dia(request, pk, data):
                 setattr(novo, campo, valor)
             novo.horas = novo.calcular_horas() or horas_padrao(estagio, dia)
             novo.confirmacao = Registro.Confirmacao.PENDENTE
-            novo.save()
+            novo.anotar(user, HistoricoRegistro.Acao.DIGITOU, request).save()
             messages.success(request, f"Horários de {dia:%d/%m} enviados ({novo.horario_display}, {horas_str(novo.horas)}h). "
                                       "Aguardando confirmação do supervisor.")
             notificar([estagio.supervisor], f"{estagio.estagiario.primeiro_nome} informou os horários de {dia:%d/%m}: "
@@ -356,6 +360,7 @@ def estagio_dia(request, pk, data):
         "futuro": dia > hoje, "pode_planejar": pode_planejar, "plano_form": plano_form,
         "ausencia_form": AusenciaForm(initial={"data": dia}), "previsao": _previsao(estagio),
         "horarios_form": horarios_form,
+        "historico": estagio.historico_registros.filter(data=dia).select_related("usuario"),
     })
 
 
@@ -380,7 +385,7 @@ def _planejar_dia(request, estagio, dia, status, reg):
             messages.error(request, "Este dia já tem presença registrada.")
             return redirect(request.path)
         if reg:  # tinha ausência informada: o estagiário mudou de ideia
-            reg.delete()
+            reg.anotar(request.user, HistoricoRegistro.Acao.CANCELOU, request).delete()
         horas = form.cleaned_data["horas"]
         regular = status.escala and dia.weekday() in status.escala.dias_lista and not status.motivo_sem_estagio
         if regular and horas == status.escala.horas_por_dia:
@@ -400,7 +405,7 @@ def _planejar_dia(request, estagio, dia, status, reg):
         notificar(avisar, f"{quem} removeu o estágio planejado para {dia:%d/%m}.", link, exceto=request.user)
     elif acao == "cancelar_ausencia":
         if reg and reg.situacao == Registro.Situacao.AUSENCIA:
-            reg.delete()
+            reg.anotar(request.user, HistoricoRegistro.Acao.CANCELOU, request).delete()
             messages.success(request, f"Ausência de {dia:%d/%m} cancelada.")
             notificar(avisar, f"{quem} cancelou a ausência informada para {dia:%d/%m}.", link, exceto=request.user)
     else:
@@ -422,7 +427,7 @@ def validar_registro(request, pk):
     if not status:
         raise Http404
     reg.confirmar(request.user, status, request.POST.get("obs", "").strip())
-    reg.save()
+    reg.anotar(request.user, HistoricoRegistro.Acao.VALIDACAO, request).save()
     texto = "confirmou" if status == Registro.Confirmacao.CONFIRMADA else "contestou"
     notificar(
         [estagio.estagiario, estagio.orientador],

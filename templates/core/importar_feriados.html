@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Importar calendário{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><div class="migalha"><a href="{% url 'dias_sem_estagio' %}">← Feriados</a></div><h1>Importar calendário</h1>
+    <p>{% if itens is not None %}Prévia de “{{ nome }}”: nada foi gravado ainda. Desmarque o que não deve entrar.{% else %}Feriados municipais, nacionais e o calendário letivo a partir de um arquivo CSV ou ICS.{% endif %}</p></div>
+  {% if itens is None %}<a class="btn sec" href="?modelo=1">{% icone "arquivo" %} Baixar modelo CSV</a>{% endif %}
+</div>
+{% if itens is not None %}
+  <div class="kpis">
+    <div class="kpi"><div class="valor">{{ itens|length }}</div><div class="rotulo">itens no arquivo</div></div>
+    {% for valor, n in por_tipo.items %}{% if n %}<div class="kpi azul"><div class="valor">{{ n }}</div><div class="rotulo">{% for k, r in rotulos.items %}{% if k == valor %}{{ r|lower }}{% endif %}{% endfor %}</div></div>{% endif %}{% endfor %}
+    <div class="kpi {% if erros %}vermelho{% else %}laranja{% endif %}"><div class="valor">{{ erros|length }}</div><div class="rotulo">com erro (ficam de fora)</div></div>
+  </div>
+  {% if erros %}<div class="card laranja"><h3>Itens com erro</h3><ul class="lista compacta">{% for onde, msg in erros %}<li><span class="etiqueta">{{ onde }}</span><span class="cresce">{{ msg }}</span></li>{% endfor %}</ul></div>{% endif %}
+  {% if itens %}
+  <form method="post" class="card destaque">{% csrf_token %}<input type="hidden" name="etapa" value="confirmar">
+    {% if substituir %}<p class="caixa-alerta">O que foi importado antes para o mesmo município/abrangência e os mesmos anos será substituído por esta importação. O que foi cadastrado à mão continua.</p>{% endif %}
+    <label class="check"><input type="checkbox" data-marcar-todos="input[name=i]"> Marcar/desmarcar todos</label>
+    <div class="tabela-wrap"><table class="tabela">
+      <thead><tr><th></th><th>Data</th><th>Descrição</th><th>Vale para</th><th></th></tr></thead>
+      <tbody>{% for i in itens %}
+        <tr{% if i.ja %} style="opacity:.6"{% endif %}>
+          <td><input type="checkbox" name="i" value="{{ forloop.counter0 }}"{% if i.marcado and not i.ja %} checked{% endif %} aria-label="Importar {{ i.descricao }}"></td>
+          <td class="nowrap">{% if i.anual %}{{ i.data|date:"d/m" }} <span class="etiqueta">todo ano</span>{% else %}{{ i.data|date:"D, d/m/Y" }}{% endif %}{% if i.ate %}<br><small>até {{ i.ate|date:"d/m/Y" }} ({{ i.dias }} dias)</small>{% endif %}</td>
+          <td><strong>{{ i.descricao }}</strong>{% if i.observacao %}<br><small class="muted">{{ i.observacao }}</small>{% endif %}</td>
+          <td>{% if i.abrangencia == "MUNICIPIO" %}{{ i.municipio }}{% elif i.abrangencia == "TODOS" %}Todos{% else %}Seus estagiários{% if i.curso_nome %} · {{ i.curso_nome }}{% endif %}{% endif %}</td>
+          <td>{% if i.ja %}<span class="selo confirmado">já cadastrado</span>{% endif %}<small class="muted">{{ i.origem }}</small></td>
+        </tr>{% endfor %}</tbody>
+    </table></div>
+    <div class="acoes mt-1"><button class="btn grande" type="submit">{% icone "check" %} Importar os marcados</button><a class="btn sec" href="{% url 'importar_feriados' %}">Enviar outro arquivo</a></div>
+  </form>
+  {% else %}<p><a class="btn" href="{% url 'importar_feriados' %}">Enviar outro arquivo</a></p>{% endif %}
+{% else %}
+  <div class="grade grade-lado">
+    <form class="card destaque" method="post" enctype="multipart/form-data" novalidate>{% csrf_token %}<input type="hidden" name="etapa" value="previa">
+      {% include "core/_form.html" %}
+      <datalist id="municipios">{% for m in municipios %}<option value="{{ m.nome }}">{% endfor %}</datalist>
+      <button class="btn" type="submit">Ver prévia</button>
+    </form>
+    <div>
+      <div class="card"><h3>De onde tirar o calendário</h3>
+        <ul style="font-size:.88rem;padding-left:1.1rem">
+          <li><strong>Google Agenda / Outlook:</strong> exporte a agenda (o calendário da prefeitura, da SEDUC ou “Feriados no Brasil”) como arquivo <strong>.ics</strong> e envie aqui. Eventos de dia inteiro viram dias sem estágio; eventos de vários dias viram um período; eventos anuais viram “todo ano”.</li>
+          <li><strong>Planilha:</strong> monte um CSV com o modelo (um feriado ou evento por linha). Serve para os feriados de vários municípios de uma vez e para o calendário letivo (recessos, férias, eventos).</li>
+        </ul>
+        <p class="muted" style="font-size:.85rem">Datas comemorativas que o Google marca como “observância” (Dia das Mães, Dia dos Namorados…) vêm desmarcadas na prévia.</p>
+      </div>
+      <div class="card"><h3>Colunas do CSV</h3>
+        <ul class="lista compacta">{% for c, obrig, ajuda in colunas %}<li><span class="cresce"><code>{{ c }}</code>{% if obrig %} <span class="etiqueta">obrigatória</span>{% endif %}<small style="display:block">{{ ajuda }}</small></span></li>{% endfor %}</ul>
+      </div>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

@@ -35,6 +35,13 @@ class FolhaEnviadaAdmin(admin.ModelAdmin):
     filter_horizontal = ("estagios",)
 
 
+@admin.register(models.HistoricoRegistro)
+class HistoricoRegistroAdmin(admin.ModelAdmin):
+    list_display = ("estagio", "data", "usuario", "acao", "em")
+    list_filter = ("acao",)
+    readonly_fields = [f.name for f in models.HistoricoRegistro._meta.fields]
+
+
 @admin.register(models.TrocaSupervisor)
 class TrocaSupervisorAdmin(admin.ModelAdmin):
     list_display = ("estagio", "anterior", "novo", "feita_por", "feita_em")

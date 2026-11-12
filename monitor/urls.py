@@ -68,6 +68,7 @@ urlpatterns = [
     path("captacao/<int:pk>/", captacao.captacao_detalhe, name="captacao_detalhe"),
     path("avisos/<int:pk>/enviado/", captacao.aviso_enviado, name="aviso_enviado"),
     path("dias-sem-estagio/", orientador.dias_sem_estagio, name="dias_sem_estagio"),
+    path("dias-sem-estagio/importar/", orientador.importar_feriados, name="importar_feriados"),
     path("documentos/", orientador.documentos_gerais, name="documentos_gerais"),
     # supervisor
     path("supervisao/", supervisor.painel_supervisor, name="painel_supervisor"),

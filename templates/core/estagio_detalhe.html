@@ -132,7 +132,7 @@
       <tr>
         <td><strong>{{ r.data|date:"d/m/Y" }}</strong><br><small>{{ r.data|date:"l" }}</small></td>
         <td>{{ r.get_situacao_display }}</td>
-        <td>{{ r.horario_display }}</td>
+        <td>{{ r.horario_display }}<br><small class="muted" title="Quando o registro foi feito no sistema">informado {{ r.criado_em|date:"d/m H:i" }}{% if r.n_alteracoes > 1 %} · {{ r.n_alteracoes }} mudanças{% endif %}</small>{% if r.criado_em|date:"Y-m-d" > r.data|date:"Y-m-d" %} <span class="etiqueta">depois do dia</span>{% endif %}</td>
         <td>{{ r.horas|horas }}</td>
         <td>{% if r.confirmacao == "CONFIRMADA" %}<span class="selo confirmado">Confirmado</span>{% elif r.confirmacao == "CONTESTADA" %}<span class="selo contestado">Contestado</span>{% else %}<span class="selo aguardando">Pendente</span>{% endif %}{% if r.confirmado_por %}<br><small>{{ r.confirmado_por.primeiro_nome }}</small>{% endif %}</td>
         <td style="max-width:320px">{{ r.diario|default:r.motivo|truncatechars:110 }}{% if r.obs_supervisor %}<br><small><strong>Supervisor:</strong> {{ r.obs_supervisor|truncatechars:80 }}</small>{% endif %}</td>
@@ -141,6 +141,10 @@
     {% empty %}<tr><td colspan="7" class="vazio">Nenhum registro ainda.</td></tr>{% endfor %}
     </tbody>
   </table></div>
+</div>
+<div class="card">
+  <div class="card-cab"><h3>Histórico de marcações e alterações</h3><small>Quando cada horário foi marcado ou digitado, e para qual valor mudou.</small></div>
+  {% with mostrar_dia=True %}{% include "core/_historico.html" %}{% endwith %}
 </div>
 
 {% elif aba == "mensagens" %}

@@ -60,6 +60,12 @@ Todo estágio precisa de **concedente** e **supervisor**, e o supervisor tem de 
 - **Concedente desativada:** some dos cadastros, mas só pode ser desativada sem estagiários ativos. Dá para desativar junto as contas dos supervisores que só atuam nela. Aprovar uma nova candidatura dela na captação, ou importá-la por CSV, reativa a concedente.
 - **Na importação por CSV:** o supervisor de cada linha fica vinculado à concedente daquela linha. Se a mesma pessoa já existir em outra concedente, a prévia avisa para você conferir.
 
+### Histórico das marcações
+Toda mudança no registro de um dia fica guardada: **quem fez, quando e o que mudou**, com os horários de antes e depois (ex.: “marcou a entrada pelo botão às 07:58” e depois “digitou os horários: Entrada 07:58 → 07:30”).
+- Também ficam registrados ausências informadas e canceladas, ajustes do supervisor/orientador e validações.
+- O que foi feito **depois do dia de estágio** ganha a etiqueta “depois do dia”.
+- **Onde ver:** na página de cada dia (*Histórico deste dia*) e na aba *Registros e diário* do estágio. Lá cada registro mostra quando foi informado e quantas vezes mudou, e há o histórico completo.
+
 ### Feriados (municipais, nacionais e da escola)
 Em **Feriados** há três abas. Todos esses dias saem da previsão de término, não contam como falta e aparecem escritos (com a linha em cinza) na folha de frequência.
 - **Municipais:** valem só para os estagiários de concedentes daquele município, pelo campo *Município* da ficha da concedente (“General Sampaio”, “GENERAL SAMPAIO - CE” e sem acento contam como o mesmo).
@@ -69,7 +75,14 @@ Em **Feriados** há três abas. Todos esses dias saem da previsão de término, 
 - **Nacionais e estaduais:** o sistema calcula os feriados nacionais e do Ceará do ano escolhido, inclusive os móveis (Paixão de Cristo, Carnaval, Corpus Christi). O orientador confere, marca os que valem e cadastra. Pontos facultativos vêm desmarcados. Valem para todos os estagiários.
 - **Da escola:** eventos e recessos do orientador, como antes. Valem só para os estagiários dele (ou de um curso).
 
-Feriados municipais e nacionais são compartilhados: qualquer orientador pode cadastrar ou remover. Cada registro guarda a origem (`manual` ou `calendario`), para a importação automática de calendários municipais e do calendário letivo que virá depois.
+Feriados municipais e nacionais são compartilhados: qualquer orientador pode cadastrar ou remover.
+
+**Importar calendário** (botão na página de Feriados) carrega feriados municipais, nacionais e o calendário letivo de um arquivo:
+- **ICS:** o formato exportado pelo Google Agenda, Outlook e muitas prefeituras. Eventos de dia inteiro viram dias sem estágio, eventos de vários dias viram um período e eventos anuais viram “todo ano”. Datas comemorativas que o Google marca como “observância” (Dia das Mães…) vêm desmarcadas.
+- **CSV:** use o modelo (*Baixar modelo CSV*). Colunas `data` e `descricao` são obrigatórias; `ate`, `tipo` (municipal, nacional, estadual, escola), `municipio`, `uf`, `anual` e `curso` são opcionais. Data só com dia/mês (`23/11`) repete todo ano. Serve para vários municípios de uma vez e para recessos e férias do calendário letivo.
+- **Prévia:** nada é gravado antes de você conferir. Dá para desmarcar itens, e os que já existem aparecem como “já cadastrado”.
+- **Versão nova do calendário:** “Substituir o que foi importado antes” troca a importação anterior do mesmo município e anos, sem apagar o que foi cadastrado à mão.
+- **Origem:** cada dia guarda de onde veio (`manual`, `calendario` ou `importado`).
 
 ### Previsão de término
 A previsão parte das horas que faltam e percorre a escala, pulando feriados e eventos da escola. Também entra o que o estagiário marca no calendário:

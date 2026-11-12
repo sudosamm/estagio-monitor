@@ -1,0 +1,5 @@
+{# Histórico de registros. Precisa de: historico; opcional: mostrar_dia #}
+<ul class="lista compacta historico">{% for h in historico %}
+  <li><span class="cresce"><strong>{{ h.em|date:"d/m/Y H:i" }}</strong> · {{ h.usuario.primeiro_nome|default:"sistema" }} {{ h.get_acao_display }}{% if mostrar_dia %} — dia <a href="{% url 'estagio_dia' h.estagio_id h.data|date:'Y-m-d' %}">{{ h.data|date:"d/m" }}</a>{% endif %}{% if h.informado_depois %} <span class="etiqueta" title="Feito depois do dia de estágio">depois do dia</span>{% endif %}
+    <small style="display:block">{% for campo, antes, depois in h.mudancas %}{{ campo }}: {% if antes != "—" %}{{ antes }} → {% endif %}<strong>{{ depois }}</strong>{% if not forloop.last %} · {% endif %}{% endfor %}</small></span></li>
+{% empty %}<li class="vazio">Nenhuma alteração registrada.</li>{% endfor %}</ul>

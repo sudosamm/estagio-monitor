@@ -988,3 +988,29 @@ class FolhaEnviadaForm(Formulario):
         if not d.get("turma") and not d.get("estagios"):
             raise forms.ValidationError("Escolha a turma ou marque os estagiários que vão receber a folha.")
         return d
+
+
+# ------------------------------------------------------------------ importação de calendários
+
+
+class ImportarCalendarioForm(Formulario):
+    arquivo = forms.FileField(label="Arquivo do calendário (CSV ou ICS)",
+                              widget=forms.ClearableFileInput(attrs={"accept": ".csv,.ics,text/csv,text/calendar"}),
+                              help_text="ICS é o formato exportado pelo Google Agenda, Outlook e muitas prefeituras.")
+    abrangencia = forms.ChoiceField(label="Os itens valem para", choices=DiaSemEstagio.Abrangencia.choices,
+                                    widget=forms.RadioSelect, initial=DiaSemEstagio.Abrangencia.MUNICIPIO,
+                                    help_text="No CSV, a coluna “tipo” tem prioridade.")
+    municipio = forms.CharField(label="Município", required=False, max_length=80,
+                                widget=forms.TextInput(attrs={"list": "municipios", "autocomplete": "off"}),
+                                help_text="Para feriados municipais (no CSV, a coluna “municipio” tem prioridade).")
+    ano = forms.IntegerField(label="Ano das datas sem ano (dd/mm)", min_value=2000, max_value=2100,
+                             help_text="Datas como “23/11” repetem todo ano a partir deste.")
+    substituir = forms.BooleanField(
+        label="Substituir o que foi importado antes (mesmo município/abrangência e mesmos anos)", required=False,
+        help_text="Use ao importar uma versão atualizada do calendário. O que foi cadastrado à mão não é apagado.")
+
+    def clean_arquivo(self):
+        arq = self.cleaned_data["arquivo"]
+        if arq.size > 2 * 1024 * 1024:
+            raise forms.ValidationError("O arquivo deve ter no máximo 2 MB.")
+        return arq

@@ -15,7 +15,7 @@ from PIL import Image
 from .forms import EscalaForm
 from .models import (
     Agendamento, AvisoExterno, Candidatura, Configuracao, VagaCandidatura, Curso, DiaPlanejado, DiaSemEstagio, Documento, Escala, Estagio, ImpressaoFrequencia,
-    FolhaEnviada, LocalEstagio, Notificacao, Registro, TrocaSupervisor, Turma, Usuario,
+    FolhaEnviada, HistoricoRegistro, LocalEstagio, Notificacao, Registro, TrocaSupervisor, Turma, Usuario,
 )
 from .services import criar_usuario, gerar_username, linhas_folha, resumo_horas, status_periodo
 from .validators import cnpj_valido, cpf_valido
@@ -937,3 +937,115 @@ class FeriadosMunicipaisTests(Base):
         from .services import dias_sem_estagio
 
         self.assertEqual(dias_sem_estagio(self.est, date(2026, 11, 1), date(2026, 11, 30)), {})
+
+
+ICS_EXEMPLO = """BEGIN:VCALENDAR\r
+VERSION:2.0\r
+BEGIN:VEVENT\r
+DTSTART;VALUE=DATE:20261123\r
+DTEND;VALUE=DATE:20261124\r
+SUMMARY:Anivers\u00e1rio da\r
+  cidade\r
+RRULE:FREQ=YEARLY\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+DTSTART;VALUE=DATE:20261228\r
+DTEND;VALUE=DATE:20270101\r
+SUMMARY:Recesso de fim de ano\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+DTSTART;VALUE=DATE:20260510\r
+SUMMARY:Dia das M\u00e3es\r
+DESCRIPTION:Observ\u00e2ncia\r
+END:VEVENT\r
+END:VCALENDAR\r
+"""
+
+
+class ImportarCalendarioTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.local.cidade = "General Sampaio"
+        self.local.save()
+        self.entrar(self.ori)
+
+    def _enviar(self, conteudo, nome, **campos):
+        dados = {"etapa": "previa", "abrangencia": "MUNICIPIO", "municipio": "General Sampaio", "ano": "2026",
+                 "arquivo": SimpleUploadedFile(nome, conteudo.encode("utf-8"))}
+        dados.update(campos)
+        return self.client.post(reverse("importar_feriados"), dados)
+
+    def test_ics_com_previa_e_importacao(self):
+        r = self._enviar(ICS_EXEMPLO, "cidade.ics")
+        self.assertContains(r, "Aniversário da cidade")
+        self.assertContains(r, "data comemorativa, não é feriado")
+        self.assertEqual(DiaSemEstagio.objects.count(), 0)  # prévia não grava
+        itens = r.context["itens"]
+        self.assertEqual([(i.anual, i.dias, i.marcado) for i in itens], [(True, 1, True), (False, 4, True), (False, 1, False)])
+        self.client.post(reverse("importar_feriados"), {"etapa": "confirmar", "i": ["0", "1"]})
+        self.assertEqual(DiaSemEstagio.objects.filter(origem="importado").count(), 5)
+        from .services import dias_sem_estagio
+
+        dias = dias_sem_estagio(self.est, date(2027, 11, 1), date(2027, 11, 30))
+        self.assertEqual(dias, {date(2027, 11, 23): "Aniversário da cidade"})
+        self.assertIn(date(2026, 12, 30), dias_sem_estagio(self.est, date(2026, 12, 1), date(2026, 12, 31)))
+
+    def test_csv_com_tipos_dd_mm_e_erros(self):
+        csv_txt = ("data;descricao;ate;tipo;municipio;anual\n"
+                   "23/11;Aniversário;;municipal;GENERAL SAMPAIO - CE;\n"
+                   "02/02/2027;Recesso;06/02/2027;escola;;\n"
+                   "31/02/2027;Data errada;;nacional;;\n"
+                   "10/10/2026;Sem cidade;;municipal;;\n")
+        r = self._enviar(csv_txt, "cal.csv", municipio="")
+        self.assertEqual(len(r.context["itens"]), 2)
+        self.assertEqual(len(r.context["erros"]), 2)
+        self.client.post(reverse("importar_feriados"), {"etapa": "confirmar", "i": ["0", "1"]})
+        aniv = DiaSemEstagio.objects.get(descricao="Aniversário")
+        self.assertTrue(aniv.anual)
+        self.assertEqual(aniv.municipio_chave, "general sampaio")
+        self.assertEqual(DiaSemEstagio.objects.filter(descricao="Recesso", abrangencia="ESCOLA").count(), 5)
+
+    def test_substituir_importacao_anterior_sem_apagar_manual(self):
+        DiaSemEstagio.objects.create(data=date(2026, 9, 1), descricao="Manual", abrangencia="MUNICIPIO",
+                                     municipio="General Sampaio", orientador=self.ori)
+        self._enviar("data;descricao\n15/08/2026;Padroeira\n", "a.csv")
+        self.client.post(reverse("importar_feriados"), {"etapa": "confirmar", "i": ["0"]})
+        self._enviar("data;descricao\n16/08/2026;Padroeira (corrigido)\n", "b.csv", substituir="on")
+        self.client.post(reverse("importar_feriados"), {"etapa": "confirmar", "i": ["0"]})
+        self.assertEqual(sorted(DiaSemEstagio.objects.values_list("descricao", flat=True)),
+                         ["Manual", "Padroeira (corrigido)"])
+
+
+class HistoricoRegistroTests(Base):
+    def test_guarda_quando_marcou_e_para_qual_horario_mudou(self):
+        self.entrar(self.aluno)
+        with mock.patch("django.utils.timezone.localtime") as agora:
+            from datetime import datetime as dt
+
+            agora.return_value = timezone.make_aware(dt(2026, 11, 11, 7, 58))
+            self.client.post(reverse("marcar_presenca", args=[self.est.pk]))
+        h = HistoricoRegistro.objects.get()
+        self.assertEqual((h.usuario, h.acao), (self.aluno, "ENTRADA"))
+        self.assertIn(["Entrada", "—", "07:58"], h.mudancas)
+        # depois digita outros horários
+        self.client.post(reverse("estagio_dia", args=[self.est.pk, "2026-11-11"]), {
+            "h-hora_chegada": "07:30", "h-hora_saida": "11:30"})
+        ultimo = HistoricoRegistro.objects.first()
+        self.assertEqual(ultimo.acao, "DIGITOU")
+        self.assertIn(["Entrada", "07:58", "07:30"], ultimo.mudancas)
+        self.assertIn(["Saída", "—", "11:30"], ultimo.mudancas)
+        # o supervisor confirma e vê o histórico do dia
+        self.entrar(self.sup)
+        reg = Registro.objects.get()
+        self.client.post(reverse("validar_registro", args=[reg.pk]), {"acao": "confirmar"})
+        self.assertEqual(HistoricoRegistro.objects.first().acao, "VALIDACAO")
+        r = self.client.get(reverse("estagio_dia", args=[self.est.pk, "2026-11-11"]))
+        self.assertContains(r, "digitou os horários")
+        self.assertContains(r, "07:58 → <strong>07:30</strong>")
+
+    def test_ausencia_cancelada_fica_no_historico(self):
+        self.entrar(self.aluno)
+        self.client.post(reverse("informar_ausencia", args=[self.est.pk]), {"data": "2026-11-16", "motivo": "Consulta"})
+        self.client.post(reverse("estagio_dia", args=[self.est.pk, "2026-11-16"]), {"planejar": "cancelar_ausencia"})
+        self.assertFalse(Registro.objects.exists())
+        self.assertEqual(list(HistoricoRegistro.objects.values_list("acao", flat=True)), ["CANCELOU", "AUSENCIA"])

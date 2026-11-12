@@ -557,6 +557,110 @@ class Registro(models.Model):
         if obs:
             self.obs_supervisor = obs
 
+    # ---- histórico: cada mudança de horário, situação ou validação fica guardada (quem, quando, de → para)
+    CAMPOS_HISTORICO = ["situacao", "hora_chegada", "saida_intervalo", "volta_intervalo", "hora_saida", "horas",
+                        "confirmacao", "motivo"]
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        inst = super().from_db(db, field_names, values)
+        inst._antes = inst._estado()
+        return inst
+
+    def _estado(self):
+        return {c: getattr(self, c) for c in self.CAMPOS_HISTORICO if c not in self.get_deferred_fields()}
+
+    def anotar(self, usuario, acao, request=None):
+        """Diz quem está mudando o registro e como (botão, digitou, lançamento…) antes de salvar."""
+        self._autor, self._acao = usuario, acao
+        if request is not None:
+            self._ip = (request.META.get("HTTP_CF_CONNECTING_IP")
+                        or request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+                        or request.META.get("REMOTE_ADDR")) or None
+        return self
+
+    def _texto(self, campo, valor):
+        if valor in (None, ""):
+            return "—"
+        if campo in ("situacao", "confirmacao"):
+            return dict(self._meta.get_field(campo).choices).get(valor, valor)
+        if hasattr(valor, "strftime"):
+            return valor.strftime("%H:%M")
+        if campo == "horas":
+            d = Decimal(valor)
+            return f"{d.normalize():f}h" if d != d.to_integral_value() else f"{int(d)}h"
+        return str(valor)[:120]
+
+    def save(self, *args, **kwargs):
+        antes = getattr(self, "_antes", None)
+        super().save(*args, **kwargs)
+        depois = self._estado()
+        mudancas = []
+        for c, valor in depois.items():
+            velho = antes.get(c) if antes is not None else None
+            if antes is not None and c not in antes:
+                continue
+            if (antes is None and valor not in (None, "", 0, Decimal(0))) or (antes is not None and velho != valor):
+                rotulo = self._meta.get_field(c).verbose_name
+                mudancas.append([str(rotulo)[:1].upper() + str(rotulo)[1:], self._texto(c, velho) if antes is not None
+                                 else "—", self._texto(c, valor)])
+        if mudancas:
+            HistoricoRegistro.objects.create(
+                estagio_id=self.estagio_id, data=self.data, registro=self, usuario=getattr(self, "_autor", None),
+                acao=getattr(self, "_acao", "") or ("CRIOU" if antes is None else "ALTEROU"), mudancas=mudancas,
+                ip=getattr(self, "_ip", None))
+        self._antes = depois
+
+    def delete(self, *args, **kwargs):
+        HistoricoRegistro.objects.create(
+            estagio_id=self.estagio_id, data=self.data, usuario=getattr(self, "_autor", None),
+            acao=getattr(self, "_acao", "") or "EXCLUIU", ip=getattr(self, "_ip", None),
+            mudancas=[["Registro do dia", f"{self.get_situacao_display()} {self.horario_display}".strip(), "excluído"]])
+        return super().delete(*args, **kwargs)
+
+
+class HistoricoRegistro(models.Model):
+    """Quem mexeu no registro de um dia, quando e o que mudou (inclusive horários: de → para).
+
+    Guardado por estágio + dia, para sobreviver mesmo se o registro for excluído (ex.: ausência cancelada).
+    """
+
+    class Acao(models.TextChoices):
+        ENTRADA = "ENTRADA", "marcou a entrada pelo botão"
+        PONTO = "PONTO", "marcou pelo botão"
+        DIGITOU = "DIGITOU", "digitou os horários"
+        AUSENCIA = "AUSENCIA", "informou ausência"
+        LANCAMENTO = "LANCAMENTO", "lançou/ajustou o registro"
+        VALIDACAO = "VALIDACAO", "validou"
+        CANCELOU = "CANCELOU", "cancelou a ausência"
+        CRIOU = "CRIOU", "criou o registro"
+        ALTEROU = "ALTEROU", "alterou o registro"
+        EXCLUIU = "EXCLUIU", "excluiu o registro"
+
+    estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="historico_registros")
+    data = models.DateField(help_text="Dia de estágio a que se refere")
+    registro = models.ForeignKey(Registro, null=True, blank=True, on_delete=models.SET_NULL, related_name="historico")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                related_name="+")
+    em = models.DateTimeField(auto_now_add=True)
+    acao = models.CharField(max_length=12, choices=Acao.choices)
+    mudancas = models.JSONField(default=list, help_text="[campo, antes, depois]")
+    ip = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-em", "-pk"]
+        indexes = [models.Index(fields=["estagio", "data"])]
+        verbose_name = "histórico de registro"
+        verbose_name_plural = "históricos de registro"
+
+    def __str__(self):
+        return f"{self.data:%d/%m} · {self.usuario} {self.get_acao_display()}"
+
+    @property
+    def informado_depois(self):
+        """Mexeu depois do próprio dia de estágio (ex.: digitou os horários na semana seguinte)."""
+        return timezone.localtime(self.em).date() > self.data
+
 
 class DiaPlanejado(models.Model):
     """Dia que o estagiário planejou estagiar fora da escala (reposição) ou com outra carga horária.

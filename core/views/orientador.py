@@ -6,13 +6,14 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..forms import (
-    AnoReferenciaForm, ConfiguracaoForm, CoordenadorForm, CursoForm, DiaSemEstagioForm, DocumentoGeralForm, EscalaLoteForm,
+    AnoReferenciaForm, ImportarCalendarioForm, ConfiguracaoForm, CoordenadorForm, CursoForm, DiaSemEstagioForm, DocumentoGeralForm, EscalaLoteForm,
     EstagiariosLoteForm, LocalForm, OrientadorForm, SubstitutosForm, SupervisoresLoteForm, TurmaForm, UsuarioEditForm,
 )
 from ..models import (
@@ -20,7 +21,7 @@ from ..models import (
     chave_municipio,
 )
 from ..services import (
-    ano_em_uso, ano_referencia, anos_disponiveis, criar_usuario, estagios_do_municipio, estagios_visiveis,
+    ano_em_uso, ano_referencia, anos_disponiveis, cadastrar_dias, criar_usuario, estagios_do_municipio, estagios_visiveis,
     feriados_nacionais, filtrar_ano, municipios_das_concedentes, notificar, redefinir_senha_padrao, resumo_horas, status_hoje, status_periodo, trocar_supervisor,
 )
 from .base import destino_seguro, orientador_requerido, permissao
@@ -520,16 +521,8 @@ def dias_sem_estagio(request):
             d = form.cleaned_data
             dia, ate = d["data"], d.get("ate") or d["data"]
             chave = chave_municipio(d["municipio"]) if d["abrangencia"] == A.MUNICIPIO else ""
-            n = 0
-            while dia <= ate:
-                busca = {"data": dia, "abrangencia": d["abrangencia"], "municipio_chave": chave, "curso": d["curso"]}
-                if d["abrangencia"] == A.ESCOLA:
-                    busca["orientador"] = request.user
-                _, criado = DiaSemEstagio.objects.get_or_create(**busca, defaults={
-                    "descricao": d["descricao"], "orientador": request.user, "municipio": d["municipio"].strip(),
-                    "anual": d["anual"]})
-                n += criado
-                dia += timedelta(days=1)
+            n = cadastrar_dias(request.user, d["abrangencia"], dia, d["descricao"], ate, d["municipio"], d["anual"],
+                               d["curso"])
             if d["abrangencia"] == A.ESCOLA:
                 estagios = _meus_estagios(request)
                 if d["curso"]:
@@ -571,6 +564,80 @@ def dias_sem_estagio(request):
         itens = DiaSemEstagio.objects.filter(abrangencia=A.ESCOLA, orientador=request.user).select_related("curso")
         ctx.update(futuros=itens.filter(data__gte=hoje), passados=itens.filter(data__lt=hoje).reverse()[:30])
     return render(request, "core/dias_sem_estagio.html", ctx)
+
+
+CHAVE_CALENDARIO = "importacao_calendario"
+
+
+@permissao("feriados")
+def importar_feriados(request):
+    """Importa feriados municipais/nacionais e o calendário letivo de um CSV ou ICS, com prévia antes de gravar."""
+    from ..calendarios import ErroCalendario, Item, Padrao, ler_calendario, modelo_csv
+
+    A = DiaSemEstagio.Abrangencia
+    if request.GET.get("modelo"):
+        resposta = HttpResponse(modelo_csv(), content_type="text/csv; charset=utf-8")
+        resposta["Content-Disposition"] = 'attachment; filename="modelo-calendario.csv"'
+        return resposta
+    ctx = {"municipios": municipios_das_concedentes()}
+    if request.POST.get("etapa") == "confirmar":
+        guardado = request.session.get(CHAVE_CALENDARIO)
+        if not guardado:
+            messages.error(request, "A prévia expirou. Envie o arquivo de novo.")
+            return redirect("importar_feriados")
+        itens = [Item.da_sessao(d) for d in guardado["itens"]]
+        escolhidos = [itens[int(i)] for i in request.POST.getlist("i") if i.isdigit() and int(i) < len(itens)]
+        removidos = criados = 0
+        with transaction.atomic():
+            if guardado["substituir"] and escolhidos:
+                anos = {i.data.year for i in escolhidos} | {i.ate.year for i in escolhidos if i.ate}
+                grupos = {(i.abrangencia, chave_municipio(i.municipio)) for i in escolhidos}
+                for abr, chave in grupos:
+                    antigos = DiaSemEstagio.objects.filter(origem="importado", abrangencia=abr, municipio_chave=chave).filter(
+                        Q(data__year__in=anos) | Q(anual=True))
+                    if abr == A.ESCOLA:
+                        antigos = antigos.filter(orientador=request.user)
+                    removidos += antigos.delete()[0]
+            cursos = {c.pk: c for c in Curso.objects.all()}
+            for i in escolhidos:
+                criados += cadastrar_dias(request.user, i.abrangencia, i.data, i.descricao, i.ate, i.municipio, i.anual,
+                                          cursos.get(i.curso_id), origem="importado")
+        del request.session[CHAVE_CALENDARIO]
+        messages.success(request, f"Calendário importado: {criados} dia(s) cadastrado(s)"
+                         + (f", {removidos} da importação anterior substituído(s)" if removidos else "") + ".")
+        abas = {i.abrangencia for i in escolhidos}
+        destino = "municipais" if A.MUNICIPIO in abas else "nacionais" if A.TODOS in abas else "escola"
+        return redirect(f"{reverse('dias_sem_estagio')}?aba={destino}")
+
+    form = ImportarCalendarioForm(request.POST or None, request.FILES or None, initial={
+        "ano": timezone.localdate().year, "municipio": request.GET.get("municipio", ""),
+        "abrangencia": request.GET.get("abrangencia") or A.MUNICIPIO})
+    if request.method == "POST" and form.is_valid():
+        d = form.cleaned_data
+        padrao = Padrao(d["abrangencia"], d["municipio"].strip(), d["ano"])
+        try:
+            itens, erros = ler_calendario(d["arquivo"].read(), d["arquivo"].name, padrao)
+        except ErroCalendario as exc:
+            form.add_error("arquivo", str(exc))
+        else:
+            for i in itens:  # já cadastrados (todos os dias do item)
+                existentes = DiaSemEstagio.objects.filter(
+                    abrangencia=i.abrangencia, municipio_chave=chave_municipio(i.municipio),
+                    data__range=(i.data, i.ate or i.data))
+                if i.abrangencia == A.ESCOLA:
+                    existentes = existentes.filter(orientador=request.user, curso_id=i.curso_id)
+                i.ja = existentes.count() >= i.dias
+            request.session[CHAVE_CALENDARIO] = {"itens": [i.para_sessao() for i in itens],
+                                                  "substituir": d["substituir"], "nome": d["arquivo"].name}
+            ctx.update(itens=itens, erros=erros, nome=d["arquivo"].name, substituir=d["substituir"],
+                       por_tipo={a: sum(1 for i in itens if i.abrangencia == a) for a in A.values},
+                       rotulos=dict(A.choices))
+            return render(request, "core/importar_feriados.html", ctx)
+    ctx.update(form=form)
+    from ..calendarios import COLUNAS
+
+    ctx["colunas"] = COLUNAS
+    return render(request, "core/importar_feriados.html", ctx)
 
 
 # ----------------------------------------------------------------- alterações em lote

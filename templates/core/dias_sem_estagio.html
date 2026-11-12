@@ -2,7 +2,8 @@
 {% load ui %}
 {% block titulo %}Feriados e recessos{% endblock %}
 {% block conteudo %}
-<div class="titulo-pagina"><div><h1>Feriados, recessos e eventos</h1><p>Dias em que os estagiários não vão ao estágio. Não contam como falta, saem da previsão de término e aparecem escritos na folha de frequência.</p></div></div>
+<div class="titulo-pagina"><div><h1>Feriados, recessos e eventos</h1><p>Dias em que os estagiários não vão ao estágio. Não contam como falta, saem da previsão de término e aparecem escritos na folha de frequência.</p></div>
+  <div class="acoes"><a class="btn sec" href="{% url 'importar_feriados' %}{% if aba == 'nacionais' %}?abrangencia=TODOS{% elif aba == 'escola' %}?abrangencia=ESCOLA{% endif %}">{% icone "upload" %} Importar calendário</a></div></div>
 
 <nav class="abas">
   <a href="?aba=municipais" class="{% if aba == 'municipais' %}ativo{% endif %}">Municipais{% if faltando %} <span class="contador">{{ faltando|length }}</span>{% endif %}</a>
@@ -17,7 +18,7 @@
     {% if faltando %}<div class="caixa-alerta"><strong>{{ faltando|length }} município{{ faltando|length|pluralize }} com estagiários ainda sem feriado municipal:</strong> {% for m in faltando %}<a href="?aba=municipais&municipio={{ m.nome|urlencode }}#novo">{{ m.nome }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
     {% for m in municipios %}
     <div class="card">
-      <div class="card-cab"><h3>{{ m.nome }}{% if m.uf %} <small class="muted">{{ m.uf }}</small>{% endif %}</h3><a class="btn sec sm" href="?aba=municipais&municipio={{ m.nome|urlencode }}#novo">{% icone "mais" %} Feriado</a></div>
+      <div class="card-cab"><h3>{{ m.nome }}{% if m.uf %} <small class="muted">{{ m.uf }}</small>{% endif %}</h3><span class="flex" style="gap:.4rem"><a class="btn sec sm" href="{% url 'importar_feriados' %}?municipio={{ m.nome|urlencode }}">{% icone "upload" %} Importar</a><a class="btn sec sm" href="?aba=municipais&municipio={{ m.nome|urlencode }}#novo">{% icone "mais" %} Feriado</a></span></div>
       <p class="muted" style="font-size:.85rem;margin-top:0">{{ m.estagios }} estagiário{{ m.estagios|pluralize }} ativo{{ m.estagios|pluralize }} · {% for l in m.locais %}{{ l }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
       <ul class="lista compacta">{% for d in m.feriados %}
         <li><span class="cresce"><strong>{% if d.anual %}{{ d.data|date:"d/m" }}{% else %}{{ d.data|date:"d/m/Y" }}{% endif %}</strong> — {{ d.descricao }}{% if d.anual %} <span class="etiqueta">todo ano</span>{% endif %}</span>
