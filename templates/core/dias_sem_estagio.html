@@ -2,16 +2,71 @@
 {% load ui %}
 {% block titulo %}Feriados e recessos{% endblock %}
 {% block conteudo %}
-<div class="titulo-pagina"><div><h1>Feriados, recessos e eventos</h1><p>Dias em que seus estagiários não vão ao estágio. Eles não contam como falta e saem da previsão de término.</p></div></div>
+<div class="titulo-pagina"><div><h1>Feriados, recessos e eventos</h1><p>Dias em que os estagiários não vão ao estágio. Não contam como falta, saem da previsão de término e aparecem escritos na folha de frequência.</p></div></div>
+
+<nav class="abas">
+  <a href="?aba=municipais" class="{% if aba == 'municipais' %}ativo{% endif %}">Municipais{% if faltando %} <span class="contador">{{ faltando|length }}</span>{% endif %}</a>
+  <a href="?aba=nacionais&ano={{ ano }}" class="{% if aba == 'nacionais' %}ativo{% endif %}">Nacionais e estaduais</a>
+  <a href="?aba=escola" class="{% if aba == 'escola' %}ativo{% endif %}">Da escola</a>
+</nav>
+
 <div class="grade grade-lado">
   <div>
-    <div class="card"><h2>Próximos</h2><ul class="lista">{% for d in futuros %}
+  {% if aba == "municipais" %}
+    <div class="caixa-info">Cada feriado municipal vale só para os estagiários de concedentes daquele município (o município da ficha da concedente). Marque “Repete todo ano” nas datas fixas, como aniversário da cidade e padroeiro.</div>
+    {% if faltando %}<div class="caixa-alerta"><strong>{{ faltando|length }} município{{ faltando|length|pluralize }} com estagiários ainda sem feriado municipal:</strong> {% for m in faltando %}<a href="?aba=municipais&municipio={{ m.nome|urlencode }}#novo">{{ m.nome }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
+    {% for m in municipios %}
+    <div class="card">
+      <div class="card-cab"><h3>{{ m.nome }}{% if m.uf %} <small class="muted">{{ m.uf }}</small>{% endif %}</h3><a class="btn sec sm" href="?aba=municipais&municipio={{ m.nome|urlencode }}#novo">{% icone "mais" %} Feriado</a></div>
+      <p class="muted" style="font-size:.85rem;margin-top:0">{{ m.estagios }} estagiário{{ m.estagios|pluralize }} ativo{{ m.estagios|pluralize }} · {% for l in m.locais %}{{ l }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+      <ul class="lista compacta">{% for d in m.feriados %}
+        <li><span class="cresce"><strong>{% if d.anual %}{{ d.data|date:"d/m" }}{% else %}{{ d.data|date:"d/m/Y" }}{% endif %}</strong> — {{ d.descricao }}{% if d.anual %} <span class="etiqueta">todo ano</span>{% endif %}</span>
+          <form method="post">{% csrf_token %}<button class="btn perigo sm" name="excluir" value="{{ d.pk }}" type="submit" title="Remover">{% icone "lixo" %}</button></form></li>
+      {% empty %}<li class="vazio">Nenhum feriado municipal cadastrado.</li>{% endfor %}</ul>
+    </div>
+    {% empty %}
+    <div class="card"><p class="vazio">Nenhuma concedente com município preenchido. Preencha o município na ficha das concedentes.</p></div>
+    {% endfor %}
+    {% if sem_concedente %}
+    <div class="card"><h3>Outros municípios</h3><p class="muted" style="font-size:.85rem">Sem concedente ativa no momento.</p>
+      <ul class="lista compacta">{% for grupo in sem_concedente %}{% for d in grupo %}
+        <li><span class="cresce"><strong>{{ d.municipio }}</strong> · {% if d.anual %}{{ d.data|date:"d/m" }} (todo ano){% else %}{{ d.data|date:"d/m/Y" }}{% endif %} — {{ d.descricao }}</span>
+          <form method="post">{% csrf_token %}<button class="btn perigo sm" name="excluir" value="{{ d.pk }}" type="submit" title="Remover">{% icone "lixo" %}</button></form></li>
+      {% endfor %}{% endfor %}</ul></div>
+    {% endif %}
+
+  {% elif aba == "nacionais" %}
+    <div class="card destaque">
+      <div class="card-cab"><h3>Calendário de {{ ano }}</h3>
+        <span class="flex" style="gap:.4rem">{% for a in anos %}<a class="btn {% if a != ano %}sec {% endif %}sm" href="?aba=nacionais&ano={{ a }}">{{ a }}</a>{% endfor %}</span></div>
+      <p class="muted" style="font-size:.85rem">Feriados nacionais e do Ceará calculados para o ano (inclusive os móveis, como Paixão de Cristo). Confira, marque os que valem e cadastre: passam a valer para todos os estagiários. Pontos facultativos vêm desmarcados.</p>
+      <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="nacionais"><input type="hidden" name="ano" value="{{ ano }}">
+        <ul class="lista compacta">{% for f in sugestoes %}
+          <li><label class="check" style="margin:0;flex:1">{% if f.ja %}<input type="checkbox" checked disabled>{% else %}<input type="checkbox" name="f" value="{{ f.data|date:'Y-m-d' }}"{% if f.marcado %} checked{% endif %}>{% endif %}
+            <span><strong>{{ f.data|date:"D, d/m" }}</strong> — {{ f.nome }} <span class="etiqueta">{{ f.tipo }}</span>{% if f.ja %} <span class="selo confirmado">cadastrado</span>{% endif %}</span></label>
+            {% if f.ja %}<button class="btn perigo sm" form="form-excluir" name="excluir" value="{{ f.ja.pk }}" type="submit" title="Remover">{% icone "lixo" %}</button>{% endif %}</li>
+        {% endfor %}</ul>
+        <div class="acoes"><button class="btn" type="submit">Cadastrar os marcados</button></div>
+      </form>
+      <form method="post" id="form-excluir">{% csrf_token %}</form>
+    </div>
+    {% if outros_nacionais %}
+    <div class="card"><h3>Outros cadastrados para todos em {{ ano }}</h3><ul class="lista compacta">{% for d in outros_nacionais %}
+      <li><span class="cresce"><strong>{{ d.data|date:"D, d/m/Y" }}</strong> — {{ d.descricao }}</span>
+        <form method="post">{% csrf_token %}<button class="btn perigo sm" name="excluir" value="{{ d.pk }}" type="submit" title="Remover">{% icone "lixo" %}</button></form></li>{% endfor %}</ul></div>
+    {% endif %}
+
+  {% else %}
+    <div class="card"><h2>Próximos</h2><p class="muted" style="font-size:.85rem">Eventos e recessos da escola valem só para os seus estagiários (ou um curso).</p><ul class="lista">{% for d in futuros %}
       <li><span class="cresce"><strong>{{ d.data|date:"D, d/m/Y" }}</strong> — {{ d.descricao }}{% if d.curso %} <span class="etiqueta">{{ d.curso }}</span>{% endif %}</span>
       <form method="post">{% csrf_token %}<button class="btn perigo sm" name="excluir" value="{{ d.pk }}" type="submit">{% icone "lixo" %}</button></form></li>
     {% empty %}<li class="vazio">Nenhum dia cadastrado.</li>{% endfor %}</ul></div>
     {% if passados %}<div class="card"><h3>Anteriores</h3><ul class="lista">{% for d in passados %}<li class="muted">{{ d.data|date:"d/m/Y" }} — {{ d.descricao }}</li>{% endfor %}</ul></div>{% endif %}
+  {% endif %}
   </div>
-  <div class="card destaque"><h3>Adicionar</h3>
-    <form method="post">{% csrf_token %}{% include "core/_form.html" %}<button class="btn bloco" type="submit">Adicionar e avisar</button></form></div>
+  <div class="card destaque" id="novo"><h3>Adicionar</h3>
+    <form method="post" novalidate>{% csrf_token %}<input type="hidden" name="acao" value="adicionar">{% include "core/_form.html" %}<button class="btn bloco" type="submit">Adicionar e avisar</button></form>
+    <datalist id="municipios">{% for m in municipios %}<option value="{{ m.nome }}">{% endfor %}</datalist>
+  </div>
 </div>
 {% endblock %}

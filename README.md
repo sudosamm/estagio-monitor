@@ -60,6 +60,17 @@ Todo estágio precisa de **concedente** e **supervisor**, e o supervisor tem de 
 - **Concedente desativada:** some dos cadastros, mas só pode ser desativada sem estagiários ativos. Dá para desativar junto as contas dos supervisores que só atuam nela. Aprovar uma nova candidatura dela na captação, ou importá-la por CSV, reativa a concedente.
 - **Na importação por CSV:** o supervisor de cada linha fica vinculado à concedente daquela linha. Se a mesma pessoa já existir em outra concedente, a prévia avisa para você conferir.
 
+### Feriados (municipais, nacionais e da escola)
+Em **Feriados** há três abas. Todos esses dias saem da previsão de término, não contam como falta e aparecem escritos (com a linha em cinza) na folha de frequência.
+- **Municipais:** valem só para os estagiários de concedentes daquele município, pelo campo *Município* da ficha da concedente (“General Sampaio”, “GENERAL SAMPAIO - CE” e sem acento contam como o mesmo).
+  - A aba lista os municípios das concedentes, com quantos estagiários há em cada um, e avisa quais ainda não têm feriado municipal.
+  - “Repete todo ano nesta data” serve para datas fixas (aniversário da cidade, padroeiro): não precisa cadastrar de novo a cada ano.
+  - Estagiários e supervisores daquele município recebem aviso.
+- **Nacionais e estaduais:** o sistema calcula os feriados nacionais e do Ceará do ano escolhido, inclusive os móveis (Paixão de Cristo, Carnaval, Corpus Christi). O orientador confere, marca os que valem e cadastra. Pontos facultativos vêm desmarcados. Valem para todos os estagiários.
+- **Da escola:** eventos e recessos do orientador, como antes. Valem só para os estagiários dele (ou de um curso).
+
+Feriados municipais e nacionais são compartilhados: qualquer orientador pode cadastrar ou remover. Cada registro guarda a origem (`manual` ou `calendario`), para a importação automática de calendários municipais e do calendário letivo que virá depois.
+
 ### Previsão de término
 A previsão parte das horas que faltam e percorre a escala, pulando feriados e eventos da escola. Também entra o que o estagiário marca no calendário:
 - **Ausência futura** (evento, prova, consulta): a previsão é adiada.
@@ -112,7 +123,7 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Agendar visitas | ✔ | — |
 | Mudar dias em lote (cada um mantém seus horários) | ✔ | — |
 | Mudar o ano de referência | ✔ | — |
-| Feriados e eventos | ✔ | — |
+| Feriados (municipais, nacionais e da escola) | ✔ | — |
 | Arquivos gerais | ✔ | — |
 | Emitir folhas em lote, enviar folhas e decidir se o estagiário emite | ✔ | — |
 
@@ -185,7 +196,7 @@ Tudo fica em `/data` (`db.sqlite3` e a pasta `anexos/`). Copiar esse volume já 
 2. **Locais**: cadastre as concedentes (endereço, telefone, link do mapa).
 3. **Contas → + Supervisores**: um por linha, vinculados ao local.
 4. **Estagiários → Cadastrar estagiários**: cole os nomes (um por linha), escolha a turma, a concedente, supervisor, data de início e dias. Ao final aparece a lista de usuários para imprimir ou repassar.
-5. **Feriados**: cadastre os dias sem estágio.
+5. **Feriados**: cadastre os feriados nacionais do ano (aba *Nacionais e estaduais*), os municipais de cada município das concedentes e os eventos da escola.
 
 ## Estrutura
 

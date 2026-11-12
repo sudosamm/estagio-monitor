@@ -81,3 +81,18 @@ document.querySelectorAll("form").forEach((form) => {
 document.querySelectorAll("select[data-autoenvio]").forEach((sel) => {
   sel.addEventListener("change", () => sel.form && sel.form.submit());
 });
+
+// feriados: município só para feriado municipal; curso só para evento da escola
+(() => {
+  const radios = document.querySelectorAll("input[name=abrangencia]");
+  if (!radios.length) return;
+  const caixa = (id) => document.getElementById(id)?.closest(".campo");
+  const atualizar = () => {
+    const v = [...radios].find((r) => r.checked)?.value;
+    const mun = caixa("id_municipio"), curso = caixa("id_curso");
+    if (mun) mun.hidden = v !== "MUNICIPIO";
+    if (curso) curso.hidden = v !== "ESCOLA";
+  };
+  radios.forEach((r) => r.addEventListener("change", atualizar));
+  atualizar();
+})();

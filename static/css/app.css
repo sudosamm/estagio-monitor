@@ -436,3 +436,4 @@ label.check input { margin-top: .2rem; }
 .faixa-config { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; }
 .faixa-config form { margin: 0; }
 td.nowrap { white-space: nowrap; }
+.campo[hidden] { display: none !important; }

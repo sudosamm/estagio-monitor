@@ -880,3 +880,60 @@ class FolhasDoOrientadorTests(Base):
         self.entrar(coord)
         self.assertEqual(self.client.get(reverse("folhas_lote") + "?mes=2026-11").status_code, 403)
         self.assertNotContains(self.client.get(reverse("frequencias")), "Enviar folha para os estagiários")
+
+
+class FeriadosMunicipaisTests(Base):
+    """Feriado municipal vale para quem estagia em concedente daquele município; nacional vale para todos."""
+
+    def setUp(self):
+        super().setUp()
+        self.local.cidade = "General Sampaio"
+        self.local.save()
+        self.outro_local = LocalEstagio.objects.create(nome="Empresa Y", cidade="Fortaleza")
+        sup_y = _ativo(criar_usuario("Yara Supervisora", Usuario.Papel.SUPERVISOR, concedente=self.outro_local))
+        aluno = _ativo(criar_usuario("Davi Capital", Usuario.Papel.ESTAGIARIO))
+        self.est_fortaleza = Estagio.objects.create(estagiario=aluno, orientador=self.ori, supervisor=sup_y, curso=self.curso,
+                                                    turma=self.turma, local=self.outro_local, data_inicio=date(2026, 11, 2))
+        self.entrar(self.ori)
+
+    def test_feriado_municipal_so_no_municipio_da_concedente_e_repete_todo_ano(self):
+        r = self.client.post(reverse("dias_sem_estagio"), {
+            "acao": "adicionar", "abrangencia": "MUNICIPIO", "municipio": "GENERAL SAMPAIO - CE", "data": "2025-11-23",
+            "descricao": "Aniversário da cidade", "anual": "on"})
+        self.assertEqual(r.status_code, 302)
+        from .services import dias_sem_estagio
+
+        self.assertEqual(dias_sem_estagio(self.est, date(2026, 11, 1), date(2026, 11, 30)),
+                         {date(2026, 11, 23): "Aniversário da cidade"})
+        self.assertEqual(dias_sem_estagio(self.est_fortaleza, date(2026, 11, 1), date(2026, 11, 30)), {})
+        linha = linhas_folha(self.est, 2026, 11)[22]
+        self.assertEqual((linha["feriado"], linha["cinza"]), ("Aniversário da cidade", True))
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="General Sampaio").exists())
+        self.assertFalse(Notificacao.objects.filter(usuario=self.est_fortaleza.estagiario).exists())
+
+    def test_municipio_obrigatorio_e_aviso_de_municipio_sem_feriado(self):
+        r = self.client.post(reverse("dias_sem_estagio"), {"acao": "adicionar", "abrangencia": "MUNICIPIO",
+                                                            "data": "2026-11-23", "descricao": "X"})
+        self.assertContains(r, "Informe o município do feriado.")
+        r = self.client.get(reverse("dias_sem_estagio"))
+        self.assertContains(r, "ainda sem feriado municipal")
+        self.assertContains(r, "Fortaleza")
+
+    def test_feriados_nacionais_do_ano_valem_para_todos(self):
+        r = self.client.get(reverse("dias_sem_estagio") + "?aba=nacionais&ano=2026")
+        self.assertContains(r, "Paixão de Cristo")
+        self.client.post(reverse("dias_sem_estagio") + "?aba=nacionais", {
+            "acao": "nacionais", "ano": "2026", "f": ["2026-11-20", "2026-04-03"]})
+        self.assertEqual(DiaSemEstagio.objects.filter(abrangencia="TODOS").count(), 2)
+        from .services import dias_sem_estagio
+
+        for e in (self.est, self.est_fortaleza):
+            self.assertEqual(dias_sem_estagio(e, date(2026, 11, 1), date(2026, 11, 30)),
+                             {date(2026, 11, 20): "Consciência Negra"})
+
+    def test_evento_da_escola_continua_so_do_orientador(self):
+        outro_ori = _ativo(criar_usuario("Otto Orientador", Usuario.Papel.ORIENTADOR))
+        DiaSemEstagio.objects.create(data=date(2026, 11, 27), descricao="Feira de ciências", orientador=outro_ori)
+        from .services import dias_sem_estagio
+
+        self.assertEqual(dias_sem_estagio(self.est, date(2026, 11, 1), date(2026, 11, 30)), {})
