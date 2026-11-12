@@ -34,6 +34,7 @@ PERMISSOES = {
     "escalas": "Mudar os dias de estágio (os horários são definidos pelo supervisor da concedente)",
     "feriados": "Feriados e eventos da escola",
     "arquivos": "Publicar arquivos gerais",
+    "folhas": "Emitir e enviar folhas de frequência; decidir se os estagiários emitem a própria",
 }
 PERMISSOES_POR_PAPEL = {
     "ORIENTADOR": set(PERMISSOES),
@@ -224,6 +225,38 @@ class DadosConcedente(models.Model):
         return " · ".join(p for p in [rua, self.complemento, self.bairro, cidade] if p)
 
 
+class Turma(models.Model):
+    """Turma de um curso, identificada pelo ano de ingresso. Ex.: a turma de 2024 estagia em 2026.
+
+    O nome costuma se repetir todo ano (é o mesmo curso); o que separa uma turma da outra é o ano.
+    As listas do sistema mostram as turmas do ano de referência (ver Configuracao.ano_referencia).
+    """
+
+    curso = models.ForeignKey(Curso, on_delete=models.PROTECT, related_name="turmas")
+    nome = models.CharField("Nome da turma", max_length=40, blank=True,
+                            help_text="Ex.: 3º A. Vazio = nome do curso. Pode repetir o nome dos anos anteriores.")
+    ano_ingresso = models.PositiveIntegerField("Ano de ingresso", help_text="Ex.: 2024 (turma de 2024)")
+    ano_estagio = models.PositiveIntegerField("Ano do estágio (referência)",
+                                              help_text="Ano em que a turma estagia. Ex.: a turma de 2024 estagia em 2026.")
+    ativa = models.BooleanField("Ativa", default=True, help_text="Turmas inativas não aparecem nos cadastros.")
+
+    class Meta:
+        ordering = ["-ano_estagio", "curso__nome", "nome"]
+        constraints = [models.UniqueConstraint(fields=["curso", "nome", "ano_ingresso"], name="turma_unica")]
+
+    def __str__(self):
+        return f"{self.curso.nome}{' · ' + self.nome if self.nome else ''} — turma {self.ano_ingresso} (estágio {self.ano_estagio})"
+
+    @property
+    def rotulo(self):
+        """Curto, para listas: “3º A · 2024” ou “Técnico em Informática · 2024”."""
+        return f"{self.nome or self.curso.nome} · {self.ano_ingresso}"
+
+    def clean(self):
+        if self.ano_ingresso and self.ano_estagio and self.ano_estagio < self.ano_ingresso:
+            raise ValidationError({"ano_estagio": "O ano do estágio não pode ser antes do ano de ingresso."})
+
+
 CAMPOS_CONCEDENTE = [
     "tipo_concedente", "razao_social", "nome", "tipo_instituicao", "atividade", "cnpj", "matriz_filial",
     "endereco", "numero", "bairro", "complemento", "cidade", "uf", "cep", "telefone",
@@ -234,6 +267,9 @@ CAMPOS_CONCEDENTE = [
 
 class LocalEstagio(DadosConcedente):
     """Concedente: empresa, órgão ou profissional liberal que recebe estagiários."""
+
+    ativa = models.BooleanField("Ativa", default=True,
+                                help_text="Concedentes inativas não aparecem nos cadastros de estágio e supervisores.")
 
     class Meta:
         ordering = ["nome"]
@@ -250,12 +286,13 @@ class Estagio(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="estagios_orientados",
         limit_choices_to={"papel": Usuario.Papel.ORIENTADOR},
     )
+    # PROTECT: o supervisor só sai de um estágio quando outro é posto no lugar (ver Estagio.clean e TrocaSupervisor)
     supervisor = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
         related_name="estagios_supervisionados", limit_choices_to={"papel": Usuario.Papel.SUPERVISOR},
     )
     curso = models.ForeignKey(Curso, on_delete=models.PROTECT, related_name="estagios")
-    turma = models.CharField(max_length=40, blank=True)
+    turma = models.ForeignKey(Turma, null=True, blank=True, on_delete=models.PROTECT, related_name="estagios")
     local = models.ForeignKey(LocalEstagio, null=True, blank=True, on_delete=models.SET_NULL, related_name="estagios")
     setor = models.CharField(max_length=100, blank=True)
     data_inicio = models.DateField("Início")
@@ -302,6 +339,12 @@ class Estagio(models.Model):
 
     def clean(self):
         super().clean()
+        if self.turma_id and self.curso_id and self.turma.curso_id != self.curso_id:
+            raise ValidationError({"turma": "A turma é de outro curso."})
+        if self.pk and not self.supervisor_id:
+            antes = Estagio.objects.filter(pk=self.pk).values_list("supervisor_id", flat=True).first()
+            if antes:
+                raise ValidationError({"supervisor": "O supervisor só pode ser trocado por outro, nunca retirado."})
         if self.supervisor_id and self.local_id and not self.supervisor.concedentes.filter(pk=self.local_id).exists():
             raise ValidationError({"supervisor": f"{self.supervisor} não está cadastrado(a) como supervisor(a) de "
                                                  f"{self.local}. Vincule-o(a) a essa concedente primeiro."})
@@ -313,6 +356,20 @@ class Estagio(models.Model):
 
     def participantes(self):
         return [u for u in [self.estagiario, self.orientador, self.supervisor] if u]
+
+
+class TrocaSupervisor(models.Model):
+    """Histórico de troca do supervisor de um estágio (só o orientador/coordenador troca)."""
+
+    estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="trocas_supervisor")
+    anterior = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    novo = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    motivo = models.CharField(max_length=200, blank=True)
+    feita_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    feita_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-feita_em"]
 
 
 class Escala(models.Model):
@@ -374,12 +431,42 @@ def formatar_horario(entrada, saida_int, volta_int, saida):
     return f"{h(entrada)}–" if entrada else ""
 
 
+def chave_municipio(nome):
+    """“São Gonçalo do Amarante - CE” e “SAO GONCALO DO AMARANTE” viram a mesma chave."""
+    import re
+    import unicodedata
+
+    texto = unicodedata.normalize("NFKD", nome or "").encode("ascii", "ignore").decode().lower()
+    texto = re.sub(r"\s*[-/(]\s*[a-z]{2}\)?\s*$", "", texto.strip())  # tira “- CE”, “/CE”, “(CE)”
+    return " ".join(re.sub(r"[^a-z0-9 ]", " ", texto).split())
+
+
 class DiaSemEstagio(models.Model):
-    """Feriados, recessos, eventos da escola — dias em que ninguém vai ao estágio."""
+    """Feriados, recessos, eventos da escola — dias em que o estagiário não vai ao estágio.
+
+    Abrangência:
+    - ESCOLA: eventos e recessos do orientador (só os estagiários dele; pode ser de um curso).
+    - MUNICIPIO: feriado municipal — vale para os estágios em concedentes daquele município.
+    - TODOS: feriado nacional ou estadual — vale para todos os estágios.
+    `anual` repete o feriado na mesma data todo ano (aniversário da cidade, padroeiro…).
+    `origem` diz de onde veio ("manual", "calendario"); prepara a importação automática de calendários.
+    """
+
+    class Abrangencia(models.TextChoices):
+        ESCOLA = "ESCOLA", "Evento ou recesso da escola"
+        MUNICIPIO = "MUNICIPIO", "Feriado municipal"
+        TODOS = "TODOS", "Feriado nacional ou estadual"
 
     data = models.DateField()
     descricao = models.CharField(max_length=120)
-    orientador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="dias_sem_estagio")
+    abrangencia = models.CharField("Vale para", max_length=10, choices=Abrangencia.choices, default=Abrangencia.ESCOLA)
+    municipio = models.CharField("Município", max_length=80, blank=True)
+    municipio_chave = models.CharField(max_length=80, blank=True, db_index=True, editable=False)
+    uf = models.CharField("UF", max_length=2, blank=True, default="CE")
+    anual = models.BooleanField("Repete todo ano nesta data", default=False)
+    origem = models.CharField(max_length=20, blank=True, default="manual")
+    orientador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="dias_sem_estagio",
+                                   help_text="Quem cadastrou. Em eventos da escola, só vale para os estagiários dele.")
     curso = models.ForeignKey(Curso, null=True, blank=True, on_delete=models.CASCADE, help_text="Vazio = todos os cursos")
 
     class Meta:
@@ -389,6 +476,24 @@ class DiaSemEstagio(models.Model):
 
     def __str__(self):
         return f"{self.data:%d/%m/%Y} — {self.descricao}"
+
+    def save(self, *args, **kwargs):
+        self.municipio_chave = chave_municipio(self.municipio) if self.abrangencia == self.Abrangencia.MUNICIPIO else ""
+        super().save(*args, **kwargs)
+
+    def ocorrencias(self, inicio, fim):
+        """Datas em que vale dentro do período (o anual se repete em cada ano)."""
+        if not self.anual:
+            return [self.data] if inicio <= self.data <= fim else []
+        datas = []
+        for ano in range(max(inicio.year, self.data.year), fim.year + 1):
+            try:
+                dia = self.data.replace(year=ano)
+            except ValueError:  # 29/02 em ano não bissexto
+                continue
+            if inicio <= dia <= fim:
+                datas.append(dia)
+        return datas
 
 
 class Registro(models.Model):
@@ -625,6 +730,14 @@ class Configuracao(models.Model):
     logo_folha = models.ImageField("Brasão / logotipo da folha", upload_to="config/", blank=True,
                                    help_text="Canto superior esquerdo da folha de frequência. Vazio = brasão padrão do "
                                              "Governo do Ceará / SEDUC (o mesmo da folha oficial).")
+    ano_referencia = models.PositiveIntegerField(
+        "Ano de referência", null=True, blank=True,
+        help_text="As listas mostram os estagiários das turmas que estagiam neste ano. Vazio = ano atual.",
+    )
+    estagiarios_emitem_folha = models.BooleanField(
+        "Estagiários emitem a própria folha de frequência", default=True,
+        help_text="Desligado: o estagiário só baixa a folha que o orientador enviar para o mês.",
+    )
     mostrar_codigo_folha = models.BooleanField(
         "Imprimir código de controle no rodapé da folha", default=True,
         help_text="Linha discreta “Emitida em … · cód. XXXX” que permite saber quem emitiu cada folha impressa.",
@@ -666,6 +779,10 @@ class Configuracao(models.Model):
         return obj
 
     @property
+    def ano_referencia_efetivo(self):
+        return self.ano_referencia or timezone.localdate().year
+
+    @property
     def ano_captacao_efetivo(self):
         return self.ano_captacao or timezone.localdate().year + 1
 
@@ -693,6 +810,8 @@ class ImpressaoFrequencia(models.Model):
     ultima_impressao = models.DateTimeField(null=True, blank=True)
     ip = models.GenericIPAddressField(null=True, blank=True)
     navegador = models.CharField(max_length=255, blank=True)
+    folha_enviada = models.ForeignKey("FolhaEnviada", null=True, blank=True, on_delete=models.SET_NULL,
+                                      related_name="downloads", help_text="Preenchido quando foi um download da folha enviada")
 
     class Meta:
         ordering = ["-aberta_em"]
@@ -838,3 +957,58 @@ class AvisoExterno(models.Model):
         if not self.email:
             return ""
         return f"mailto:{self.email}?subject={quote(self.assunto)}&body={quote(self.mensagem)}"
+
+
+def caminho_folha(instance, filename):
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "pdf"
+    return f"folhas/{instance.mes:%Y-%m}/{get_random_string(16)}.{ext}"
+
+
+class FolhaEnviada(models.Model):
+    """Folha de frequência de um mês que o orientador envia para os estagiários baixarem e imprimirem."""
+
+    mes = models.DateField(help_text="Primeiro dia do mês da folha")
+    turma = models.ForeignKey(Turma, null=True, blank=True, on_delete=models.CASCADE, related_name="folhas_enviadas",
+                              help_text="Para todos os estagiários da turma")
+    estagios = models.ManyToManyField(Estagio, blank=True, related_name="folhas_enviadas",
+                                      help_text="Ou só para estes estagiários")
+    arquivo = models.FileField(upload_to=caminho_folha)
+    nome_original = models.CharField(max_length=255, blank=True)
+    observacao = models.CharField("Observação", max_length=200, blank=True)
+    enviado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    enviado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-mes", "-enviado_em"]
+        verbose_name = "folha de frequência enviada"
+        verbose_name_plural = "folhas de frequência enviadas"
+
+    def __str__(self):
+        return f"Frequência {self.mes:%m/%Y} — {self.destino}"
+
+    @property
+    def destino(self):
+        if self.turma_id:
+            return str(self.turma.rotulo)
+        nomes = [str(e.estagiario) for e in self.estagios.all()]
+        return ", ".join(nomes[:3]) + (f" e mais {len(nomes) - 3}" if len(nomes) > 3 else "")
+
+    @classmethod
+    def do_estagio(cls, estagio):
+        filtro = models.Q(estagios=estagio)
+        if estagio.turma_id:
+            filtro |= models.Q(turma_id=estagio.turma_id)
+        return cls.objects.filter(filtro).distinct()
+
+    def alcanca(self, estagio):
+        return (self.turma_id and self.turma_id == estagio.turma_id) or self.estagios.filter(pk=estagio.pk).exists()
+
+    def estagios_alvo(self):
+        if self.turma_id:
+            return Estagio.objects.filter(models.Q(turma_id=self.turma_id) | models.Q(folhas_enviadas=self)).distinct()
+        return self.estagios.all()
+
+    @property
+    def extensao(self):
+        nome = self.nome_original or self.arquivo.name
+        return nome.rsplit(".", 1)[-1].upper() if "." in nome else "ARQ"

@@ -15,7 +15,7 @@ from PIL import Image
 from .forms import EscalaForm
 from .models import (
     Agendamento, AvisoExterno, Candidatura, Configuracao, VagaCandidatura, Curso, DiaPlanejado, DiaSemEstagio, Documento, Escala, Estagio, ImpressaoFrequencia,
-    LocalEstagio, Notificacao, Registro, Usuario,
+    FolhaEnviada, LocalEstagio, Notificacao, Registro, TrocaSupervisor, Turma, Usuario,
 )
 from .services import criar_usuario, gerar_username, linhas_folha, resumo_horas, status_periodo
 from .validators import cnpj_valido, cpf_valido
@@ -36,9 +36,10 @@ class Base(TestCase):
         self.local = LocalEstagio.objects.create(nome="Empresa X")
         self.sup = _ativo(criar_usuario("Sérgio Supervisor", Usuario.Papel.SUPERVISOR, concedente=self.local))
         self.curso = Curso.objects.create(nome="Informática", carga_horaria=100, horas_por_dia_padrao=4)
+        self.turma = Turma.objects.create(curso=self.curso, nome="3º A", ano_ingresso=2024, ano_estagio=2026)
         self.aluno = _ativo(criar_usuario("Maria da Silva Souza", Usuario.Papel.ESTAGIARIO))
         self.est = Estagio.objects.create(estagiario=self.aluno, orientador=self.ori, supervisor=self.sup,
-                                          curso=self.curso, local=self.local, data_inicio=date(2026, 11, 2))
+                                          curso=self.curso, turma=self.turma, local=self.local, data_inicio=date(2026, 11, 2))
         Escala.objects.create(estagio=self.est, vigente_desde=date(2026, 11, 2), dias="0,1", horas_por_dia=4)
         patcher = mock.patch("django.utils.timezone.localdate", return_value=QUARTA)
         patcher.start()
@@ -67,7 +68,7 @@ class ContasTests(Base):
     def test_cadastro_em_lote_cria_contas_estagios_e_escalas(self):
         self.entrar(self.ori)
         r = self.client.post(reverse("criar_estagiarios"), {
-            "nomes": "Ana Clara Lima\nBruno Dias; 2024999", "curso": self.curso.pk, "local": self.local.pk,
+            "nomes": "Ana Clara Lima\nBruno Dias; 2024999", "turma": self.turma.pk, "local": self.local.pk,
             "supervisor": self.sup.pk, "data_inicio": "2026-11-16", "dias": ["0", "1", "2", "3", "4"], "horas_por_dia": "4",
         })
         self.assertContains(r, "ana.lima")
@@ -374,7 +375,7 @@ class CoordenadorTests(Base):
     def test_cadastra_estagiarios_escolhendo_o_orientador(self):
         self.entrar(self.coord)
         r = self.client.post(reverse("criar_estagiarios"), {
-            "nomes": "Caio Prado", "curso": self.curso.pk, "orientador": self.ori.pk, "data_inicio": "2026-11-16",
+            "nomes": "Caio Prado", "turma": self.turma.pk, "orientador": self.ori.pk, "data_inicio": "2026-11-16",
             "local": self.local.pk, "supervisor": self.sup.pk,
             "dias": ["0"], "horas_por_dia": "4"})
         self.assertContains(r, "caio.prado")
@@ -654,7 +655,7 @@ class SupervisorDaConcedenteTests(Base):
         self.entrar(self.ori)
 
     def _editar(self, **kw):
-        dados = {"curso": self.curso.pk, "local": self.local.pk, "supervisor": self.sup.pk, "data_inicio": "2026-11-02",
+        dados = {"turma": self.turma.pk, "local": self.local.pk, "supervisor": self.sup.pk, "data_inicio": "2026-11-02",
                  "horas_anteriores": "0", "ativo": "on"}
         dados.update(kw)
         return self.client.post(reverse("editar_estagio", args=[self.est.pk]), dados)
@@ -674,7 +675,7 @@ class SupervisorDaConcedenteTests(Base):
         r = self._editar(supervisor="")
         self.assertEqual(r.status_code, 200)
         r = self.client.post(reverse("criar_estagiarios"), {
-            "nomes": "Lia Souza", "curso": self.curso.pk, "local": self.local.pk, "supervisor": self.sup_y.pk,
+            "nomes": "Lia Souza", "turma": self.turma.pk, "local": self.local.pk, "supervisor": self.sup_y.pk,
             "data_inicio": "2026-11-16", "dias": ["0"], "horas_por_dia": "4"})
         self.assertContains(r, "não é supervisor(a) de Empresa X")
         self.assertFalse(Usuario.objects.filter(username="lia.souza").exists())
@@ -702,3 +703,180 @@ class SupervisorDaConcedenteTests(Base):
         self.assertEqual([(s, l) for s, l in r.supervisores_vinculados], [(self.sup, self.outro_local)])
         self.assertEqual(set(self.sup.concedentes.all()), {self.local, self.outro_local})
         self.assertEqual(Usuario.objects.filter(nome_completo="Sérgio Supervisor").count(), 1)
+
+
+class TurmasPorAnoTests(Base):
+    """A turma de 2024 estagia em 2026: as listas mostram as turmas do ano de referência."""
+
+    def setUp(self):
+        super().setUp()
+        self.turma_25 = Turma.objects.create(curso=self.curso, nome="3º A", ano_ingresso=2025, ano_estagio=2027)
+        aluno = _ativo(criar_usuario("Davi Futuro", Usuario.Papel.ESTAGIARIO))
+        self.est_27 = Estagio.objects.create(estagiario=aluno, orientador=self.ori, supervisor=self.sup, curso=self.curso,
+                                             turma=self.turma_25, local=self.local, data_inicio=date(2026, 11, 2))
+        self.entrar(self.ori)
+
+    def test_lista_puxa_o_ano_de_referencia_e_troca_de_ano(self):
+        Configuracao.objects.update_or_create(pk=1, defaults={"ano_referencia": 2026})
+        r = self.client.get(reverse("estagios_lista"))
+        self.assertContains(r, self.aluno.nome_completo)
+        self.assertNotContains(r, "Davi Futuro")
+        r = self.client.get(reverse("estagios_lista") + "?ano=2027")
+        self.assertContains(r, "Davi Futuro")
+        self.assertNotContains(r, self.aluno.nome_completo)
+        # a escolha fica na sessão
+        self.assertContains(self.client.get(reverse("painel")), "Davi Futuro")
+        r = self.client.get(reverse("estagios_lista") + "?ano=todos")
+        self.assertContains(r, "Davi Futuro")
+        self.assertContains(r, self.aluno.nome_completo)
+
+    def test_repetir_turmas_para_o_ano_seguinte_com_o_mesmo_nome(self):
+        self.client.post(reverse("turmas"), {"acao": "repetir", "de": "2027"})
+        nova = Turma.objects.get(ano_estagio=2028)
+        self.assertEqual((nova.nome, nova.ano_ingresso, nova.curso), ("3º A", 2026, self.curso))
+
+    def test_cadastro_em_lote_pega_o_curso_da_turma(self):
+        self.client.post(reverse("criar_estagiarios"), {
+            "nomes": "Ana Clara Lima", "turma": self.turma_25.pk, "local": self.local.pk, "supervisor": self.sup.pk,
+            "data_inicio": "2026-11-16", "dias": ["0"], "horas_por_dia": "4"})
+        e = Usuario.objects.get(username="ana.lima").estagios.get()
+        self.assertEqual((e.turma, e.curso), (self.turma_25, self.curso))
+
+    def test_importacao_cria_a_turma_do_ano(self):
+        from .importacao import Opcoes, importar
+
+        linhas = [(2, {"estagiario_nome": "Rui Lopes", "curso": "Informática", "turma": "3º B", "data_inicio": "01/09/2026",
+                       "concedente_nome": "Empresa X", "supervisor_nome": "Sérgio Supervisor"})]
+        r = importar(linhas, Opcoes(orientador=self.ori, dias=[0], horas_por_dia=Decimal(4)), self.ori, confirmar=True)
+        self.assertTrue(r.confirmado, r.erros)
+        t = Usuario.objects.get(nome_completo="Rui Lopes").estagios.get().turma
+        self.assertEqual((t.nome, t.ano_ingresso, t.ano_estagio), ("3º B", 2024, 2026))
+
+
+class TrocaSupervisorTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.sup2 = _ativo(criar_usuario("Sônia Substituta", Usuario.Papel.SUPERVISOR, concedente=self.local))
+
+    def test_supervisor_nao_pode_ser_retirado_sem_outro_no_lugar(self):
+        from django.core.exceptions import ValidationError
+        from django.db.models import ProtectedError
+
+        self.est.supervisor = None
+        with self.assertRaises(ValidationError):
+            self.est.full_clean()
+        with self.assertRaises(ProtectedError):
+            self.sup.delete()
+
+    def test_orientador_troca_e_fica_no_historico(self):
+        self.entrar(self.ori)
+        r = self.client.post(reverse("trocar_supervisor", args=[self.est.pk]), {"novo": self.sup2.pk, "motivo": "férias"})
+        self.assertEqual(r.status_code, 302)
+        self.est.refresh_from_db()
+        self.assertEqual(self.est.supervisor, self.sup2)
+        t = TrocaSupervisor.objects.get()
+        self.assertEqual((t.anterior, t.novo, t.feita_por), (self.sup, self.sup2, self.ori))
+        self.assertTrue(Notificacao.objects.filter(usuario=self.sup2).exists())
+
+    def test_supervisor_e_estagiario_nao_trocam(self):
+        for u in (self.sup, self.aluno):
+            self.entrar(u)
+            self.assertEqual(self.client.get(reverse("trocar_supervisor", args=[self.est.pk])).status_code, 403)
+
+    def test_desativar_supervisor_exige_substituto(self):
+        self.entrar(self.ori)
+        url = reverse("ativacao_usuario", args=[self.sup.pk])
+        r = self.client.post(url, {})
+        self.assertEqual(r.status_code, 200)
+        self.sup.refresh_from_db()
+        self.assertTrue(self.sup.is_active)
+        self.client.post(url, {f"sub_{self.est.pk}": self.sup2.pk})
+        self.sup.refresh_from_db()
+        self.est.refresh_from_db()
+        self.assertFalse(self.sup.is_active)
+        self.assertEqual(self.est.supervisor, self.sup2)
+        self.assertTrue(TrocaSupervisor.objects.filter(anterior=self.sup, novo=self.sup2).exists())
+
+
+class AtivacaoTests(Base):
+    def test_desativar_e_reativar_estagiario(self):
+        self.entrar(self.ori)
+        self.client.post(reverse("ativacao_usuario", args=[self.aluno.pk]))
+        self.aluno.refresh_from_db()
+        self.est.refresh_from_db()
+        self.assertFalse(self.aluno.is_active)
+        self.assertFalse(self.est.ativo)
+        self.client.logout()
+        self.assertFalse(self.client.login(username=self.aluno.username, password="senha-teste-1"))
+        self.entrar(self.ori)
+        self.client.post(reverse("ativacao_usuario", args=[self.aluno.pk]), {"reativar_estagio": "1"})
+        self.aluno.refresh_from_db()
+        self.est.refresh_from_db()
+        self.assertTrue(self.aluno.is_active and self.est.ativo)
+
+    def test_concedente_com_estagio_ativo_nao_desativa(self):
+        self.entrar(self.ori)
+        self.client.post(reverse("ativacao_local", args=[self.local.pk]), {"contas": "1"})
+        self.local.refresh_from_db()
+        self.assertTrue(self.local.ativa)
+        self.est.ativo = False
+        self.est.save()
+        self.client.post(reverse("ativacao_local", args=[self.local.pk]), {"contas": "1"})
+        self.local.refresh_from_db()
+        self.sup.refresh_from_db()
+        self.assertFalse(self.local.ativa)
+        self.assertFalse(self.sup.is_active)  # só atuava nessa concedente
+        r = self.client.get(reverse("criar_estagiarios"))
+        self.assertNotContains(r, ">Empresa X<")
+        self.client.post(reverse("ativacao_local", args=[self.local.pk]), {"contas": "1"})
+        self.local.refresh_from_db()
+        self.sup.refresh_from_db()
+        self.assertTrue(self.local.ativa and self.sup.is_active)
+
+
+class FolhasDoOrientadorTests(Base):
+    def _pdf(self):
+        return SimpleUploadedFile("frequencia novembro.pdf", b"%PDF-1.4 teste", content_type="application/pdf")
+
+    @override_settings(MEDIA_ROOT=settings.BASE_DIR / "data" / "anexos-testes")
+    def test_orientador_envia_e_estagiario_so_baixa_quando_desligado(self):
+        self.entrar(self.ori)
+        self.client.post(reverse("frequencias"), {"acao": "config", "estagiarios_emitem_folha": "0"})
+        self.assertFalse(Configuracao.atual().estagiarios_emitem_folha)
+        r = self.client.post(reverse("frequencias"), {"acao": "enviar", "mes": "2026-11", "turma": self.turma.pk,
+                                                       "arquivo": self._pdf()})
+        self.assertEqual(r.status_code, 302)
+        folha = FolhaEnviada.objects.get()
+        self.assertEqual(folha.mes, date(2026, 11, 1))
+
+        self.entrar(self.aluno)
+        r = self.client.get(reverse("folha_frequencia", args=[self.est.pk]))
+        self.assertRedirects(r, reverse("minhas_folhas", args=[self.est.pk]), fetch_redirect_response=False)
+        self.assertContains(self.client.get(reverse("minhas_folhas", args=[self.est.pk])), "Novembro de 2026")
+        r = self.client.get(reverse("baixar_folha", args=[folha.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(b"".join(r.streaming_content), b"%PDF-1.4 teste")
+        self.assertTrue(ImpressaoFrequencia.objects.filter(folha_enviada=folha, usuario=self.aluno).exists())
+        # outro estagiário (outra turma) não baixa
+        outro = _ativo(criar_usuario("Leo Alheio", Usuario.Papel.ESTAGIARIO))
+        self.entrar(outro)
+        self.assertEqual(self.client.get(reverse("baixar_folha", args=[folha.pk])).status_code, 403)
+        folha.arquivo.delete(save=False)
+
+    def test_emissao_em_lote_uma_folha_por_estagiario(self):
+        aluno2 = _ativo(criar_usuario("Lia Souza", Usuario.Papel.ESTAGIARIO))
+        Estagio.objects.create(estagiario=aluno2, orientador=self.ori, supervisor=self.sup, curso=self.curso,
+                               turma=self.turma, local=self.local, data_inicio=date(2026, 11, 2))
+        self.entrar(self.ori)
+        r = self.client.get(reverse("folhas_lote") + f"?mes=2026-11&turma={self.turma.pk}")
+        self.assertEqual(r.content.decode().count('class="folha"'), 2)
+        self.assertEqual(ImpressaoFrequencia.objects.filter(usuario=self.ori).count(), 2)
+        codigos = list(ImpressaoFrequencia.objects.values_list("codigo", flat=True))
+        self.client.post(reverse("marcar_impressao"), {"codigo": codigos})
+        self.assertEqual(ImpressaoFrequencia.objects.filter(impressoes=1).count(), 2)
+
+    def test_coordenador_nao_emite_nem_envia(self):
+        coord = _ativo(criar_usuario("Paula Lins", Usuario.Papel.COORDENADOR))
+        self.entrar(coord)
+        self.assertEqual(self.client.get(reverse("folhas_lote") + "?mes=2026-11").status_code, 403)
+        self.assertNotContains(self.client.get(reverse("frequencias")), "Enviar folha para os estagiários")

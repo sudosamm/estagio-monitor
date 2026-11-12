@@ -8,12 +8,13 @@
 </div>
 <form class="filtros card" method="get">
   <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ q }}" placeholder="Nome, razão social, CNPJ ou município"></div>
+  <div><label class="rotulo">Situação</label><select name="situacao"><option value="">Ativas</option><option value="inativas"{% if situacao == "inativas" %} selected{% endif %}>Desativadas{% if n_inativas %} ({{ n_inativas }}){% endif %}</option><option value="todas"{% if situacao == "todas" %} selected{% endif %}>Todas</option></select></div>
   <button class="btn" type="submit">Buscar</button>
 </form>
 <div class="card">
   <ul class="lista">{% for l in itens %}
     <li><span class="avatar sm verde">{% icone "predio" %}</span>
-      <span class="cresce"><strong>{{ l.nome }}</strong>{% if l.razao_social and l.razao_social != l.nome %} <small>· {{ l.razao_social }}</small>{% endif %}
+      <span class="cresce"{% if not l.ativa %} style="opacity:.6"{% endif %}><strong>{{ l.nome }}</strong>{% if not l.ativa %} <span class="etiqueta">desativada</span>{% endif %}{% if l.razao_social and l.razao_social != l.nome %} <small>· {{ l.razao_social }}</small>{% endif %}
         <small style="display:block">{% if l.cnpj %}{{ l.cnpj }} · {% endif %}{{ l.endereco_completo|default:"sem endereço" }}{% if l.telefone %} · {{ l.telefone }}{% endif %}</small>
         <small style="display:block">{{ l.n }} estagiário(s) · {{ l.n_sup }} supervisor(es){% if not l.cnpj or not l.representante_nome %} · <span class="alerta-txt">cadastro incompleto</span>{% endif %}</small></span>
       {% if l.link_mapa %}<a class="btn sec sm oculto-mobile" href="{{ l.link_mapa }}" target="_blank" rel="noopener">Mapa</a>{% endif %}

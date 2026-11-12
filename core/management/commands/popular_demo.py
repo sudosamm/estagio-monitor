@@ -17,7 +17,7 @@ from django.utils import timezone
 from core.models import (
     Agendamento, Candidatura, Configuracao, VagaCandidatura, Curso, DiaSemEstagio, Escala, Estagio, LocalEstagio, Mensagem, Registro, Usuario,
 )
-from core.services import criar_usuario
+from core.services import criar_usuario, turma_para
 from core.validators import _dv, formatar_cnpj, formatar_cpf
 
 
@@ -87,7 +87,8 @@ class Command(BaseCommand):
         estagios = []
         for i, (nome, curso, local, sup, turma) in enumerate(alunos):
             u = conta(nome, Usuario.Papel.ESTAGIARIO, matricula=f"2024{1000 + i}", cpf=cpf_ficticio(987654300 + i))
-            e = Estagio.objects.create(estagiario=u, orientador=ori, supervisor=sup, curso=curso, local=local, turma=turma,
+            e = Estagio.objects.create(estagiario=u, orientador=ori, supervisor=sup, curso=curso, local=local,
+                                       turma=turma_para(curso, turma, inicio.year),
                                        data_inicio=inicio, data_fim=inicio + timedelta(days=200))
             horas = curso.horas_por_dia_padrao
             dias_iniciais = [0, 1] if curso == info else [2, 3]  # Informática: seg/ter · Enfermagem: qua/qui

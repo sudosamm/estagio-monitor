@@ -9,7 +9,7 @@
 {% if not supervisor %}
 <form class="filtros card" method="get">
   <div><label class="rotulo">Curso</label><select name="curso"><option value="">Todos</option>{% for c in cursos %}<option value="{{ c.pk }}"{% if filtro_curso == c.pk|stringformat:"s" %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
-  <div><label class="rotulo">Turma</label><select name="turma"><option value="">Todas</option>{% for t in turmas %}<option{% if filtro_turma == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+  <div><label class="rotulo">Turma</label><select name="turma"><option value="">Todas</option>{% for t in turmas %}<option value="{{ t.pk }}"{% if filtro_turma == t.pk|stringformat:"s" %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
   <button class="btn sec" type="submit">Filtrar lista</button>
 </form>
 {% endif %}

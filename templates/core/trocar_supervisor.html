@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Trocar supervisor — {{ estagio.estagiario }}{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><div class="migalha"><a href="{{ estagio.get_absolute_url }}">← {{ estagio.estagiario }}</a></div>
+    <h1>Trocar o supervisor de {{ estagio.estagiario.primeiro_nome }}</h1>
+    <p>{{ estagio.local|default:"Sem concedente" }} · supervisor atual: <strong>{{ estagio.supervisor|default:"nenhum" }}</strong></p></div>
+</div>
+<div class="grade grade-lado">
+  <div class="card destaque">
+    <p class="caixa-info">O supervisor só deixa o estagiário quando outro é colocado no lugar. O novo precisa estar cadastrado nesta concedente. Os dois e o estagiário são avisados.</p>
+    {% if not form.fields.novo.queryset.exists %}
+      <p class="caixa-alerta">Não há outro supervisor cadastrado em {{ estagio.local }}. {% if user|pode:"cadastros" and estagio.local %}<a href="{% url 'local_editar' estagio.local.pk %}">Cadastre ou vincule um supervisor nessa concedente</a>{% endif %} e volte aqui.</p>
+    {% else %}
+    <form method="post" novalidate>{% csrf_token %}{% include "core/_form.html" %}
+      <div class="acoes"><button class="btn" type="submit">Trocar supervisor</button><a class="btn sec" href="{{ estagio.get_absolute_url }}">Cancelar</a></div></form>
+    {% endif %}
+  </div>
+  <div class="card"><h3>Histórico</h3>
+    <ul class="lista compacta">{% for t in historico %}
+      <li><span class="cresce">{{ t.anterior|default:"—" }} → <strong>{{ t.novo|default:"—" }}</strong><small style="display:block">{{ t.feita_em|date:"d/m/Y H:i" }} · por {{ t.feita_por|default:"—" }}{% if t.motivo %} · {{ t.motivo }}{% endif %}</small></span></li>
+    {% empty %}<li class="vazio">Nenhuma troca até agora.</li>{% endfor %}</ul>
+  </div>
+</div>
+{% endblock %}

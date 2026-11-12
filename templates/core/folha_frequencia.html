@@ -1,7 +1,7 @@
 {% load static ui %}<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Frequência {{ mes_nome }} {{ ano }} — {{ estagio.estagiario }}</title>
+<title>Frequência {{ mes_nome }} {{ ano }} — {{ titulo }}</title>
 <style>
   /* Medidas em milímetros copiadas da folha oficial (CEPAE/SEDUC), página A4 sem margem. */
   @page { size: A4 portrait; margin: 0; }
@@ -44,21 +44,25 @@
   .ass .t10 { display: block; margin-top: .5mm; }
   .emissao { position: absolute; right: 7.2mm; bottom: 6mm; font-size: 6pt; color: #555; }
 
+  .papel-wrap .folha + .folha { margin-top: 12px; }
+
   @media print {
     body { background: #fff; }
     .barra, .dica { display: none !important; }
     .papel-wrap { padding: 0; overflow: visible; }
-    .folha { margin: 0; box-shadow: none; }
+    .folha { margin: 0; box-shadow: none; break-after: page; page-break-after: always; }
+    .folha:last-child { break-after: auto; page-break-after: auto; }
+    .papel-wrap .folha + .folha { margin-top: 0; }
   }
 </style></head>
 <body oncontextmenu="return false">
 <div class="barra">
-  <span><a href="?mes={{ nav.anterior }}" aria-label="Mês anterior">←</a> <span class="mes">{{ mes_nome }} de {{ ano }}</span> <a href="?mes={{ nav.proximo }}" aria-label="Próximo mês">→</a></span>
-  <span><a href="{{ estagio.get_absolute_url }}">Voltar</a> <button class="imprimir" type="button" id="imprimir">Imprimir</button></span>
+  <span><a href="?mes={{ nav.anterior }}{% if outros_params %}&amp;{{ outros_params }}{% endif %}" aria-label="Mês anterior">←</a> <span class="mes">{{ mes_nome }} de {{ ano }}</span> <a href="?mes={{ nav.proximo }}{% if outros_params %}&amp;{{ outros_params }}{% endif %}" aria-label="Próximo mês">→</a>{% if folhas|length > 1 %} · {{ folhas|length }} folhas (uma por página){% endif %}</span>
+  <span><a href="{{ voltar }}">Voltar</a> <button class="imprimir" type="button" id="imprimir">Imprimir{% if folhas|length > 1 %} todas{% endif %}</button></span>
 </div>
 <p class="dica">Imprima em papel A4, com margens <em>padrão</em> (ou “nenhuma”) e sem “cabeçalhos e rodapés” do navegador. Assine todos os dias e entregue ao orientador no último dia do mês.</p>
 
-<div class="papel-wrap"><div class="folha">
+<div class="papel-wrap">{% for f in folhas %}{% with estagio=f.estagio linhas=f.linhas log=f.log %}<div class="folha">
   <img class="logo" src="{% if config.logo_folha %}{% url 'logo_folha' %}{% else %}{% static 'img/brasao-ceara-seduc.png' %}{% endif %}" alt="">
   {% with linhas_cab=config.cabecalho_folha.splitlines %}
     {% for linha in linhas_cab %}{% if linha.strip %}<div class="a centro t10" style="top:{% if forloop.counter == 1 %}6.6{% else %}10.6{% endif %}mm">{{ linha }}</div>{% endif %}{% endfor %}
@@ -136,9 +140,9 @@
     </div>
   </div>
   {% if config.mostrar_codigo_folha %}<div class="emissao">Emitida em {{ agora|date:"d/m/Y H:i" }} · cód. {{ log.codigo }}</div>{% endif %}
-</div></div>
+</div>{% endwith %}{% endfor %}</div>
 
-<form id="registro" hidden>{% csrf_token %}<input type="hidden" name="codigo" value="{{ log.codigo }}"></form>
+<form id="registro" hidden>{% csrf_token %}{% for f in folhas %}<input type="hidden" name="codigo" value="{{ f.log.codigo }}">{% endfor %}</form>
 <script>
 (function () {
   var url = "{% url 'marcar_impressao' %}";

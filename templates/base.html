@@ -58,7 +58,7 @@
         {% if user|pode:"arquivos" %}<a href="{% url 'documentos_gerais' %}" class="{% if n == 'documentos_gerais' %}ativo{% endif %}">Arquivos</a>{% endif %}
         <a href="{% url 'usuarios' %}" class="{% if n in 'usuarios,editar_usuario,criar_supervisores,criar_orientador,criar_coordenador' %}ativo{% endif %}">Contas</a>
         <a href="{% url 'locais' %}" class="{% if n in 'locais,local_editar,local_novo' %}ativo{% endif %}">Concedentes</a>
-        <a href="{% url 'cursos' %}" class="{% if n in 'cursos,curso_editar' %}ativo{% endif %}">Cursos</a>
+        <a href="{% url 'turmas' %}" class="{% if n in 'turmas,turma_editar,cursos,curso_editar' %}ativo{% endif %}">Turmas e cursos</a>
         {% if user|pode:"feriados" %}<a href="{% url 'dias_sem_estagio' %}" class="{% if n == 'dias_sem_estagio' %}ativo{% endif %}">Feriados</a>{% endif %}
         {% if CONFIG.banco_talentos_habilitado or CONFIG.curriculos_habilitados %}<a href="{% url 'banco_talentos' %}" class="{% if n == 'banco_talentos' %}ativo{% endif %}">Talentos</a>{% endif %}
       {% elif user.is_supervisor %}
@@ -69,6 +69,7 @@
         {% if CONFIG.banco_talentos_habilitado %}<a href="{% url 'banco_talentos' %}" class="{% if n == 'banco_talentos' %}ativo{% endif %}">Banco de talentos</a>{% endif %}
       {% else %}
         <a href="{% url 'inicio' %}" class="{% if n in 'inicio,estagio_detalhe,estagio_dia' %}ativo{% endif %}">Meu estágio</a>
+        {% for e in user.estagios.all %}{% if e.ativo %}<a href="{% url 'minhas_folhas' e.pk %}" class="{% if n == 'minhas_folhas' %}ativo{% endif %}">Folha de frequência</a>{% endif %}{% endfor %}
         <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Visitas e conversas</a>
       {% endif %}
     </div>

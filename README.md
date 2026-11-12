@@ -19,6 +19,18 @@ Todos recebem **notificações** (o sino no topo) quando algo muda, por exemplo:
 - Usuário gerado como `primeiro.ultimo` sem acentos (ex.: *Maria da Silva Souza* → `maria.souza`). Se já existir, recebe um número (`maria.souza2`).
 - Todas as contas nascem com a `SENHA_PADRAO` e a pessoa **é obrigada a criar a própria senha** no primeiro acesso.
 - O orientador pode voltar a senha de alguém para a padrão (em *Contas → Editar*).
+- **Desativar/reativar** (em *Contas*): a pessoa deixa de entrar, mas o histórico fica guardado.
+  - **Estagiário:** o estágio ativo é encerrado junto. Ao reativar, dá para reabrir o último estágio.
+  - **Supervisor com estagiários ativos:** é preciso escolher um substituto da mesma concedente para cada um.
+  - **Orientador com estágios ativos:** passe os estágios para outro orientador antes.
+
+### Turmas e ano de referência
+O curso é sempre o mesmo; o que muda é a **turma de cada ano**. A turma de 2024 estagia em 2026, a de 2025 em 2027, e assim por diante. Cada turma tem curso, nome (pode repetir todo ano, ex.: “3º A”), ano de ingresso e ano do estágio.
+- **Ano de referência** (em *Turmas e cursos*; vazio = ano atual): as listas de estagiários, o painel, *Alterar dias* e *Frequências* mostram só as turmas que estagiam nesse ano. Cada pessoa pode olhar outro ano (ou todos) no seletor “Ano” das listas.
+- **Turmas do ano seguinte:** o botão *Turmas de 2027* cria as turmas do próximo ano com os mesmos nomes.
+- **No cadastro do estágio** escolhe-se a turma, e o curso vem dela.
+- **Na importação:** a turma é criada a partir das colunas `curso`, `turma` e `ano_turma` (vazio = 2 anos antes do início do estágio).
+- **Estágios antigos:** quem já estava cadastrado ganhou a turma do seu curso no ano em que começou.
 
 ### Dias e horários
 - **Supervisor:** os horários são da concedente. Ele define dias, carga diária (4, 6 ou 8 h) e horários de cada estagiário, um por um (aba *Dias e horários* do estágio) ou vários de uma vez (*Dias e horários* no menu). O painel avisa quem ainda está sem horário definido.
@@ -35,10 +47,17 @@ Cada pessoa gera a folha do mês reproduzindo, medida a medida, a folha oficial 
 - O estagiário não vê nada desse registro.
 - Escola, município, cabeçalho e logotipo da folha ficam em **Configurações** (menu do usuário, só para o administrador).
 
+Em **Frequências**, o orientador também:
+- **Emite as folhas em lote:** de uma turma, de uma concedente ou de todos, uma por página, para imprimir de uma vez.
+- **Decide quem emite:** com o botão “Só eu envio as folhas”, o estagiário deixa de emitir pelo sistema e só baixa a folha que o orientador enviar. “Deixar os estagiários emitirem” volta ao normal.
+- **Envia a folha de um mês** (PDF ou imagem) para uma turma inteira ou para estagiários escolhidos. Eles recebem um aviso e baixam em *Folha de frequência*. A tabela mostra quem já baixou.
+
 ### Supervisor e concedente
 Todo estágio precisa de **concedente** e **supervisor**, e o supervisor tem de estar **cadastrado nessa concedente**. Os formulários só mostram os supervisores da concedente escolhida e recusam outro.
 - **Mais de uma concedente:** um supervisor pode estar em várias concedentes. Vincule-o na ficha da concedente, em “Vincular supervisor já cadastrado em outra concedente”, ou na edição da conta.
 - **Desvincular:** não é possível tirar um supervisor de uma concedente onde ele ainda supervisiona estagiários ativos.
+- **Trocar o supervisor do estagiário:** o supervisor só sai do estágio quando o orientador ou o coordenador coloca **outro no lugar**, pelo botão *Trocar supervisor* do estágio (ou ao editar o estágio). Nunca fica sem supervisor. Cada troca fica no histórico, e o novo supervisor, o anterior e o estagiário são avisados.
+- **Concedente desativada:** some dos cadastros, mas só pode ser desativada sem estagiários ativos. Dá para desativar junto as contas dos supervisores que só atuam nela. Aprovar uma nova candidatura dela na captação, ou importá-la por CSV, reativa a concedente.
 - **Na importação por CSV:** o supervisor de cada linha fica vinculado à concedente daquela linha. Se a mesma pessoa já existir em outra concedente, a prévia avisa para você conferir.
 
 ### Previsão de término
@@ -87,13 +106,15 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 |---|---|---|
 | Painel, estagiários, lançar/validar registros | ✔ | ✔ |
 | Cadastrar estagiários | ✔ | ✔ (escolhe o orientador) |
-| Contas, concedentes e cursos | ✔ | ✔ |
+| Contas, concedentes, cursos e turmas (inclui desativar/reativar) | ✔ | ✔ |
 | Captação de concedentes | ✔ | ✔ |
 | Frequências impressas | ✔ | ✔ |
 | Agendar visitas | ✔ | — |
 | Mudar dias em lote (cada um mantém seus horários) | ✔ | — |
+| Mudar o ano de referência | ✔ | — |
 | Feriados e eventos | ✔ | — |
 | Arquivos gerais | ✔ | — |
+| Emitir folhas em lote, enviar folhas e decidir se o estagiário emite | ✔ | — |
 
 Coordenadores são criados pelo administrador em **Contas → + Coordenador**.
 
@@ -160,10 +181,10 @@ python manage.py criar_orientador "Nome Completo"
 Tudo fica em `/data` (`db.sqlite3` e a pasta `anexos/`). Copiar esse volume já é um backup completo.
 
 ## Primeiros passos como orientador
-1. **Cursos**: cadastre os cursos com a carga horária (ex.: Informática, 300h).
+1. **Turmas e cursos**: cadastre os cursos com a carga horária (ex.: Informática, 300h) e as turmas de cada ano (ex.: turma de 2024, estágio em 2026).
 2. **Locais**: cadastre as concedentes (endereço, telefone, link do mapa).
 3. **Contas → + Supervisores**: um por linha, vinculados ao local.
-4. **Estagiários → Cadastrar estagiários**: cole os nomes (um por linha), escolha curso, local, supervisor, data de início e dias. Ao final aparece a lista de usuários para imprimir ou repassar.
+4. **Estagiários → Cadastrar estagiários**: cole os nomes (um por linha), escolha a turma, a concedente, supervisor, data de início e dias. Ao final aparece a lista de usuários para imprimir ou repassar.
 5. **Feriados**: cadastre os dias sem estágio.
 
 ## Estrutura

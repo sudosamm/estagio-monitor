@@ -3,12 +3,13 @@ from decimal import Decimal
 
 from django import forms
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
 from .models import (
-    DIAS_SEMANA, Agendamento, Candidatura, Configuracao, Curso, DiaSemEstagio, Documento, Estagio, LocalEstagio,
-    Mensagem, Registro, Usuario,
+    DIAS_SEMANA, Agendamento, Candidatura, Configuracao, Curso, DiaSemEstagio, Documento, Estagio, FolhaEnviada,
+    LocalEstagio, Mensagem, Registro, Turma, Usuario,
 )
 from .validators import limpar_cep, limpar_cnpj_ou_cpf, limpar_cpf
 
@@ -92,6 +93,35 @@ class SupervisorSelect(forms.Select):
 
 def supervisores_qs():
     return Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR, is_active=True).prefetch_related("concedentes")
+
+
+def concedentes_ativas(atual=None):
+    """Concedentes ativas (mais a atual do estágio, mesmo que tenha sido desativada)."""
+    if atual is not None and atual.pk:
+        return LocalEstagio.objects.filter(Q(ativa=True) | Q(pk=atual.pk))
+    return LocalEstagio.objects.filter(ativa=True)
+
+
+def turmas_qs(usuario=None, atual=None):
+    """Turmas ativas (as do ano de referência primeiro), limitadas aos cursos do coordenador."""
+    qs = Turma.objects.select_related("curso")
+    qs = qs.filter(Q(ativa=True) | Q(pk=atual.pk)) if atual is not None and atual.pk else qs.filter(ativa=True)
+    if usuario is not None and usuario.is_coordenador and usuario.cursos_ids():
+        qs = qs.filter(curso_id__in=usuario.cursos_ids())
+    return qs
+
+
+class TurmaChoiceField(forms.ModelChoiceField):
+    def __init__(self, **kw):
+        kw.setdefault("label", "Turma")
+        if not kw.get("help_text"):
+            kw["help_text"] = "Curso e ano da turma. Ex.: a turma de 2024 estagia em 2026. Cadastre turmas em “Turmas”."
+        kw.setdefault("queryset", Turma.objects.none())
+        kw.pop("limit_choices_to", None)
+        super().__init__(**kw)
+
+    def label_from_instance(self, t):
+        return str(t)
 
 
 def validar_supervisor_da_concedente(form, local, supervisor):
@@ -195,16 +225,15 @@ class EstagiariosLoteForm(CamposEscalaMixin, Formulario):
         widget=forms.Textarea(attrs={"rows": 8, "placeholder": "Maria da Silva Souza\nJoão Pedro Lima; 2024001234"}),
         help_text="Nome completo por linha. Opcional: “; matrícula” depois do nome.",
     )
-    curso = forms.ModelChoiceField(queryset=Curso.objects.all())
-    turma = forms.CharField(required=False, max_length=40)
-    local = forms.ModelChoiceField(queryset=LocalEstagio.objects.all(), label="Concedente")
+    turma = TurmaChoiceField()
+    local = forms.ModelChoiceField(queryset=LocalEstagio.objects.none(), label="Concedente")
     supervisor = forms.ModelChoiceField(queryset=supervisores_qs(), widget=SupervisorSelect,
                                         help_text="Só aparecem os supervisores da concedente escolhida.")
     setor = forms.CharField(required=False, max_length=100)
     data_inicio = forms.DateField(label="Início do estágio", widget=DataInput())
     data_fim = forms.DateField(label="Término previsto no termo", widget=DataInput(), required=False)
 
-    field_order = ["nomes", "curso", "turma", "local", "setor", "supervisor", "data_inicio", "data_fim", *CAMPOS_ESCALA]
+    field_order = ["nomes", "turma", "local", "setor", "supervisor", "data_inicio", "data_fim", *CAMPOS_ESCALA]
 
     orientador = forms.ModelChoiceField(
         queryset=Usuario.objects.filter(papel=Usuario.Papel.ORIENTADOR, is_active=True), required=False,
@@ -215,14 +244,14 @@ class EstagiariosLoteForm(CamposEscalaMixin, Formulario):
         super().__init__(*a, **kw)
         self.fields["supervisor"].queryset = supervisores_qs()
         self.fields["supervisor"].label_from_instance = lambda u: f"{u} ({u.concedentes_txt or 'sem concedente'})"
+        self.fields["turma"].queryset = turmas_qs(usuario)
+        self.fields["local"].queryset = concedentes_ativas()
         # o orientador cadastra os próprios estagiários; o coordenador escolhe o orientador
         if usuario is not None and usuario.is_orientador:
             del self.fields["orientador"]
         else:
             self.fields["orientador"].required = True
-            self.order_fields(["nomes", "curso", "orientador"])
-        if usuario is not None and usuario.is_coordenador and usuario.cursos_ids():
-            self.fields["curso"].queryset = Curso.objects.filter(pk__in=usuario.cursos_ids())
+            self.order_fields(["nomes", "turma", "orientador"])
         self.fields["horario_entrada"].help_text = "Horários são opcionais: o supervisor da concedente define depois."
 
     def clean(self):
@@ -251,7 +280,7 @@ class SupervisoresLoteForm(Formulario):
         widget=forms.Textarea(attrs={"rows": 5, "placeholder": "Ana Beatriz Rocha; (85) 99999-0000"}),
         help_text="Nome completo por linha. Opcional: “; telefone” depois do nome.",
     )
-    local = forms.ModelChoiceField(queryset=LocalEstagio.objects.all(), label="Concedente")
+    local = forms.ModelChoiceField(queryset=LocalEstagio.objects.filter(ativa=True), label="Concedente")
     cargo = forms.CharField(required=False, max_length=80, label="Cargo/Função")
 
     def clean_nomes(self):
@@ -291,9 +320,7 @@ class CoordenadorForm(Formulario):
 class UsuarioEditForm(FormularioModelo):
     class Meta:
         model = Usuario
-        fields = ["nome_completo", "email", "telefone", "cpf", "matricula", "cargo", "concedentes", "cursos_coordenados",
-                  "is_active"]
-        labels = {"is_active": "Conta ativa"}
+        fields = ["nome_completo", "email", "telefone", "cpf", "matricula", "cargo", "concedentes", "cursos_coordenados"]
         widgets = {"cursos_coordenados": forms.CheckboxSelectMultiple, "concedentes": forms.CheckboxSelectMultiple}
 
     def clean_cpf(self):
@@ -394,8 +421,8 @@ class PerfilForm(FormularioModelo):
 class ConfiguracaoForm(FormularioModelo):
     class Meta:
         model = Configuracao
-        fields = ["nome_escola", "municipio_escola", "cabecalho_folha", "logo_folha", "mostrar_codigo_folha",
-                  "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
+        fields = ["nome_escola", "municipio_escola", "ano_referencia", "cabecalho_folha", "logo_folha",
+                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
                   "curriculos_habilitados", "banco_talentos_habilitado"]
         widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(),
                    "texto_captacao": forms.Textarea(attrs={"rows": 3})}
@@ -414,6 +441,36 @@ class CursoForm(FormularioModelo):
     class Meta:
         model = Curso
         fields = ["nome", "carga_horaria", "horas_por_dia_padrao"]
+
+
+class TurmaForm(FormularioModelo):
+    class Meta:
+        model = Turma
+        fields = ["curso", "nome", "ano_ingresso", "ano_estagio", "ativa"]
+
+    def __init__(self, *a, usuario=None, **kw):
+        super().__init__(*a, **kw)
+        if usuario is not None and usuario.is_coordenador and usuario.cursos_ids():
+            self.fields["curso"].queryset = Curso.objects.filter(pk__in=usuario.cursos_ids())
+        for nome in ("ano_ingresso", "ano_estagio"):
+            self.fields[nome].widget.attrs.update({"min": 2000, "max": 2100})
+
+    def clean_nome(self):
+        return " ".join((self.cleaned_data.get("nome") or "").split())
+
+    def clean(self):
+        d = super().clean()
+        if d.get("curso") and d.get("ano_ingresso"):
+            iguais = Turma.objects.filter(curso=d["curso"], ano_ingresso=d["ano_ingresso"], nome__iexact=d.get("nome", ""))
+            if iguais.exclude(pk=self.instance.pk).exists():
+                raise forms.ValidationError("Já existe essa turma (mesmo curso, nome e ano de ingresso).")
+        return d
+
+
+class AnoReferenciaForm(FormularioModelo):
+    class Meta:
+        model = Configuracao
+        fields = ["ano_referencia"]
 
 
 class LocalForm(FormularioModelo):
@@ -485,27 +542,53 @@ class DiaSemEstagioForm(FormularioModelo):
 
     class Meta:
         model = DiaSemEstagio
-        fields = ["data", "ate", "descricao", "curso"]
-        widgets = {"data": DataInput()}
-        labels = {"data": "Data"}
+        fields = ["abrangencia", "municipio", "data", "ate", "descricao", "anual", "curso"]
+        widgets = {"data": DataInput(), "abrangencia": forms.RadioSelect,
+                   "municipio": forms.TextInput(attrs={"list": "municipios", "autocomplete": "off",
+                                                       "placeholder": "Ex.: General Sampaio"})}
+        labels = {"data": "Data", "descricao": "Descrição", "curso": "Só para o curso (eventos da escola)"}
+        help_texts = {
+            "municipio": "Vale para os estagiários de concedentes deste município (pelo município da ficha da concedente).",
+            "anual": "Para datas fixas como o aniversário da cidade e o padroeiro: não precisa cadastrar de novo a cada ano.",
+        }
+
+    def clean(self):
+        d = super().clean()
+        A = DiaSemEstagio.Abrangencia
+        abr = d.get("abrangencia")
+        if abr == A.MUNICIPIO and not (d.get("municipio") or "").strip():
+            self.add_error("municipio", "Informe o município do feriado.")
+        if d.get("anual") and d.get("ate"):
+            self.add_error("anual", "Um período (com “até”) não pode repetir todo ano. Cadastre cada data.")
+        if d.get("ate") and d.get("data") and d["ate"] < d["data"]:
+            self.add_error("ate", "A data final é antes da inicial.")
+        if abr != A.ESCOLA:
+            d["curso"] = None
+        if abr != A.MUNICIPIO:
+            d["municipio"] = ""
+        return d
 
 
 class EstagioForm(FormularioModelo):
     class Meta:
         model = Estagio
         fields = [
-            "curso", "turma", "local", "setor", "supervisor", "data_inicio", "data_fim", "acompanhamento_desde",
+            "turma", "local", "setor", "supervisor", "data_inicio", "data_fim", "acompanhamento_desde",
             "carga_horaria", "horas_anteriores", "ativo", "observacoes_orientador",
         ]
+        field_classes = {"turma": TurmaChoiceField}
         labels = {"local": "Concedente", "data_fim": "Término previsto no termo"}
         help_texts = {"data_fim": "Só informativo: a previsão real é calculada pelas horas que faltam.",
-                      "supervisor": "Só aparecem os supervisores da concedente escolhida."}
+                      "supervisor": "Só aparecem os supervisores da concedente escolhida. Trocar o supervisor fica "
+                                    "registrado no histórico do estágio."}
         widgets = {"data_inicio": DataInput(), "data_fim": DataInput(), "acompanhamento_desde": DataInput(),
                    "supervisor": SupervisorSelect}
 
-    def __init__(self, *a, **kw):
+    def __init__(self, *a, usuario=None, **kw):
         super().__init__(*a, **kw)
-        self.fields["local"].required = self.fields["supervisor"].required = True
+        self.fields["local"].required = self.fields["supervisor"].required = self.fields["turma"].required = True
+        self.fields["turma"].queryset = turmas_qs(usuario, self.instance.turma if self.instance.turma_id else None)
+        self.fields["local"].queryset = concedentes_ativas(self.instance.local if self.instance.local_id else None)
         self.fields["supervisor"].queryset = supervisores_qs()
         self.fields["supervisor"].label_from_instance = lambda u: f"{u} ({u.concedentes_txt or 'sem concedente'})"
 
@@ -513,6 +596,45 @@ class EstagioForm(FormularioModelo):
         dados = super().clean()
         validar_supervisor_da_concedente(self, dados.get("local"), dados.get("supervisor"))
         return dados
+
+    def _post_clean(self):
+        if self.cleaned_data.get("turma"):
+            self.instance.curso = self.cleaned_data["turma"].curso
+        super()._post_clean()
+
+
+class TrocarSupervisorForm(Formulario):
+    """Só o orientador/coordenador troca o supervisor — e sempre colocando outro no lugar."""
+
+    novo = forms.ModelChoiceField(queryset=Usuario.objects.none(), label="Novo supervisor")
+    motivo = forms.CharField(label="Motivo (opcional)", required=False, max_length=200)
+
+    def __init__(self, *a, estagio=None, **kw):
+        super().__init__(*a, **kw)
+        qs = supervisores_qs().filter(concedentes=estagio.local) if estagio.local_id else supervisores_qs()
+        if estagio.supervisor_id:
+            qs = qs.exclude(pk=estagio.supervisor_id)
+        self.fields["novo"].queryset = qs
+        self.fields["novo"].help_text = f"Supervisores cadastrados em {estagio.local}." if estagio.local_id else ""
+
+
+class SubstitutosForm(Formulario):
+    """Ao desativar um supervisor: um substituto (da mesma concedente) para cada estágio ativo dele."""
+
+    def __init__(self, *a, estagios=(), sair=None, **kw):
+        super().__init__(*a, **kw)
+        self.estagios = list(estagios)
+        self.sem_opcao = []
+        for e in self.estagios:
+            qs = supervisores_qs().filter(concedentes=e.local).exclude(pk=sair.pk) if e.local_id else Usuario.objects.none()
+            campo = forms.ModelChoiceField(queryset=qs, label=f"{e.estagiario} · {e.local or 'sem concedente'}",
+                                           empty_label="Escolha o novo supervisor")
+            if not qs.exists() and e.local not in self.sem_opcao:
+                self.sem_opcao.append(e.local)  # concedentes sem outro supervisor cadastrado
+            self.fields[f"sub_{e.pk}"] = campo
+
+    def trocas(self):
+        return [(e, self.cleaned_data[f"sub_{e.pk}"]) for e in self.estagios]
 
 
 class EscalaForm(CamposEscalaMixin, Formulario):
@@ -816,3 +938,53 @@ class ImportarCSVForm(CamposEscalaMixin, Formulario):
         if arq.size > 2 * 1024 * 1024:
             raise forms.ValidationError("O arquivo deve ter no máximo 2 MB.")
         return arq
+
+
+# ------------------------------------------------------------------ folhas de frequência enviadas pelo orientador
+
+TIPOS_FOLHA = {b"%PDF-": "pdf", b"\x89PNG": "png", b"\xff\xd8\xff": "jpg"}
+
+
+class FolhaEnviadaForm(Formulario):
+    mes = forms.CharField(label="Mês da folha", widget=forms.TextInput(attrs={"type": "month"}))
+    turma = forms.ModelChoiceField(queryset=Turma.objects.none(), required=False, label="Para toda a turma")
+    estagios = forms.ModelMultipleChoiceField(queryset=Estagio.objects.none(), required=False,
+                                              widget=forms.CheckboxSelectMultiple, label="Ou só para estes estagiários")
+    arquivo = forms.FileField(label="Arquivo (PDF ou imagem)",
+                              widget=forms.ClearableFileInput(attrs={"accept": "application/pdf,.pdf,image/png,image/jpeg"}))
+    observacao = forms.CharField(label="Observação para o estagiário (opcional)", required=False, max_length=200)
+
+    def __init__(self, *a, estagios_qs=None, turmas=None, **kw):
+        super().__init__(*a, **kw)
+        self.fields["estagios"].queryset = estagios_qs if estagios_qs is not None else Estagio.objects.none()
+        self.fields["estagios"].label_from_instance = lambda e: f"{e.estagiario} · {e.turma.rotulo if e.turma_id else e.curso}"
+        self.fields["turma"].queryset = turmas if turmas is not None else Turma.objects.none()
+        self.fields["turma"].label_from_instance = str
+        self.fields["arquivo"].help_text = f"Até {settings.TAMANHO_MAX_ANEXO_MB} MB."
+
+    def clean_mes(self):
+        from datetime import date
+
+        try:
+            ano, mes = (int(x) for x in self.cleaned_data["mes"].split("-"))
+            return date(ano, mes, 1)
+        except (ValueError, TypeError):
+            raise forms.ValidationError("Escolha o mês.")
+
+    def clean_arquivo(self):
+        arq = self.cleaned_data["arquivo"]
+        if arq.size > settings.TAMANHO_MAX_ANEXO_MB * 1024 * 1024:
+            raise forms.ValidationError(f"O arquivo deve ter no máximo {settings.TAMANHO_MAX_ANEXO_MB} MB.")
+        inicio = arq.read(5)
+        arq.seek(0)
+        ext = next((e for assinatura, e in TIPOS_FOLHA.items() if inicio.startswith(assinatura)), None)
+        if not ext:
+            raise forms.ValidationError("Envie a folha em PDF, PNG ou JPG.")
+        self.extensao = ext
+        return arq
+
+    def clean(self):
+        d = super().clean()
+        if not d.get("turma") and not d.get("estagios"):
+            raise forms.ValidationError("Escolha a turma ou marque os estagiários que vão receber a folha.")
+        return d

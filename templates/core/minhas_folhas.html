@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Folhas de frequência{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><div class="migalha"><a href="{{ estagio.get_absolute_url }}">← {% if e_estagiario %}Meu estágio{% else %}{{ estagio.estagiario }}{% endif %}</a></div>
+    <h1>Folhas de frequência</h1>
+    <p>{% if emite %}Emita a folha do mês pelo sistema ou baixe a que o orientador enviou.{% else %}Baixe aqui a folha que o orientador enviou para cada mês, imprima, assine todos os dias e entregue no último dia do mês.{% endif %}</p></div>
+</div>
+<div class="grade grade-lado">
+  <div class="card destaque">
+    <h3>Enviadas pelo orientador</h3>
+    <ul class="lista">{% for f in folhas %}
+      <li><span class="avatar sm verde">{% icone "impressora" %}</span>
+        <span class="cresce"><strong>{{ f.mes|date:"F \d\e Y"|capfirst }}</strong><small style="display:block">{{ f.extensao }} · enviada em {{ f.enviado_em|date:"d/m/Y" }} por {{ f.enviado_por.primeiro_nome }}{% if f.observacao %} · {{ f.observacao }}{% endif %}</small></span>
+        <a class="btn sm" href="{% url 'baixar_folha' f.pk %}" target="_blank" rel="noopener">Baixar</a></li>
+    {% empty %}<li class="vazio">{% if emite %}Nenhuma folha enviada pelo orientador.{% else %}O orientador ainda não enviou nenhuma folha. Você recebe um aviso quando ele enviar.{% endif %}</li>{% endfor %}</ul>
+  </div>
+  {% if emite %}
+  <div class="card">
+    <h3>Emitir pelo sistema</h3>
+    <p class="muted" style="font-size:.85rem">A folha sai preenchida com os seus dados e os feriados do mês.</p>
+    <div class="flex" style="align-items:center;gap:.5rem;margin-bottom:.75rem">
+      <a class="btn sec sm" href="?mes={{ nav.anterior }}" aria-label="Mês anterior">{% icone "esq" %}</a><strong>{{ nav.titulo }}</strong><a class="btn sec sm" href="?mes={{ nav.proximo }}" aria-label="Próximo mês">{% icone "dir" %}</a>
+    </div>
+    <a class="btn" href="{% url 'folha_frequencia' estagio.pk %}?mes={{ nav.atual }}" target="_blank" rel="noopener">{% icone "impressora" %} Abrir folha de {{ nav.titulo|lower }}</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

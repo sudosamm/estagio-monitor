@@ -119,11 +119,11 @@ def banco_talentos(request):
         qs = qs.filter(Q(nome_completo__icontains=q) | Q(habilidades__icontains=q) | Q(apresentacao__icontains=q))
     if curso:
         qs = qs.filter(estagios__curso_id=curso)
-    pessoas = list(qs.distinct().prefetch_related("estagios__curso"))
+    pessoas = list(qs.distinct().prefetch_related("estagios__curso", "estagios__turma"))
     for p in pessoas:
         ultimo = max(p.estagios.all(), key=lambda e: e.data_inicio, default=None)
         p.curso_atual = ultimo.curso if ultimo else None
-        p.turma_atual = ultimo.turma if ultimo else ""
+        p.turma_atual = ultimo.turma if ultimo else None
     from ..models import Curso
 
     return render(request, "core/talentos.html", {

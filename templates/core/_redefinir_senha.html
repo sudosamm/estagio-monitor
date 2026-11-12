@@ -8,3 +8,11 @@
   </form>
   {% endif %}
 </div>
+{% if alvo != user and not alvo.is_superuser %}
+<div class="card">
+  <h3>Situação da conta</h3>
+  <p class="muted">{% if alvo.is_active %}Ativa: a pessoa entra no sistema normalmente.{% else %}Desativada: a pessoa não consegue entrar.{% endif %}
+  {% if alvo.is_supervisor and alvo.is_active %} Para desativar um supervisor com estagiários, escolha antes quem fica no lugar dele.{% endif %}</p>
+  <a class="btn {% if alvo.is_active %}sec{% endif %}" href="{% url 'ativacao_usuario' alvo.pk %}">{% if alvo.is_active %}Desativar conta{% else %}Reativar conta{% endif %}</a>
+</div>
+{% endif %}

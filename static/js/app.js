@@ -76,3 +76,8 @@ document.querySelectorAll("form").forEach((form) => {
   local.addEventListener("change", filtrar);
   filtrar();
 });
+
+// selects que enviam o formulário ao mudar (ex.: escolha do ano de referência)
+document.querySelectorAll("select[data-autoenvio]").forEach((sel) => {
+  sel.addEventListener("change", () => sel.form && sel.form.submit());
+});

@@ -3,13 +3,13 @@
 {% block titulo %}Estagiários{% endblock %}
 {% block conteudo %}
 <div class="titulo-pagina">
-  <div><h1>Estagiários</h1><p>{{ estagios|length }} encontrado(s)</p></div>
-  <div class="acoes"><a class="btn sec" href="{% url 'escala_lote' %}">{% icone "calendario" %} Alterar dias</a><a class="btn" href="{% url 'criar_estagiarios' %}">{% icone "mais" %} Cadastrar estagiários</a></div>
+  <div><h1>Estagiários</h1><p>{{ estagios|length }} encontrado(s){% if ano %} · turmas que estagiam em {{ ano }}{% endif %}</p></div>
+  <div class="acoes">{% include "core/_seletor_ano.html" %}<a class="btn sec" href="{% url 'escala_lote' %}">{% icone "calendario" %} Alterar dias</a><a class="btn" href="{% url 'criar_estagiarios' %}">{% icone "mais" %} Cadastrar estagiários</a></div>
 </div>
-<form class="filtros card" method="get">
+<form class="filtros card" method="get">{% if ano %}<input type="hidden" name="ano" value="{{ ano }}">{% endif %}
   <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ f.q }}" placeholder="Nome ou usuário"></div>
   <div><label class="rotulo">Curso</label><select name="curso"><option value="">Todos</option>{% for c in cursos %}<option value="{{ c.pk }}"{% if f.curso == c.pk|stringformat:"s" %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
-  <div><label class="rotulo">Turma</label><select name="turma"><option value="">Todas</option>{% for t in turmas %}<option{% if f.turma == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+  <div><label class="rotulo">Turma</label><select name="turma"><option value="">Todas</option>{% for t in turmas %}<option value="{{ t.pk }}"{% if f.turma == t.pk|stringformat:"s" %} selected{% endif %}>{% if ano %}{{ t.nome|default:t.curso.nome }} · {{ t.curso }}{% else %}{{ t }}{% endif %}</option>{% endfor %}</select></div>
   <div><label class="rotulo">Concedente</label><select name="local"><option value="">Todos</option>{% for l in locais %}<option value="{{ l.pk }}"{% if f.local == l.pk|stringformat:"s" %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
   <div><label class="rotulo">Situação</label><select name="situacao"><option value="">Ativos</option><option value="inativos"{% if f.situacao == "inativos" %} selected{% endif %}>Encerrados</option></select></div>
   <button class="btn" type="submit">Filtrar</button>
@@ -20,7 +20,7 @@
     <tbody>
     {% for e in estagios %}
       <tr>
-        <td><a class="pessoa" href="{{ e.get_absolute_url }}">{% avatar e.estagiario "sm verde" %}<span><strong>{{ e.estagiario }}</strong><small>{{ e.estagiario.username }} · {{ e.curso }}{% if e.turma %} · {{ e.turma }}{% endif %}</small></span></a></td>
+        <td><a class="pessoa" href="{{ e.get_absolute_url }}">{% avatar e.estagiario "sm verde" %}<span><strong>{{ e.estagiario }}</strong><small>{{ e.estagiario.username }} · {% if e.turma %}{{ e.turma.rotulo }}{% else %}{{ e.curso }} · <span class="alerta-txt">sem turma</span>{% endif %}</small></span></a></td>
         <td>{{ e.local|default:"—" }}<br><small>{{ e.supervisor|default:"sem supervisor" }}</small></td>
         <td><small>{% with esc=e.st.escala %}{{ esc.dias_display|default:"—" }}{% endwith %}</small></td>
         <td>{% selo e.st.codigo e.st.rotulo|default:"—" %}</td>

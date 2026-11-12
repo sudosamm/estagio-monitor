@@ -3,36 +3,81 @@
 {% block titulo %}Folhas de frequência{% endblock %}
 {% block conteudo %}
 <div class="titulo-pagina">
-  <div><h1>Folhas de frequência</h1><p>Quem já abriu e imprimiu a folha de {{ nav.titulo|lower }}. Os estagiários não veem esta página.</p></div>
+  <div><h1>Folhas de frequência</h1><p>Quem já abriu, baixou e imprimiu a folha de {{ nav.titulo|lower }}. Os estagiários não veem esta página.</p></div>
   <div class="acoes">
-    <a class="btn sec sm" href="?mes={{ nav.anterior }}" aria-label="Mês anterior">{% icone "esq" %}</a>
+    {% if anos %}{% include "core/_seletor_ano.html" %}{% endif %}
+    <a class="btn sec sm" href="?mes={{ nav.anterior }}{% if filtro_turma %}&turma={{ filtro_turma }}{% endif %}" aria-label="Mês anterior">{% icone "esq" %}</a>
     <strong>{{ nav.titulo }}</strong>
-    <a class="btn sec sm" href="?mes={{ nav.proximo }}" aria-label="Próximo mês">{% icone "dir" %}</a>
+    <a class="btn sec sm" href="?mes={{ nav.proximo }}{% if filtro_turma %}&turma={{ filtro_turma }}{% endif %}" aria-label="Próximo mês">{% icone "dir" %}</a>
   </div>
 </div>
+{% if pode_folhas %}
+<div class="caixa-{% if config.estagiarios_emitem_folha %}info{% else %}alerta{% endif %} faixa-config">
+  <span>{% if config.estagiarios_emitem_folha %}<strong>Os estagiários emitem a própria folha</strong> pelo sistema (e também podem baixar as que você enviar).{% else %}<strong>Os estagiários só baixam a folha que você enviar</strong> para o mês. Eles não conseguem emitir pelo sistema.{% endif %}</span>
+  <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="config"><input type="hidden" name="estagiarios_emitem_folha" value="{% if config.estagiarios_emitem_folha %}0{% else %}1{% endif %}">
+    <button class="btn sec sm" type="submit">{% if config.estagiarios_emitem_folha %}Só eu envio as folhas{% else %}Deixar os estagiários emitirem{% endif %}</button></form>
+</div>
+{% endif %}
 <div class="kpis">
   <div class="kpi vermelho"><div class="valor">{{ contagem.nao }}</div><div class="rotulo">não abriram</div></div>
   <div class="kpi amarelo"><div class="valor">{{ contagem.aberta }}</div><div class="rotulo">abriram sem imprimir</div></div>
+  <div class="kpi azul"><div class="valor">{{ contagem.baixada }}</div><div class="rotulo">baixaram a folha enviada</div></div>
   <div class="kpi"><div class="valor">{{ contagem.impressa }}</div><div class="rotulo">imprimiram</div></div>
 </div>
 <div class="grade grade-lado">
-  <div class="card">
-    <div class="tabela-wrap"><table class="tabela">
-      <thead><tr><th>Estagiário</th><th>Situação</th><th>Impressões</th><th>Última impressão</th></tr></thead>
-      <tbody>
-      {% for e in estagios %}
-        <tr>
-          <td><a class="pessoa" href="{{ e.get_absolute_url }}">{% avatar e.estagiario "sm verde" %}<span><strong>{{ e.estagiario }}</strong><small>{{ e.local|default:"sem concedente" }}</small></span></a></td>
-          <td>{% if e.situacao_folha == "impressa" %}<span class="selo confirmado">Imprimiu</span>{% elif e.situacao_folha == "aberta" %}<span class="selo hoje">Abriu ({{ e.aberturas_aluno }}×), não imprimiu</span>{% else %}<span class="selo falta">Não abriu</span>{% endif %}</td>
-          <td>{{ e.impressoes_aluno }}{% if e.impressoes_outros %} <small>+ {{ e.impressoes_outros }} por orientador/supervisor</small>{% endif %}</td>
-          <td>{{ e.ultima_aluno|date:"d/m H:i"|default:"—" }}</td>
-        </tr>
-      {% empty %}<tr><td colspan="4" class="vazio">Nenhum estágio ativo.</td></tr>{% endfor %}
-      </tbody>
-    </table></div>
+  <div>
+    <div class="card">
+      {% if turmas %}<form method="get" class="filtros"><input type="hidden" name="mes" value="{{ nav.atual }}">
+        <div><label class="rotulo">Turma</label><select name="turma" data-autoenvio><option value="">Todas</option>{% for t in turmas %}<option value="{{ t.pk }}"{% if filtro_turma == t.pk|stringformat:"s" %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+        <noscript><button class="btn" type="submit">Filtrar</button></noscript></form>{% endif %}
+      <div class="tabela-wrap"><table class="tabela">
+        <thead><tr><th>Estagiário</th><th>Situação</th><th>Impressões</th><th>Última impressão</th></tr></thead>
+        <tbody>
+        {% for e in estagios %}
+          <tr>
+            <td><a class="pessoa" href="{{ e.get_absolute_url }}">{% avatar e.estagiario "sm verde" %}<span><strong>{{ e.estagiario }}</strong><small>{{ e.local|default:"sem concedente" }}{% if e.turma %} · {{ e.turma.rotulo }}{% endif %}</small></span></a></td>
+            <td>{% if e.situacao_folha == "impressa" %}<span class="selo confirmado">Imprimiu</span>{% elif e.situacao_folha == "baixada" %}<span class="selo aguardando">Baixou a folha enviada ({{ e.downloads_aluno }}×)</span>{% elif e.situacao_folha == "aberta" %}<span class="selo hoje">Abriu ({{ e.aberturas_aluno }}×), não imprimiu</span>{% else %}<span class="selo falta">Não abriu</span>{% endif %}</td>
+            <td>{{ e.impressoes_aluno }}{% if e.impressoes_outros %} <small>+ {{ e.impressoes_outros }} por orientador/supervisor</small>{% endif %}</td>
+            <td>{{ e.ultima_aluno|date:"d/m H:i"|default:"—" }}</td>
+          </tr>
+        {% empty %}<tr><td colspan="4" class="vazio">Nenhum estágio ativo{% if ano %} nas turmas de {{ ano }}{% endif %}.</td></tr>{% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+    {% if pode_folhas %}
+    <div class="card">
+      <h3>Folhas enviadas para {{ nav.titulo|lower }}</h3>
+      <ul class="lista">{% for f in enviadas %}
+        <li><span class="avatar sm verde">{% icone "impressora" %}</span>
+          <span class="cresce"><strong>{{ f.destino }}</strong><small style="display:block">{{ f.extensao }} · {{ f.enviado_em|date:"d/m H:i" }} por {{ f.enviado_por.primeiro_nome }}{% if f.observacao %} · {{ f.observacao }}{% endif %}</small></span>
+          <a class="btn sec sm" href="{% url 'baixar_folha' f.pk %}" target="_blank" rel="noopener">Ver</a>
+          {% if f.enviado_por_id == user.pk or user.is_superuser %}<form method="post" action="{% url 'excluir_folha' f.pk %}" data-confirmar="Remover esta folha? Os estagiários deixam de vê-la.">{% csrf_token %}<button class="btn sec sm" type="submit">Remover</button></form>{% endif %}</li>
+      {% empty %}<li class="vazio">Nenhuma folha enviada para este mês.</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
   </div>
   <div>
+    {% if pode_folhas %}
     <div class="card destaque">
+      <h3>Emitir folhas de {{ nav.titulo|lower }}</h3>
+      <p class="muted" style="font-size:.85rem">Gera as folhas já preenchidas, uma por página, para imprimir de uma vez.</p>
+      <form method="get" action="{% url 'folhas_lote' %}" target="_blank">
+        <input type="hidden" name="mes" value="{{ nav.atual }}">
+        <div class="campo"><label for="lote-turma">Turma</label><select id="lote-turma" name="turma"><option value="">Todas{% if ano %} as de {{ ano }}{% endif %}</option>{% for t in turmas %}<option value="{{ t.pk }}"{% if filtro_turma == t.pk|stringformat:"s" %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+        <div class="campo"><label for="lote-local">Concedente</label><select id="lote-local" name="local"><option value="">Todas</option>{% for l in locais %}<option value="{{ l.pk }}">{{ l }}</option>{% endfor %}</select></div>
+        <button class="btn" type="submit">{% icone "impressora" %} Emitir folhas</button>
+      </form>
+    </div>
+    <div class="card">
+      <h3>Enviar folha para os estagiários</h3>
+      <p class="muted" style="font-size:.85rem">Envie a folha do mês (PDF ou imagem) para uma turma inteira ou para estagiários escolhidos. Eles recebem um aviso e baixam em “Folha de frequência”.</p>
+      <form method="post" enctype="multipart/form-data" novalidate>{% csrf_token %}<input type="hidden" name="acao" value="enviar">
+        {% with form=envio %}{% include "core/_form.html" %}{% endwith %}
+        <div class="acoes"><button class="btn" type="submit">{% icone "upload" %} Enviar folha</button></div>
+      </form>
+    </div>
+    {% endif %}
+    <div class="card">
       <h3>Conferir uma folha impressa</h3>
       <p class="muted" style="font-size:.85rem">Toda folha sai com um código no rodapé. Digite-o para saber quem a emitiu e quando.</p>
       <form method="get" class="flex"><input type="hidden" name="mes" value="{{ nav.atual }}"><input type="search" name="codigo" value="{{ busca }}" placeholder="Ex.: K7QW2M9A" maxlength="8" style="text-transform:uppercase"><button class="btn" type="submit">Buscar</button></form>
@@ -53,7 +98,7 @@
       <ul class="lista compacta">
       {% for i in detalhes %}
         <li><span class="cresce"><strong>{{ i.estagio.estagiario.primeiro_nome }}</strong>{% if i.usuario_id != i.estagio.estagiario_id %} <small>(por {{ i.usuario.primeiro_nome }})</small>{% endif %}
-          <small style="display:block">{{ i.aberta_em|date:"d/m H:i" }} · {% if i.impressoes %}impressa {{ i.impressoes }}×{% else %}só abriu{% endif %} · {{ i.codigo }}</small></span></li>
+          <small style="display:block">{{ i.aberta_em|date:"d/m H:i" }} · {% if i.folha_enviada_id %}baixou a folha enviada{% elif i.impressoes %}impressa {{ i.impressoes }}×{% else %}só abriu{% endif %} · {{ i.codigo }}</small></span></li>
       {% empty %}<li class="vazio">Nada neste mês.</li>{% endfor %}
       </ul>
     </div>

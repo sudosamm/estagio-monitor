@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}{% if desativar %}Desativar{% else %}Reativar{% endif %} {{ local }}{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><div class="migalha"><a href="{% url 'local_editar' local.pk %}">← {{ local }}</a></div>
+    <h1>{% if desativar %}Desativar{% else %}Reativar{% endif %} a concedente {{ local }}</h1></div>
+</div>
+<div class="grade grade-lado">
+  <div class="card destaque">
+  {% if ativos %}
+    <p class="caixa-alerta">{{ local }} tem {{ ativos|length }} estagiário(s) ativo(s). Encerre esses estágios ou mude-os de concedente antes de desativá-la:</p>
+    <ul class="lista">{% for e in ativos %}<li><a href="{{ e.get_absolute_url }}">{{ e.estagiario }}</a></li>{% endfor %}</ul>
+    <a class="btn sec" href="{% url 'locais' %}">Voltar</a>
+  {% else %}
+    {% if desativar %}<p>A concedente deixa de aparecer nos cadastros de estágio e de supervisores. Os dados e o histórico continuam guardados, e ela pode ser reativada (inclusive ao aprovar uma nova candidatura dela na captação).</p>
+    {% else %}<p>A concedente volta a aparecer nos cadastros.</p>{% endif %}
+    <form method="post">{% csrf_token %}
+      {% if supervisores %}
+        <label class="check"><input type="checkbox" name="contas" value="1" checked> {% if desativar %}Desativar{% else %}Reativar{% endif %} também a conta dos supervisores que só atuam aqui:</label>
+        <ul class="lista compacta">{% for s in supervisores %}<li>{{ s }}{% if s.telefone %} <small>· {{ s.telefone }}</small>{% endif %}</li>{% endfor %}</ul>
+      {% endif %}
+      <div class="acoes"><button class="btn{% if desativar %} vermelho{% endif %}" type="submit">{% if desativar %}Desativar{% else %}Reativar{% endif %} concedente</button><a class="btn sec" href="{% url 'local_editar' local.pk %}">Cancelar</a></div>
+    </form>
+  {% endif %}
+  </div>
+</div>
+{% endblock %}

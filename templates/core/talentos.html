@@ -16,7 +16,7 @@
 <div class="talentos">
 {% for p in pessoas %}
   <article class="card talento">
-    <div class="talento-cab">{% avatar p "lg" %}<div><h3>{{ p.nome_completo }}</h3><small>{{ p.curso_atual|default:"" }}{% if p.turma_atual %} · {{ p.turma_atual }}{% endif %}</small></div></div>
+    <div class="talento-cab">{% avatar p "lg" %}<div><h3>{{ p.nome_completo }}</h3><small>{{ p.curso_atual|default:"" }}{% if p.turma_atual %} · {{ p.turma_atual.rotulo }}{% endif %}</small></div></div>
     {% if p.habilidades_lista %}<div class="tags">{% for h in p.habilidades_lista %}<span class="etiqueta">{{ h }}</span>{% endfor %}</div>{% endif %}
     {% if p.apresentacao %}<p class="quebra">{{ p.apresentacao|truncatechars:280 }}</p>{% else %}<p class="muted">Sem apresentação.</p>{% endif %}
     {% if p.curriculo %}<a class="btn sec sm" href="{% url 'curriculo_usuario' p.pk %}" target="_blank" rel="noopener">{% icone "arquivo" %} Ver currículo</a>{% endif %}

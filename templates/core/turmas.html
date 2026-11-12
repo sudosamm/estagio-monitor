@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Turmas{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><h1>Turmas</h1><p>O curso é sempre o mesmo, o que muda é a turma de cada ano: a turma de 2024 estagia em 2026, a de 2025 em 2027… As listas do sistema mostram os estagiários das turmas do <strong>ano de referência ({{ ref }})</strong>.</p></div>
+  <div class="acoes"><a class="btn sec" href="{% url 'cursos' %}">Cursos</a></div>
+</div>
+<div class="grade grade-lado">
+  <div>
+    {% for ano_est, itens in grupos %}
+    <div class="card{% if ano_est == ref %} destaque{% endif %}">
+      <div class="card-cab"><h3>Estagiam em {{ ano_est }}{% if ano_est == ref %} <span class="etiqueta">ano de referência</span>{% endif %}</h3>
+        {% if ano_est == proximo %}<form method="post" data-confirmar="Criar as turmas de {{ ano_est|add:1 }} com os mesmos nomes das de {{ ano_est }}?">{% csrf_token %}<input type="hidden" name="acao" value="repetir"><input type="hidden" name="de" value="{{ ano_est }}"><button class="btn sec sm" type="submit">{% icone "mais" %} Turmas de {{ ano_est|add:1 }}</button></form>{% endif %}
+      </div>
+      <div class="tabela-wrap"><table class="tabela">
+        <thead><tr><th>Turma</th><th>Curso</th><th>Ingresso</th><th>Estagiários</th><th></th></tr></thead>
+        <tbody>{% for t in itens %}
+          <tr{% if not t.ativa %} style="opacity:.55"{% endif %}>
+            <td><strong>{{ t.nome|default:t.curso.nome }}</strong>{% if not t.ativa %} <span class="etiqueta">inativa</span>{% endif %}</td>
+            <td>{{ t.curso }}</td><td>{{ t.ano_ingresso }}</td>
+            <td><a href="{% url 'estagios_lista' %}?ano={{ t.ano_estagio }}&turma={{ t.pk }}">{{ t.n }} ativo{{ t.n|pluralize }}</a>{% if t.n_total != t.n %} <small>({{ t.n_total }} no total)</small>{% endif %}</td>
+            <td><a class="btn sec sm" href="{% url 'turma_editar' t.pk %}">Editar</a></td>
+          </tr>{% endfor %}</tbody>
+      </table></div>
+    </div>
+    {% empty %}
+    <div class="card"><p class="vazio">Nenhuma turma ainda. Cadastre a primeira ao lado.</p></div>
+    {% endfor %}
+  </div>
+  <div>
+    <div class="card destaque"><h3>{% if editando %}Editar turma{% else %}Nova turma{% endif %}</h3>
+      <form method="post" novalidate>{% csrf_token %}<input type="hidden" name="acao" value="turma">{% include "core/_form.html" %}
+        <div class="acoes"><button class="btn" type="submit">Salvar</button>{% if editando %}<a class="btn sec" href="{% url 'turmas' %}">Cancelar</a>{% endif %}</div></form>
+    </div>
+    {% if pode_ano %}
+    <div class="card"><h3>Ano de referência</h3>
+      <p class="muted" style="font-size:.85rem">Define quais turmas aparecem nas listas (estagiários, painel, frequências). Ex.: em 2026, as turmas que estagiam em 2026. Cada pessoa pode olhar outro ano no seletor das listas.</p>
+      <form method="post" novalidate>{% csrf_token %}<input type="hidden" name="acao" value="ano">{% with form=form_ano %}{% include "core/_form.html" %}{% endwith %}
+        <div class="acoes"><button class="btn sec" type="submit">Salvar</button></div></form>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

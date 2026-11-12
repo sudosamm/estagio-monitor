@@ -1,0 +1,10 @@
+{# Escolha do ano de referência das listas (fica guardado na sessão). Precisa de: ano, anos, ano_ref #}
+<form method="get" class="seletor-ano" title="Turmas que estagiam neste ano">
+  {% for k, v in request.GET.items %}{% if k != "ano" and k != "turma" %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+  <label for="sel-ano">Ano</label>
+  <select id="sel-ano" name="ano" data-autoenvio>
+    {% for a in anos %}<option value="{{ a }}"{% if a == ano %} selected{% endif %}>{{ a }}{% if a == ano_ref %} · referência{% endif %}</option>{% endfor %}
+    <option value="todos"{% if ano is None %} selected{% endif %}>Todos os anos</option>
+  </select>
+  <noscript><button class="btn sec sm" type="submit">Ver</button></noscript>
+</form>

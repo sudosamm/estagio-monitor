@@ -12,7 +12,7 @@ from django.core.files.base import ContentFile
 from django.db.models import Q, Sum
 from django.utils.crypto import get_random_string
 
-from .models import DiaSemEstagio, Estagio, Notificacao, Registro, Usuario
+from .models import DiaSemEstagio, Estagio, Notificacao, Registro, Usuario, chave_municipio
 
 # ---------------------------------------------------------------- contas
 
@@ -100,6 +100,89 @@ def estagios_visiveis(user):
     return qs.filter(estagiario=user)
 
 
+# ---------------------------------------------------------------- turmas e ano de referência
+
+ANOS_ATE_ESTAGIO = 2  # a turma de 2024 estagia em 2026
+
+
+def ano_referencia():
+    from .models import Configuracao
+
+    return Configuracao.atual().ano_referencia_efetivo
+
+
+def ano_em_uso(request):
+    """Ano que a pessoa está vendo nas listas: o escolhido na tela (guardado na sessão) ou o de referência.
+
+    Devolve None quando ela escolheu “todos os anos”.
+    """
+    escolhido = request.GET.get("ano")
+    if escolhido is not None:
+        if escolhido == "todos":
+            request.session["ano_lista"] = "todos"
+        elif escolhido.isdigit():
+            request.session["ano_lista"] = int(escolhido)
+        else:
+            request.session.pop("ano_lista", None)
+    ano = request.session.get("ano_lista")
+    if ano == "todos":
+        return None
+    return ano or ano_referencia()
+
+
+def filtrar_ano(qs, ano, prefixo=""):
+    """Estágios das turmas que estagiam no ano (os sem turma aparecem sempre, para não sumirem)."""
+    if ano is None:
+        return qs
+    return qs.filter(Q(**{f"{prefixo}turma__ano_estagio": ano}) | Q(**{f"{prefixo}turma__isnull": True}))
+
+
+def anos_disponiveis():
+    from .models import Turma
+
+    anos = set(Turma.objects.values_list("ano_estagio", flat=True)) | {ano_referencia()}
+    return sorted(anos, reverse=True)
+
+
+def turma_para(curso, nome, ano_estagio, ano_ingresso=None):
+    """A turma do curso naquele ano (cria se não existir)."""
+    from .models import Turma
+
+    nome = " ".join((nome or "").split())
+    ingresso = ano_ingresso or ano_estagio - ANOS_ATE_ESTAGIO
+    turma = next((t for t in Turma.objects.filter(curso=curso, ano_ingresso=ingresso) if t.nome.lower() == nome.lower()),
+                 None)
+    return turma or Turma.objects.create(curso=curso, nome=nome, ano_ingresso=ingresso, ano_estagio=ano_estagio)
+
+
+# ---------------------------------------------------------------- supervisor do estágio
+
+
+def trocar_supervisor(estagio, novo, feita_por, motivo=""):
+    """Põe outro supervisor no estágio (o anterior só sai assim). Registra o histórico e avisa os envolvidos."""
+    from django.urls import reverse
+
+    from .models import TrocaSupervisor
+
+    anterior = estagio.supervisor
+    if novo is None:
+        raise ValueError("O supervisor só pode ser trocado por outro.")
+    if anterior and anterior.pk == novo.pk:
+        return None
+    if estagio.local_id and not novo.concedentes.filter(pk=estagio.local_id).exists():
+        raise ValueError(f"{novo} não é supervisor(a) de {estagio.local}.")
+    estagio.supervisor = novo
+    estagio.save(update_fields=["supervisor"])
+    troca = TrocaSupervisor.objects.create(estagio=estagio, anterior=anterior, novo=novo, motivo=motivo,
+                                           feita_por=feita_por)
+    link = reverse("estagio_detalhe", args=[estagio.pk])
+    notificar([novo], f"{estagio.estagiario} agora está sob a sua supervisão.", link, exceto=feita_por)
+    if anterior:
+        notificar([anterior], f"{estagio.estagiario} passou a ser supervisionado(a) por {novo}.", "", exceto=feita_por)
+    notificar([estagio.estagiario], f"Seu supervisor de estágio agora é {novo}.", link, exceto=feita_por)
+    return troca
+
+
 # ---------------------------------------------------------------- notificações
 
 
@@ -153,11 +236,94 @@ ROTULOS = {
 }
 
 
+def filtro_feriados_do_estagio(estagio):
+    """Quais cadastros valem para o estágio: os da escola (do orientador dele), os nacionais/estaduais e os
+    municipais do município da concedente."""
+    A = DiaSemEstagio.Abrangencia
+    filtro = (Q(abrangencia=A.ESCOLA, orientador_id=estagio.orientador_id)
+              & (Q(curso__isnull=True) | Q(curso_id=estagio.curso_id))) | Q(abrangencia=A.TODOS)
+    chave = chave_municipio(estagio.local.cidade) if estagio.local_id else ""
+    if chave:
+        filtro |= Q(abrangencia=A.MUNICIPIO, municipio_chave=chave)
+    return filtro
+
+
 def dias_sem_estagio(estagio, inicio, fim):
-    qs = DiaSemEstagio.objects.filter(orientador_id=estagio.orientador_id, data__range=(inicio, fim)).filter(
-        Q(curso__isnull=True) | Q(curso_id=estagio.curso_id)
-    )
-    return {d.data: d.descricao for d in qs}
+    qs = DiaSemEstagio.objects.filter(filtro_feriados_do_estagio(estagio)).filter(
+        Q(anual=False, data__range=(inicio, fim)) | Q(anual=True, data__lte=fim))
+    dias = {}
+    # o municipal vem primeiro: em dia com dois cadastros, a folha mostra o nome do feriado da cidade
+    ordem = {DiaSemEstagio.Abrangencia.MUNICIPIO: 0, DiaSemEstagio.Abrangencia.TODOS: 1, DiaSemEstagio.Abrangencia.ESCOLA: 2}
+    for d in sorted(qs, key=lambda d: (ordem.get(d.abrangencia, 3), d.pk)):
+        for dia in d.ocorrencias(inicio, fim):
+            dias.setdefault(dia, d.descricao)
+    return dias
+
+
+# ---------------------------------------------------------------- calendário de feriados
+
+
+def pascoa(ano):
+    """Domingo de Páscoa (algoritmo de Meeus/Jones/Butcher, calendário gregoriano)."""
+    a, b, c = ano % 19, ano // 100, ano % 100
+    d, e = b // 4, b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mes = (h + l - 7 * m + 114) // 31
+    dia = (h + l - 7 * m + 114) % 31 + 1
+    return date(ano, mes, dia)
+
+
+def feriados_nacionais(ano):
+    """Feriados nacionais e do Ceará, mais os pontos facultativos usuais. (data, nome, tipo, marcado por padrão)
+
+    É uma sugestão: o orientador revisa a lista antes de cadastrar. Feriados municipais não entram aqui.
+    """
+    p = pascoa(ano)
+    lista = [
+        (date(ano, 1, 1), "Confraternização Universal", "nacional", True),
+        (p - timedelta(days=48), "Carnaval", "ponto facultativo", False),
+        (p - timedelta(days=47), "Carnaval", "ponto facultativo", False),
+        (date(ano, 3, 19), "São José", "estadual (CE)", True),
+        (date(ano, 3, 25), "Data Magna do Ceará", "estadual (CE)", True),
+        (p - timedelta(days=2), "Paixão de Cristo", "nacional", True),
+        (date(ano, 4, 21), "Tiradentes", "nacional", True),
+        (date(ano, 5, 1), "Dia do Trabalho", "nacional", True),
+        (p + timedelta(days=60), "Corpus Christi", "ponto facultativo", False),
+        (date(ano, 9, 7), "Independência do Brasil", "nacional", True),
+        (date(ano, 10, 12), "Nossa Senhora Aparecida", "nacional", True),
+        (date(ano, 11, 2), "Finados", "nacional", True),
+        (date(ano, 11, 15), "Proclamação da República", "nacional", True),
+        (date(ano, 11, 20), "Consciência Negra", "nacional", True),
+        (date(ano, 12, 25), "Natal", "nacional", True),
+    ]
+    return sorted(lista, key=lambda x: x[0])
+
+
+def municipios_das_concedentes():
+    """Municípios das concedentes ativas, com quantos estágios ativos há em cada um."""
+    from .models import LocalEstagio
+
+    grupos = {}
+    for l in LocalEstagio.objects.filter(ativa=True).exclude(cidade=""):
+        chave = chave_municipio(l.cidade)
+        if not chave:
+            continue
+        g = grupos.setdefault(chave, {"chave": chave, "nome": l.cidade.strip(), "uf": l.uf or "", "locais": [], "estagios": 0})
+        g["locais"].append(l)
+        g["estagios"] += l.estagios.filter(ativo=True).count()
+    return sorted(grupos.values(), key=lambda g: (-g["estagios"], g["chave"]))
+
+
+def estagios_do_municipio(chave):
+    from .models import LocalEstagio
+
+    ids = [l.pk for l in LocalEstagio.objects.exclude(cidade="") if chave_municipio(l.cidade) == chave]
+    return Estagio.objects.filter(ativo=True, local_id__in=ids).select_related("estagiario", "supervisor")
 
 
 def status_periodo(estagio, inicio, fim, hoje=None, limite=None):
@@ -393,6 +559,7 @@ def aprovar_candidatura(cand, usuario, destino="nova", criar_supervisor=False, p
             local = LocalEstagio.objects.create(**{c: getattr(cand, c) for c in CAMPOS_CONCEDENTE})
         else:
             local = LocalEstagio.objects.get(pk=destino)
+            local.ativa = True  # concedente que volta a receber estagiários
             for campo in CAMPOS_CONCEDENTE:  # completa só o que estava vazio
                 if not getattr(local, campo) and getattr(cand, campo):
                     setattr(local, campo, getattr(cand, campo))

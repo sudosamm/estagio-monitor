@@ -8,7 +8,7 @@
   <div class="info">
     <h1>{% if e_estagiario %}Meu estágio{% else %}{{ estagio.estagiario.nome_completo }}{% endif %}</h1>
     <div class="est-meta">
-      <span>{% icone "escola" %}{{ estagio.curso }}{% if estagio.turma %} · {{ estagio.turma }}{% endif %}</span>
+      <span>{% icone "escola" %}{{ estagio.curso }}{% if estagio.turma %} · {{ estagio.turma.nome|default:"turma" }} {{ estagio.turma.ano_ingresso }}{% endif %}</span>
       <span>{% icone "pin" %}{{ estagio.local|default:"Local a definir" }}{% if estagio.setor %} · {{ estagio.setor }}{% endif %}</span>
       <span>{% icone "usuario" %}Supervisor: {{ estagio.supervisor|default:"a definir" }}</span>
       <span>{% icone "usuarios" %}Orientador: {{ estagio.orientador }}</span>
@@ -19,11 +19,13 @@
   <div class="acoes">
     {% if e_orientador %}
       <a class="btn sec" href="{% url 'editar_estagio' estagio.pk %}">{% icone "editar" %} Editar</a>
+      <a class="btn sec" href="{% url 'trocar_supervisor' estagio.pk %}">{% icone "usuario" %} Trocar supervisor</a>
       {% if pode_agenda %}<a class="btn" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "calendario" %} Agendar visita</a>{% endif %}
     {% else %}
       <a class="btn" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "mensagem" %} Pedir visita ou conversa</a>
     {% endif %}
-    <a class="btn sec" href="{% url 'folha_frequencia' estagio.pk %}?mes={{ nav.atual|default:'' }}" target="_blank" rel="noopener">{% icone "impressora" %} Folha de frequência</a>
+    {% if e_estagiario %}<a class="btn sec" href="{% url 'minhas_folhas' estagio.pk %}?mes={{ nav.atual|default:'' }}">{% icone "impressora" %} Folha de frequência</a>
+    {% else %}<a class="btn sec" href="{% url 'folha_frequencia' estagio.pk %}?mes={{ nav.atual|default:'' }}" target="_blank" rel="noopener">{% icone "impressora" %} Folha de frequência</a>{% endif %}
   </div>
 </div>
 
@@ -90,12 +92,18 @@
       <ul class="lista compacta">
       {% for i in impressoes %}
         <li><span class="cresce"><strong>{{ i.mes|date:"M/Y" }}</strong> · {% if i.usuario_id == estagio.estagiario_id %}pelo estagiário{% else %}{{ i.usuario.primeiro_nome }}{% endif %}
-          <small style="display:block">{% if i.impressoes %}impressa {{ i.impressoes }}× · última {{ i.ultima_impressao|date:"d/m H:i" }}{% else %}aberta em {{ i.aberta_em|date:"d/m H:i" }}, sem imprimir{% endif %} · cód. {{ i.codigo }}</small></span>
+          <small style="display:block">{% if i.folha_enviada_id %}baixou a folha enviada em {{ i.aberta_em|date:"d/m H:i" }}{% elif i.impressoes %}impressa {{ i.impressoes }}× · última {{ i.ultima_impressao|date:"d/m H:i" }}{% else %}aberta em {{ i.aberta_em|date:"d/m H:i" }}, sem imprimir{% endif %} · cód. {{ i.codigo }}</small></span>
           {% if i.impressoes %}<span class="selo confirmado">{{ i.impressoes }}×</span>{% endif %}</li>
       {% empty %}<li class="vazio">Ninguém abriu a folha ainda.</li>{% endfor %}
       </ul>
       <small>O estagiário não vê este quadro.</small>
     </div>
+    {% if trocas %}
+    <div class="card">
+      <div class="card-cab"><h3>Troca de supervisor</h3>{% if e_orientador %}<a class="btn sec sm" href="{% url 'trocar_supervisor' estagio.pk %}">Histórico</a>{% endif %}</div>
+      <ul class="lista compacta">{% for t in trocas %}<li><span class="cresce">{{ t.anterior|default:"—" }} → <strong>{{ t.novo|default:"—" }}</strong><small style="display:block">{{ t.feita_em|date:"d/m/Y" }} · por {{ t.feita_por.primeiro_nome|default:"—" }}{% if t.motivo %} · {{ t.motivo }}{% endif %}</small></span></li>{% endfor %}</ul>
+    </div>
+    {% endif %}
     {% endif %}
     {% if estagio.local %}
     <div class="card">

@@ -13,12 +13,12 @@ from django.views.decorators.http import require_POST
 
 from ..forms import (
     AusenciaForm, DiarioForm, DocumentoForm, EscalaForm, EstagioForm, HorariosDiaForm, LancamentoForm, MensagemForm,
-    PlanejarDiaForm, horas_str,
+    PlanejarDiaForm, TrocarSupervisorForm, horas_str,
 )
-from ..models import DIAS_ABREV, Agendamento, DiaPlanejado, Documento, Escala, Registro
+from ..models import DIAS_ABREV, Agendamento, Configuracao, DiaPlanejado, Documento, Escala, Registro, TrocaSupervisor
 from ..services import (
     calendario_mes, horas_padrao, limite_calendario, notificar, proximos_dias, resumo_horas,
-    status_hoje, status_periodo,
+    status_hoje, status_periodo, trocar_supervisor,
 )
 from .base import (
     destino_seguro, eh_orientador_do, eh_supervisor_do, orientador_requerido, pegar_estagio, pode_definir_horario,
@@ -102,6 +102,7 @@ def estagio_detalhe(request, pk):
         "nao_lidas_msg": 0,
         "pode_escalas": pode_definir_horario(user, estagio),
         "pode_agenda": not user.is_gestor or user.pode("agenda"),
+        "emite_folha": estagio.estagiario_id != user.pk or Configuracao.atual().estagiarios_emitem_folha,
     }
     if aba == "visao":
         from .frequencia import resumo_impressoes
@@ -109,6 +110,7 @@ def estagio_detalhe(request, pk):
         semanas = calendario_mes(estagio, ano, mes, limite)
         if ctx["e_orientador"] or ctx["e_supervisor"]:
             ctx["impressoes"] = resumo_impressoes(estagio)
+            ctx["trocas"] = estagio.trocas_supervisor.select_related("anterior", "novo", "feita_por")[:5]
         visitas = Agendamento.objects.filter(
             estagios=estagio, data_hora__year=ano, data_hora__month=mes,
         ).exclude(status=Agendamento.Status.CANCELADO)
@@ -482,13 +484,38 @@ def editar_estagio(request, pk):
     estagio = pegar_estagio(request, pk)
     if not eh_orientador_do(request.user, estagio):
         raise PermissionDenied
-    form = EstagioForm(request.POST or None, instance=estagio)
+    anterior = estagio.supervisor
+    form = EstagioForm(request.POST or None, instance=estagio, usuario=request.user)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        novo = form.cleaned_data["supervisor"]
+        estagio = form.save(commit=False)
+        estagio.supervisor = anterior  # a troca passa pelo serviço, que registra o histórico e avisa
+        estagio.save()
+        if novo != anterior:
+            trocar_supervisor(estagio, novo, request.user, motivo=request.POST.get("motivo_troca", "")[:200])
+            messages.info(request, f"Supervisor trocado: {anterior or '—'} → {novo}.")
         messages.success(request, "Dados do estágio atualizados.")
         return redirect(estagio)
     return render(request, "core/form_pagina.html", {
         "form": form, "titulo": f"Editar estágio — {estagio.estagiario}", "voltar": estagio.get_absolute_url(),
+    })
+
+
+@login_required
+def trocar_supervisor_view(request, pk):
+    """O supervisor só deixa o estagiário quando o orientador/coordenador põe outro no lugar."""
+    estagio = pegar_estagio(request, pk)
+    if not eh_orientador_do(request.user, estagio):
+        raise PermissionDenied
+    form = TrocarSupervisorForm(request.POST or None, estagio=estagio)
+    if request.method == "POST" and form.is_valid():
+        anterior = estagio.supervisor
+        trocar_supervisor(estagio, form.cleaned_data["novo"], request.user, form.cleaned_data["motivo"])
+        messages.success(request, f"Supervisor trocado: {anterior or '—'} → {estagio.supervisor}.")
+        return redirect(estagio)
+    return render(request, "core/trocar_supervisor.html", {
+        "estagio": estagio, "form": form,
+        "historico": TrocaSupervisor.objects.filter(estagio=estagio).select_related("anterior", "novo", "feita_por"),
     })
 
 

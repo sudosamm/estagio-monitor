@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}{% if desativar %}Desativar{% else %}Reativar{% endif %} {{ alvo }}{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><div class="migalha"><a href="{% url 'editar_usuario' alvo.pk %}">← {{ alvo }}</a></div>
+    <h1>{% if desativar %}Desativar{% else %}Reativar{% endif %} a conta de {{ alvo.nome_completo }}</h1>
+    <p>{{ alvo.get_papel_display }} · {{ alvo.username }}</p></div>
+</div>
+<div class="grade grade-lado">
+  <div class="card destaque">
+  {% if desativar %}
+    {% if orientados %}
+      <p class="caixa-alerta">{{ alvo.primeiro_nome }} orienta {{ orientados }} estágio(s) ativo(s). Passe esses estágios para outro orientador (em “Editar” de cada estágio, ou pelo administrador) antes de desativar a conta.</p>
+      <a class="btn sec" href="{% url 'usuarios' %}">Voltar</a>
+    {% else %}
+      <p>A pessoa deixa de conseguir entrar no sistema. O histórico (registros, folhas, mensagens) continua guardado e a conta pode ser reativada depois.</p>
+      {% if alvo.is_estagiario %}<p class="caixa-info">O estágio ativo de {{ alvo.primeiro_nome }} também é encerrado.</p>{% endif %}
+      <form method="post" novalidate>{% csrf_token %}
+        {% if estagios %}
+          <fieldset class="secao"><legend>Novo supervisor de cada estagiário</legend>
+            <p class="muted" style="font-size:.9rem">{{ alvo.primeiro_nome }} supervisiona {{ estagios|length }} estagiário(s) ativo(s). O supervisor só pode sair do estágio se outro for colocado no lugar, da mesma concedente.</p>
+            {% if form.sem_opcao %}<div class="caixa-alerta">Não há outro supervisor cadastrado em:
+              {% for l in form.sem_opcao %}{% if l %}<a href="{% url 'local_editar' l.pk %}">{{ l }}</a>{% else %}estágios sem concedente{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}.
+              Cadastre ou vincule um supervisor nessa concedente primeiro.</div>{% endif %}
+            {% include "core/_form.html" %}
+          </fieldset>
+        {% endif %}
+        <div class="acoes"><button class="btn vermelho" type="submit"{% if form.sem_opcao %} disabled{% endif %}>Desativar conta</button><a class="btn sec" href="{% url 'editar_usuario' alvo.pk %}">Cancelar</a></div>
+      </form>
+    {% endif %}
+  {% else %}
+    <p>A pessoa volta a entrar no sistema com a senha que já tinha.</p>
+    <form method="post">{% csrf_token %}
+      {% if ultimo_estagio and not ultimo_estagio.ativo %}
+        <label class="check"><input type="checkbox" name="reativar_estagio" value="1" checked> Reabrir também o último estágio ({{ ultimo_estagio.local|default:"sem concedente" }}, desde {{ ultimo_estagio.data_inicio|date:"d/m/Y" }})</label>
+      {% endif %}
+      <div class="acoes"><button class="btn" type="submit">Reativar conta</button><a class="btn sec" href="{% url 'editar_usuario' alvo.pk %}">Cancelar</a></div>
+    </form>
+  {% endif %}
+  </div>
+</div>
+{% endblock %}

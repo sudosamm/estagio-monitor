@@ -425,3 +425,14 @@ h1 svg.ic, h2 svg.ic, h3 svg.ic { width: 1.05em; height: 1.05em; vertical-align:
 .navegacao .contador { display: inline-block; background: var(--laranja); color: #fff; border-radius: 999px; font-size: .72rem; padding: 0 .45rem; margin-left: .2rem; }
 .aviso-externo textarea { font-size: .88rem; }
 .tabela code { word-break: break-all; font-size: .8rem; }
+
+/* turmas por ano, ativação e folhas enviadas */
+.seletor-ano { display: inline-flex; align-items: center; gap: .4rem; font-size: .85rem; color: var(--cinza-500); }
+.seletor-ano select { width: auto; padding: .35rem .5rem; }
+.btn.vermelho { background: var(--vermelho); } .btn.vermelho:hover { filter: brightness(.92); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+label.check { display: flex; align-items: flex-start; gap: .5rem; margin: .5rem 0 .75rem; font-weight: 500; }
+label.check input { margin-top: .2rem; }
+.faixa-config { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; }
+.faixa-config form { margin: 0; }
+td.nowrap { white-space: nowrap; }

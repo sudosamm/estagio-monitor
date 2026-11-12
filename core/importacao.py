@@ -17,7 +17,7 @@ from django.contrib.auth.hashers import make_password
 from django.db import transaction
 
 from .models import CAMPOS_CONCEDENTE, Curso, Escala, Estagio, LocalEstagio, Usuario
-from .services import criar_usuario, normalizar_nome
+from .services import criar_usuario, normalizar_nome, turma_para
 from .validators import cnpj_valido, cpf_valido, formatar_cnpj, formatar_cpf, so_digitos
 
 # (coluna, obrigatória, descrição) — a ordem é a do modelo para download
@@ -28,7 +28,8 @@ COLUNAS = [
     ("estagiario_email", False, ""),
     ("matricula", False, ""),
     ("curso", True, "Nome do curso (é criado se não existir)"),
-    ("turma", False, ""),
+    ("turma", False, "Nome da turma (ex.: 3º A). Vazio = nome do curso"),
+    ("ano_turma", False, "Ano de ingresso da turma (ex.: 2024). Vazio = 2 anos antes do início do estágio"),
     ("data_inicio", True, "Início do estágio (dd/mm/aaaa)"),
     ("data_fim", False, "Término previsto no termo (dd/mm/aaaa)"),
     ("horas_anteriores", False, "Horas já cumpridas antes do sistema"),
@@ -273,6 +274,10 @@ def _linha(n, d, op, usuario, r, senha_hash, concedentes, supervisores, cursos, 
                                               carga_horaria=op.carga_cursos_novos, horas_por_dia_padrao=horas)
             r.cursos_novos.append(cursos[ck])
     curso = cursos[ck]
+    ano_turma = d.get("ano_turma", "").strip()
+    if ano_turma and not (ano_turma.isdigit() and 2000 <= int(ano_turma) <= inicio.year):
+        raise ErroImportacao(f"ano_turma: ano inválido “{ano_turma}”")
+    turma = turma_para(curso, d.get("turma", ""), inicio.year, int(ano_turma) if ano_turma else None)
 
     local = _concedente(d, op, r, concedentes)
     supervisor = _supervisor(d, local, usuario, r, senha_hash, supervisores)
@@ -300,7 +305,7 @@ def _linha(n, d, op, usuario, r, senha_hash, concedentes, supervisores, cursos, 
         r.estagiarios.append(aluno)
 
     estagio = Estagio.objects.create(
-        estagiario=aluno, orientador=orientador, supervisor=supervisor, curso=curso, turma=d.get("turma", ""),
+        estagiario=aluno, orientador=orientador, supervisor=supervisor, curso=curso, turma=turma,
         local=local, data_inicio=inicio, data_fim=fim, horas_anteriores=horas_ant,
         acompanhamento_desde=op.acompanhamento_desde if op.acompanhamento_desde and op.acompanhamento_desde > inicio else None,
     )
@@ -345,6 +350,9 @@ def _concedente(d, op, r, cache):
     if local is None and not chave[0]:
         local = next((l for l in LocalEstagio.objects.all() if _chave(l.nome) == chave[1]), None)
     if local:
+        if not local.ativa:  # concedente desativada que voltou a receber estagiários
+            local.ativa = True
+            local.save(update_fields=["ativa"])
         if op.completar_concedentes:
             mudou = False
             for campo in CAMPOS_CONCEDENTE:
@@ -404,7 +412,7 @@ def modelo_csv():
     w.writerow(NOMES_COLUNAS)
     exemplo = {
         "estagiario_nome": "Maria da Silva Souza", "estagiario_cpf": "529.982.247-25", "estagiario_telefone": "(85) 99999-0000",
-        "curso": "Técnico em Informática", "turma": "3º A", "data_inicio": "24/08/2026", "horas_anteriores": "120",
+        "curso": "Técnico em Informática", "turma": "3º A", "ano_turma": "2024", "data_inicio": "24/08/2026", "horas_anteriores": "120",
         "dias": "seg-sex", "horas_por_dia": "8", "entrada": "07:00", "saida_intervalo": "11:00",
         "volta_intervalo": "13:00", "saida": "17:00", "concedente_nome": "EEM Escola Exemplo",
         "concedente_razao_social": "Secretaria da Educação", "concedente_cnpj": "11.222.333/0001-81",

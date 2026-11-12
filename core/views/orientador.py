@@ -12,27 +12,44 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..forms import (
-    ConfiguracaoForm, CoordenadorForm, CursoForm, DiaSemEstagioForm, DocumentoGeralForm, EscalaLoteForm, EstagiariosLoteForm, LocalForm,
-    OrientadorForm, SupervisoresLoteForm, UsuarioEditForm,
+    AnoReferenciaForm, ConfiguracaoForm, CoordenadorForm, CursoForm, DiaSemEstagioForm, DocumentoGeralForm, EscalaLoteForm,
+    EstagiariosLoteForm, LocalForm, OrientadorForm, SubstitutosForm, SupervisoresLoteForm, TurmaForm, UsuarioEditForm,
 )
 from ..models import (
-    Agendamento, Configuracao, Curso, DiaSemEstagio, Documento, Escala, Estagio, LocalEstagio, Registro, Usuario,
+    Agendamento, Configuracao, Curso, DiaSemEstagio, Documento, Escala, Estagio, LocalEstagio, Registro, Turma, Usuario,
+    chave_municipio,
 )
 from ..services import (
-    criar_usuario, estagios_visiveis, notificar, redefinir_senha_padrao, resumo_horas, status_hoje, status_periodo,
+    ano_em_uso, ano_referencia, anos_disponiveis, criar_usuario, estagios_do_municipio, estagios_visiveis,
+    feriados_nacionais, filtrar_ano, municipios_das_concedentes, notificar, redefinir_senha_padrao, resumo_horas, status_hoje, status_periodo, trocar_supervisor,
 )
-from .base import orientador_requerido, permissao
+from .base import destino_seguro, orientador_requerido, permissao
 
 
 def _meus_estagios(request, ativos=True):
-    qs = estagios_visiveis(request.user).prefetch_related("escalas")
+    qs = estagios_visiveis(request.user).select_related("turma").prefetch_related("escalas")
     return qs.filter(ativo=True) if ativos else qs
+
+
+def turmas_do_ano(user, ano):
+    qs = Turma.objects.select_related("curso")
+    if ano is not None:
+        qs = qs.filter(ano_estagio=ano)
+    if user.is_coordenador and user.cursos_ids():
+        qs = qs.filter(curso_id__in=user.cursos_ids())
+    return qs
+
+
+def contexto_ano(request, ano):
+    return {"ano": ano, "anos": anos_disponiveis(), "ano_ref": ano_referencia()}
 
 
 @orientador_requerido
 def painel(request):
     hoje = timezone.localdate()
-    estagios = list(_meus_estagios(request))
+    ano = ano_em_uso(request)
+    todos_ativos = _meus_estagios(request)
+    estagios = list(filtrar_ano(todos_ativos, ano))
     grupos = {"presentes": [], "ausentes": [], "pendentes": [], "nao_previstos": []}
     alertas = []
     semana_atras = hoje - timedelta(days=7)
@@ -65,6 +82,7 @@ def painel(request):
     ).prefetch_related("estagios__estagiario").select_related("local").order_by("data_hora")[:8]
 
     return render(request, "core/painel_orientador.html", {
+        **contexto_ano(request, ano), "outros_anos": todos_ativos.count() - len(estagios),
         "grupos": grupos, "total": len(estagios), "alertas": alertas,
         "previstos_hoje": len(estagios) - len(grupos["nao_previstos"]),
         "pendentes_validacao": pendentes_validacao, "solicitacoes": solicitacoes, "proximas": proximas,
@@ -73,7 +91,8 @@ def painel(request):
 
 @orientador_requerido
 def estagios_lista(request):
-    qs = _meus_estagios(request, ativos=False)
+    ano = ano_em_uso(request)
+    qs = filtrar_ano(_meus_estagios(request, ativos=False), ano)
     f = {k: request.GET.get(k, "") for k in ("q", "curso", "local", "turma", "situacao")}
     if f["q"]:
         qs = qs.filter(Q(estagiario__nome_completo__icontains=f["q"]) | Q(estagiario__username__icontains=f["q"]))
@@ -81,16 +100,17 @@ def estagios_lista(request):
         qs = qs.filter(curso_id=f["curso"])
     if f["local"]:
         qs = qs.filter(local_id=f["local"])
-    if f["turma"]:
-        qs = qs.filter(turma=f["turma"])
+    if f["turma"].isdigit():
+        qs = qs.filter(turma_id=f["turma"])
     qs = qs.filter(ativo=f["situacao"] != "inativos")
     estagios = list(qs)
     for e in estagios:
         e.st = status_hoje(e)
         e.h = resumo_horas(e)
     return render(request, "core/estagios_lista.html", {
+        **contexto_ano(request, ano),
         "estagios": estagios, "f": f, "cursos": Curso.objects.all(), "locais": LocalEstagio.objects.all(),
-        "turmas": sorted(set(_meus_estagios(request, False).exclude(turma="").values_list("turma", flat=True))),
+        "turmas": turmas_do_ano(request.user, ano),
     })
 
 
@@ -109,8 +129,7 @@ def criar_estagiarios(request):
                 user = criar_usuario(nome, Usuario.Papel.ESTAGIARIO, request.user, matricula=matricula)
                 estagio = Estagio.objects.create(
                     estagiario=user, orientador=d.get("orientador") or request.user, supervisor=d["supervisor"],
-                    curso=d["curso"],
-                    turma=d["turma"], local=d["local"], setor=d["setor"], data_inicio=d["data_inicio"],
+                    curso=d["turma"].curso, turma=d["turma"], local=d["local"], setor=d["setor"], data_inicio=d["data_inicio"],
                     data_fim=d["data_fim"],
                 )
                 Escala.objects.create(estagio=estagio, vigente_desde=d["data_inicio"], criado_por=request.user,
@@ -190,6 +209,7 @@ def _resultado_contas(request, usuarios, titulo):
 def usuarios(request):
     papel = request.GET.get("papel", "")
     q = request.GET.get("q", "")
+    situacao = request.GET.get("situacao", "")
     if request.user.is_superuser:
         qs = Usuario.objects.all()
     else:
@@ -200,11 +220,14 @@ def usuarios(request):
         )
     if papel:
         qs = qs.filter(papel=papel)
+    if situacao != "todas":
+        qs = qs.filter(is_active=situacao != "inativas")
     if q:
         qs = qs.filter(Q(nome_completo__icontains=q) | Q(username__icontains=q))
-    qs = qs.prefetch_related("concedentes").annotate(n_supervisionados=Count("estagios_supervisionados", distinct=True))
+    qs = qs.prefetch_related("concedentes").annotate(
+        n_supervisionados=Count("estagios_supervisionados", filter=Q(estagios_supervisionados__ativo=True), distinct=True))
     return render(request, "core/usuarios.html", {
-        "usuarios": qs.distinct(), "papel": papel, "q": q, "papeis": Usuario.Papel.choices,
+        "usuarios": qs.distinct(), "papel": papel, "q": q, "papeis": Usuario.Papel.choices, "situacao": situacao,
     })
 
 
@@ -253,6 +276,43 @@ def redefinir_senha(request, pk):
     return redirect(request.POST.get("next") or "usuarios")
 
 
+@permissao("contas")
+def ativacao_usuario(request, pk):
+    """Desativar ou reativar uma conta. Supervisor com estagiários ativos só sai com um substituto para cada um."""
+    alvo = get_object_or_404(Usuario, pk=pk)
+    if not _pode_gerir(request, alvo) or alvo.pk == request.user.pk or alvo.is_superuser:
+        raise PermissionDenied
+    desativar = alvo.is_active
+    estagios = list(alvo.estagios_supervisionados.filter(ativo=True).select_related("estagiario", "local")
+                    ) if desativar and alvo.is_supervisor else []
+    orientados = alvo.estagios_orientados.filter(ativo=True).count() if desativar and alvo.is_orientador else 0
+    form = SubstitutosForm(request.POST if request.method == "POST" else None, estagios=estagios, sair=alvo)
+    ultimo_estagio = alvo.estagios.order_by("-data_inicio").first() if alvo.is_estagiario else None
+    if request.method == "POST" and not orientados and form.is_valid():
+        with transaction.atomic():
+            if desativar:
+                for e, novo in form.trocas():
+                    trocar_supervisor(e, novo, request.user, motivo=f"{alvo} foi desativado(a)")
+                n = alvo.estagios.filter(ativo=True).update(ativo=False) if alvo.is_estagiario else 0
+                alvo.is_active = False
+                alvo.save(update_fields=["is_active"])
+                messages.success(request, f"Conta de {alvo} desativada: não consegue mais entrar no sistema."
+                                 + (f" {len(estagios)} estagiário(s) passaram para os novos supervisores." if estagios else "")
+                                 + (" O estágio foi encerrado." if n else ""))
+            else:
+                alvo.is_active = True
+                alvo.save(update_fields=["is_active"])
+                if ultimo_estagio and request.POST.get("reativar_estagio") and not ultimo_estagio.ativo:
+                    ultimo_estagio.ativo = True
+                    ultimo_estagio.save(update_fields=["ativo"])
+                messages.success(request, f"Conta de {alvo} reativada.")
+        return redirect(destino_seguro(request, reverse("usuarios")))
+    return render(request, "core/ativacao_usuario.html", {
+        "alvo": alvo, "desativar": desativar, "form": form, "estagios": estagios, "orientados": orientados,
+        "ultimo_estagio": ultimo_estagio,
+    })
+
+
 # ----------------------------------------------------------------- cadastros simples
 
 
@@ -276,8 +336,58 @@ def cursos(request, pk=None):
 
 
 @permissao("cadastros")
+def turmas(request, pk=None):
+    """Turmas por ano: a turma de 2024 estagia em 2026, a de 2025 em 2027… O nome pode se repetir todo ano."""
+    config = Configuracao.atual()
+    obj = get_object_or_404(Turma, pk=pk) if pk else None
+    if obj and request.user.is_coordenador and not request.user.coordena(obj.curso_id):
+        raise PermissionDenied
+    ref = config.ano_referencia_efetivo
+    inicial = {} if obj else {"ano_estagio": ref, "ano_ingresso": ref - 2}
+    form = TurmaForm(request.POST if request.POST.get("acao") == "turma" else None, instance=obj, usuario=request.user,
+                     initial=inicial)
+    form_ano = AnoReferenciaForm(request.POST if request.POST.get("acao") == "ano" else None, instance=config)
+    pode_ano = request.user.is_superuser or request.user.is_orientador
+    if request.method == "POST":
+        acao = request.POST.get("acao")
+        if acao == "turma" and form.is_valid():
+            t = form.save()
+            messages.success(request, f"Turma “{t}” salva.")
+            return redirect("turmas")
+        if acao == "ano" and pode_ano and form_ano.is_valid():
+            form_ano.save()
+            request.session.pop("ano_lista", None)
+            messages.success(request, f"Ano de referência: {Configuracao.atual().ano_referencia_efetivo}.")
+            return redirect("turmas")
+        if acao == "repetir":
+            try:
+                de = int(request.POST.get("de", ""))
+            except ValueError:
+                de = ref
+            criadas = 0
+            for t in turmas_do_ano(request.user, de):
+                _, nova = Turma.objects.get_or_create(
+                    curso=t.curso, nome=t.nome, ano_ingresso=t.ano_ingresso + 1, defaults={"ano_estagio": t.ano_estagio + 1})
+                criadas += nova
+            messages.success(request, f"{criadas} turma(s) criada(s) para {de + 1}, com os mesmos nomes de {de}."
+                             if criadas else f"As turmas de {de + 1} já existiam.")
+            return redirect("turmas")
+    itens = turmas_do_ano(request.user, None).annotate(
+        n=Count("estagios", filter=Q(estagios__ativo=True), distinct=True),
+        n_total=Count("estagios", distinct=True))
+    grupos = {}
+    for t in itens:
+        grupos.setdefault(t.ano_estagio, []).append(t)
+    return render(request, "core/turmas.html", {
+        "form": form, "form_ano": form_ano, "pode_ano": pode_ano, "editando": obj, "ref": ref,
+        "grupos": sorted(grupos.items(), reverse=True), "proximo": max(grupos, default=ref),
+    })
+
+
+@permissao("cadastros")
 def locais(request):
     q = request.GET.get("q", "").strip()
+    situacao = request.GET.get("situacao", "")
     itens = LocalEstagio.objects.annotate(
         n=Count("estagios", filter=Q(estagios__ativo=True), distinct=True),
         n_sup=Count("supervisores", distinct=True),
@@ -285,7 +395,43 @@ def locais(request):
     if q:
         itens = itens.filter(Q(nome__icontains=q) | Q(razao_social__icontains=q) | Q(cnpj__icontains=q)
                              | Q(cidade__icontains=q))
-    return render(request, "core/locais.html", {"itens": itens, "q": q})
+    if situacao != "todas":
+        itens = itens.filter(ativa=situacao != "inativas")
+    return render(request, "core/locais.html", {"itens": itens, "q": q, "situacao": situacao,
+                                                "n_inativas": LocalEstagio.objects.filter(ativa=False).count()})
+
+
+def _sozinhos(local, sup_qs):
+    """Supervisores da concedente que não têm outra concedente ativa."""
+    return [s for s in sup_qs.prefetch_related("concedentes")
+            if not any(c.ativa and c.pk != local.pk for c in s.concedentes.all())]
+
+
+@permissao("cadastros")
+def ativacao_local(request, pk):
+    """Desativar ou reativar uma concedente (e, se quiser, as contas dos supervisores que só atuam nela)."""
+    local = get_object_or_404(LocalEstagio, pk=pk)
+    desativar = local.ativa
+    ativos = list(local.estagios.filter(ativo=True).select_related("estagiario")) if desativar else []
+    supervisores = _sozinhos(local, local.supervisores.filter(is_active=desativar))
+    if request.method == "POST" and not ativos:
+        with transaction.atomic():
+            local.ativa = not desativar
+            local.save(update_fields=["ativa"])
+            contas = 0
+            if request.POST.get("contas"):
+                for s in supervisores:
+                    if desativar and s.estagios_supervisionados.filter(ativo=True).exists():
+                        continue
+                    s.is_active = not desativar
+                    s.save(update_fields=["is_active"])
+                    contas += 1
+        messages.success(request, f"Concedente “{local}” {'desativada' if desativar else 'reativada'}."
+                         + (f" {contas} conta(s) de supervisor {'desativada' if desativar else 'reativada'}(s)." if contas else ""))
+        return redirect("locais")
+    return render(request, "core/ativacao_local.html", {
+        "local": local, "desativar": desativar, "ativos": ativos, "supervisores": supervisores,
+    })
 
 
 @permissao("cadastros")
@@ -329,37 +475,102 @@ def configuracoes(request):
 
 
 
+def _ano_param(request):
+    try:
+        ano = int(request.GET.get("ano") or request.POST.get("ano") or timezone.localdate().year)
+        return ano if 2000 <= ano <= 2100 else timezone.localdate().year
+    except ValueError:
+        return timezone.localdate().year
+
+
+def _pode_excluir_feriado(user, dia):
+    return user.is_superuser or dia.abrangencia != DiaSemEstagio.Abrangencia.ESCOLA or dia.orientador_id == user.pk
+
+
 @permissao("feriados")
 def dias_sem_estagio(request):
-    form = DiaSemEstagioForm(request.POST or None)
+    """Feriados nacionais/estaduais (todos), municipais (pelo município da concedente) e eventos da escola."""
+    A = DiaSemEstagio.Abrangencia
+    aba = request.GET.get("aba", "municipais")
+    ano = _ano_param(request)
+    inicial = {"abrangencia": A.MUNICIPIO if aba == "municipais" else A.TODOS if aba == "nacionais" else A.ESCOLA,
+               "anual": aba == "municipais", "municipio": request.GET.get("municipio", "")}
+    form = DiaSemEstagioForm(request.POST if request.POST.get("acao") == "adicionar" else None, initial=inicial)
     if request.method == "POST":
+        acao = request.POST.get("acao")
         if "excluir" in request.POST:
-            DiaSemEstagio.objects.filter(pk=request.POST["excluir"], orientador=request.user).delete()
+            dia = get_object_or_404(DiaSemEstagio, pk=request.POST["excluir"])
+            if not _pode_excluir_feriado(request.user, dia):
+                raise PermissionDenied
+            dia.delete()
             messages.success(request, "Data removida.")
-            return redirect("dias_sem_estagio")
-        if form.is_valid():
+            return redirect(request.get_full_path())
+        if acao == "nacionais":
+            escolhidos = set(request.POST.getlist("f"))
+            n = 0
+            for data, nome, tipo, _ in feriados_nacionais(ano):
+                if f"{data:%Y-%m-%d}" in escolhidos:
+                    _, criado = DiaSemEstagio.objects.get_or_create(
+                        data=data, abrangencia=A.TODOS,
+                        defaults={"descricao": nome, "orientador": request.user, "origem": "calendario"})
+                    n += criado
+            messages.success(request, f"{n} feriado(s) de {ano} cadastrado(s) para todos os estagiários.")
+            return redirect(f"{reverse('dias_sem_estagio')}?aba=nacionais&ano={ano}")
+        if acao == "adicionar" and form.is_valid():
             d = form.cleaned_data
             dia, ate = d["data"], d.get("ate") or d["data"]
+            chave = chave_municipio(d["municipio"]) if d["abrangencia"] == A.MUNICIPIO else ""
             n = 0
             while dia <= ate:
-                DiaSemEstagio.objects.get_or_create(
-                    data=dia, orientador=request.user, curso=d["curso"], defaults={"descricao": d["descricao"]}
-                )
+                busca = {"data": dia, "abrangencia": d["abrangencia"], "municipio_chave": chave, "curso": d["curso"]}
+                if d["abrangencia"] == A.ESCOLA:
+                    busca["orientador"] = request.user
+                _, criado = DiaSemEstagio.objects.get_or_create(**busca, defaults={
+                    "descricao": d["descricao"], "orientador": request.user, "municipio": d["municipio"].strip(),
+                    "anual": d["anual"]})
+                n += criado
                 dia += timedelta(days=1)
-                n += 1
-            estagios = _meus_estagios(request)
-            if d["curso"]:
-                estagios = estagios.filter(curso=d["curso"])
+            if d["abrangencia"] == A.ESCOLA:
+                estagios = _meus_estagios(request)
+                if d["curso"]:
+                    estagios = estagios.filter(curso=d["curso"])
+            elif d["abrangencia"] == A.MUNICIPIO:
+                estagios = estagios_do_municipio(chave)
+            else:
+                estagios = Estagio.objects.filter(ativo=True).select_related("estagiario", "supervisor")
             pessoas = [p for e in estagios for p in (e.estagiario, e.supervisor)]
             periodo = f"{d['data']:%d/%m}" + (f" a {ate:%d/%m}" if ate != d["data"] else "")
-            notificar(pessoas, f"Sem estágio em {periodo}: {d['descricao']}.", reverse("inicio"))
-            messages.success(request, f"{n} dia(s) marcados como sem estágio.")
-            return redirect("dias_sem_estagio")
+            onde = f" ({d['municipio'].strip()})" if chave else ""
+            notificar(pessoas, f"Sem estágio em {periodo}{onde}: {d['descricao']}.", reverse("inicio"))
+            messages.success(request, f"{n} dia(s) cadastrado(s)" + (f"; {len(estagios)} estágio(s) neste município" if chave else "")
+                             + ".")
+            destino = {A.MUNICIPIO: "municipais", A.TODOS: "nacionais"}.get(d["abrangencia"], "escola")
+            return redirect(f"{reverse('dias_sem_estagio')}?aba={destino}")
+
     hoje = timezone.localdate()
-    itens = DiaSemEstagio.objects.filter(orientador=request.user).select_related("curso")
-    return render(request, "core/dias_sem_estagio.html", {
-        "form": form, "futuros": itens.filter(data__gte=hoje), "passados": itens.filter(data__lt=hoje).reverse()[:30],
-    })
+    ctx = {"form": form, "aba": aba, "ano": ano, "anos": [ano - 1, ano, ano + 1], "hoje": hoje,
+           "municipios": municipios_das_concedentes()}
+    if aba == "municipais":
+        municipais = list(DiaSemEstagio.objects.filter(abrangencia=A.MUNICIPIO).order_by("municipio_chave", "data"))
+        por_chave = {}
+        for d in municipais:
+            por_chave.setdefault(d.municipio_chave, []).append(d)
+        for m in ctx["municipios"]:
+            m["feriados"] = por_chave.pop(m["chave"], [])
+        ctx["sem_concedente"] = sorted(por_chave.values(), key=lambda l: l[0].municipio_chave)  # municípios sem concedente ativa
+        ctx["faltando"] = [m for m in ctx["municipios"] if not m["feriados"] and m["estagios"]]
+    elif aba == "nacionais":
+        cadastrados = {d.data: d for d in DiaSemEstagio.objects.filter(abrangencia=A.TODOS, data__year=ano)}
+        sugestoes = feriados_nacionais(ano)
+        ctx["sugestoes"] = [{"data": dt, "nome": nome, "tipo": tipo, "marcado": marcado, "ja": cadastrados.get(dt)}
+                            for dt, nome, tipo, marcado in sugestoes]
+        datas_sugeridas = {dt for dt, *_ in sugestoes}
+        ctx["nacionais"] = sorted(cadastrados.values(), key=lambda d: d.data)
+        ctx["outros_nacionais"] = [d for d in ctx["nacionais"] if d.data not in datas_sugeridas]
+    else:
+        itens = DiaSemEstagio.objects.filter(abrangencia=A.ESCOLA, orientador=request.user).select_related("curso")
+        ctx.update(futuros=itens.filter(data__gte=hoje), passados=itens.filter(data__lt=hoje).reverse()[:30])
+    return render(request, "core/dias_sem_estagio.html", ctx)
 
 
 # ----------------------------------------------------------------- alterações em lote
@@ -372,13 +583,15 @@ def escala_lote(request):
     supervisor = user.is_supervisor
     if not (supervisor or user.pode("escalas")):
         raise PermissionDenied
-    qs = estagios_visiveis(user).filter(ativo=True).prefetch_related("escalas")
+    qs = estagios_visiveis(user).filter(ativo=True).select_related("turma").prefetch_related("escalas")
+    ano = None if supervisor else ano_em_uso(request)
+    qs = filtrar_ano(qs, ano)
     filtro_curso = request.GET.get("curso", "")
     filtro_turma = request.GET.get("turma", "")
     if filtro_curso:
         qs = qs.filter(curso_id=filtro_curso)
-    if filtro_turma:
-        qs = qs.filter(turma=filtro_turma)
+    if filtro_turma.isdigit():
+        qs = qs.filter(turma_id=filtro_turma)
     inicial = {"dias": [0, 1, 2, 3, 4], "vigente_desde": timezone.localdate()}
     if request.GET.get("estagio"):
         inicial["estagios"] = qs.filter(pk=request.GET["estagio"])
@@ -405,8 +618,11 @@ def escala_lote(request):
                   reverse("inicio"), exceto=user)
         messages.success(request, f"Aplicado a {len(d['estagios'])} estagiário(s) a partir de {d['vigente_desde']:%d/%m/%Y}.")
         return redirect("painel_supervisor" if supervisor else "estagios_lista")
-    turmas = sorted(set(estagios_visiveis(user).exclude(turma="").values_list("turma", flat=True)))
+    turmas = Turma.objects.filter(pk__in=estagios_visiveis(user).filter(ativo=True).values("turma")).select_related("curso")
+    if ano is not None:
+        turmas = turmas.filter(ano_estagio=ano)
     return render(request, "core/escala_lote.html", {
+        **(contexto_ano(request, ano) if not supervisor else {}),
         "form": form, "cursos": Curso.objects.all(), "turmas": turmas, "supervisor": supervisor,
         "filtro_curso": filtro_curso, "filtro_turma": filtro_turma,
     })

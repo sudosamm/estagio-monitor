@@ -22,10 +22,28 @@ class EscalaInline(admin.TabularInline):
     extra = 0
 
 
+@admin.register(models.Turma)
+class TurmaAdmin(admin.ModelAdmin):
+    list_display = ("curso", "nome", "ano_ingresso", "ano_estagio", "ativa")
+    list_filter = ("ano_estagio", "curso", "ativa")
+
+
+@admin.register(models.FolhaEnviada)
+class FolhaEnviadaAdmin(admin.ModelAdmin):
+    list_display = ("mes", "turma", "nome_original", "enviado_por", "enviado_em")
+    list_filter = ("mes",)
+    filter_horizontal = ("estagios",)
+
+
+@admin.register(models.TrocaSupervisor)
+class TrocaSupervisorAdmin(admin.ModelAdmin):
+    list_display = ("estagio", "anterior", "novo", "feita_por", "feita_em")
+
+
 @admin.register(models.Estagio)
 class EstagioAdmin(admin.ModelAdmin):
-    list_display = ("estagiario", "curso", "local", "supervisor", "orientador", "data_inicio", "ativo")
-    list_filter = ("curso", "ativo", "orientador")
+    list_display = ("estagiario", "curso", "turma", "local", "supervisor", "orientador", "data_inicio", "ativo")
+    list_filter = ("curso", "turma__ano_estagio", "ativo", "orientador")
     search_fields = ("estagiario__nome_completo", "local__nome")
     inlines = [EscalaInline]
 
