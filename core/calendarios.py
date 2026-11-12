@@ -13,25 +13,27 @@ import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
 
-from .models import Curso, DiaSemEstagio, chave_municipio
+from .models import Curso, DiaSemEstagio, LocalEstagio, chave_municipio
 
 A = DiaSemEstagio.Abrangencia
 COLUNAS = [
     ("data", True, "dd/mm/aaaa. Só dd/mm = repete todo ano"),
     ("descricao", True, "Nome do feriado ou evento"),
     ("ate", False, "Último dia, para períodos (recesso, férias)"),
-    ("tipo", False, "municipal, nacional, estadual ou escola. Vazio = o escolhido na tela"),
+    ("tipo", False, "municipal, nacional, estadual, concedente (recesso) ou escola. Vazio = o escolhido na tela"),
     ("municipio", False, "Para feriado municipal. Vazio = o escolhido na tela"),
     ("uf", False, "Ex.: CE"),
     ("anual", False, "sim = repete todo ano nesta data"),
     ("curso", False, "Só para eventos da escola de um curso"),
+    ("concedente", False, "Para recesso de concedente: nome fantasia/unidade ou razão social"),
 ]
 SINONIMOS = {"nome": "descricao", "feriado": "descricao", "evento": "descricao", "descrição": "descricao",
              "data_inicio": "data", "inicio": "data", "data_fim": "ate", "fim": "ate", "cidade": "municipio",
              "município": "municipio", "abrangencia": "tipo"}
 TIPOS = {"municipal": A.MUNICIPIO, "municipio": A.MUNICIPIO, "nacional": A.TODOS, "estadual": A.TODOS,
          "todos": A.TODOS, "escola": A.ESCOLA, "evento": A.ESCOLA, "recesso": A.ESCOLA, "letivo": A.ESCOLA,
-         "ferias": A.ESCOLA}
+         "ferias": A.ESCOLA, "concedente": A.CONCEDENTE, "recessodaconcedente": A.CONCEDENTE,
+         "empresa": A.CONCEDENTE}
 # o Google Agenda marca datas comemorativas que não são feriado (Dia das Mães, Dia dos Namorados…)
 NAO_FERIADO = ("observância", "observance", "observancia")
 LIMITE_ITENS = 1000
@@ -53,6 +55,8 @@ class Item:
     anual: bool = False
     curso_id: int = None
     curso_nome: str = ""
+    concedente_id: int = None
+    concedente_nome: str = ""
     marcado: bool = True
     observacao: str = ""
 
@@ -79,6 +83,7 @@ class Padrao:
     abrangencia: str
     municipio: str = ""
     ano: int = None  # para “dd/mm” sem ano
+    concedente: object = None  # LocalEstagio, para recessos
 
 
 def _chave(texto):
@@ -141,6 +146,10 @@ def _ler_csv(texto, padrao):
     if faltando:
         raise ErroCalendario("Colunas obrigatórias ausentes: " + ", ".join(faltando) + ". Baixe o modelo.")
     cursos = {_chave(c.nome): c for c in Curso.objects.all()}
+    locais = {}
+    for l in LocalEstagio.objects.filter(ativa=True):
+        for nome in {l.nome, l.razao_social} - {""}:
+            locais.setdefault(_chave(nome), []).append(l)
     itens, erros = [], []
     for n, bruta in enumerate(leitor, start=2):
         d = {cab[k]: (v or "").strip() for k, v in bruta.items() if k in cab}
@@ -166,6 +175,18 @@ def _ler_csv(texto, padrao):
             anual = anual or _chave(d.get("anual", "")) in ("sim", "s", "x", "1", "true", "anual")
             if anual and ate:
                 raise ValueError("um período não pode repetir todo ano")
+            local = None
+            if abr == A.CONCEDENTE:
+                if d.get("concedente"):
+                    achadas = {l.pk: l for l in locais.get(_chave(d["concedente"]), [])}
+                    if len(achadas) != 1:
+                        raise ValueError(f"concedente “{d['concedente']}” " + ("não encontrada" if not achadas else
+                                         "ambígua (mais de uma com esse nome): use o nome da unidade"))
+                    local = next(iter(achadas.values()))
+                else:
+                    local = padrao.concedente
+                if not local:
+                    raise ValueError("recesso sem concedente (coluna concedente ou a da tela)")
             curso = None
             if d.get("curso") and abr == A.ESCOLA:
                 curso = cursos.get(_chave(d["curso"]))
@@ -175,7 +196,8 @@ def _ler_csv(texto, padrao):
             erros.append((onde, str(exc)))
             continue
         itens.append(Item(onde, data, d["descricao"], abr, ate, municipio if abr == A.MUNICIPIO else "", anual,
-                          curso.pk if curso else None, curso.nome if curso else ""))
+                          curso.pk if curso else None, curso.nome if curso else "",
+                          local.pk if local else None, str(local) if local else ""))
     return itens, erros
 
 
@@ -253,7 +275,11 @@ def _item_ics(ev, padrao, onde):
     municipio = padrao.municipio if padrao.abrangencia == A.MUNICIPIO else ""
     if padrao.abrangencia == A.MUNICIPIO and not chave_municipio(municipio):
         raise ValueError("informe na tela o município deste calendário")
+    local = padrao.concedente if padrao.abrangencia == A.CONCEDENTE else None
+    if padrao.abrangencia == A.CONCEDENTE and not local:
+        raise ValueError("escolha na tela a concedente deste calendário")
     return Item(onde, inicio, descricao[:120], padrao.abrangencia, ate, municipio, anual,
+                concedente_id=local.pk if local else None, concedente_nome=str(local) if local else "",
                 marcado=not nao_feriado, observacao="data comemorativa, não é feriado" if nao_feriado else
                 ("" if dia_inteiro else "evento com horário: conta o dia todo"))
 
@@ -263,7 +289,8 @@ def modelo_csv():
     saida.write("﻿")
     w = csv.writer(saida, delimiter=";")
     w.writerow([c for c, _, _ in COLUNAS])
-    w.writerow(["23/11", "Aniversário da cidade (exemplo)", "", "municipal", "Cidade Exemplo", "CE", "sim", ""])
-    w.writerow(["02/02/2027", "Recesso escolar (exemplo)", "06/02/2027", "escola", "", "", "", ""])
-    w.writerow(["15/03/2027", "Evento do curso (exemplo)", "", "escola", "", "", "", "Técnico em Informática"])
+    w.writerow(["23/11", "Aniversário da cidade (exemplo)", "", "municipal", "Cidade Exemplo", "CE", "sim", "", ""])
+    w.writerow(["02/02/2027", "Recesso escolar (exemplo)", "06/02/2027", "escola", "", "", "", "", ""])
+    w.writerow(["15/03/2027", "Evento do curso (exemplo)", "", "escola", "", "", "", "Técnico em Informática", ""])
+    w.writerow(["21/12/2026", "Férias coletivas (exemplo)", "02/01/2027", "concedente", "", "", "", "", "Empresa Exemplo"])
     return saida.getvalue()

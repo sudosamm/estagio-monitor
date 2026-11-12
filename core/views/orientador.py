@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..forms import (
-    AnoReferenciaForm, ImportarCalendarioForm, ConfiguracaoForm, CoordenadorForm, CursoForm, DiaSemEstagioForm, DocumentoGeralForm, EscalaLoteForm,
+    AnoReferenciaForm, ImportarCalendarioForm, RecessoForm, ConfiguracaoForm, CoordenadorForm, CursoForm, DiaSemEstagioForm, DocumentoGeralForm, EscalaLoteForm,
     EstagiariosLoteForm, LocalForm, OrientadorForm, SubstitutosForm, SupervisoresLoteForm, TurmaForm, UsuarioEditForm,
 )
 from ..models import (
@@ -21,7 +21,7 @@ from ..models import (
     chave_municipio,
 )
 from ..services import (
-    ano_em_uso, ano_referencia, anos_disponiveis, cadastrar_dias, criar_usuario, estagios_do_municipio, estagios_visiveis,
+    agrupar_periodos, ano_em_uso, ano_referencia, anos_disponiveis, cadastrar_dias, pessoas_da_concedente, criar_usuario, estagios_do_municipio, estagios_visiveis,
     feriados_nacionais, filtrar_ano, municipios_das_concedentes, notificar, redefinir_senha_padrao, resumo_horas, status_hoje, status_periodo, trocar_supervisor,
 )
 from .base import destino_seguro, orientador_requerido, permissao
@@ -452,7 +452,9 @@ def local_editar(request, pk=None):
             return _resultado_contas(request, criados, f"Supervisores de {local}")
         return redirect("locais")
     supervisores = obj.supervisores.order_by("nome_completo") if obj else []
-    return render(request, "core/concedente_form.html", {"form": form, "obj": obj, "supervisores": supervisores})
+    recessos_futuros = agrupar_periodos(obj.recessos.filter(data__gte=timezone.localdate()).order_by("data")) if obj else []
+    return render(request, "core/concedente_form.html", {"form": form, "obj": obj, "supervisores": supervisores,
+                                                         "recessos": recessos_futuros})
 
 
 @orientador_requerido
@@ -488,6 +490,11 @@ def _pode_excluir_feriado(user, dia):
     return user.is_superuser or dia.abrangencia != DiaSemEstagio.Abrangencia.ESCOLA or dia.orientador_id == user.pk
 
 
+def _ids_post(request, nome="excluir"):
+    """Aceita “12” ou “12,13,14” (um período inteiro)."""
+    return [int(x) for v in request.POST.getlist(nome) for x in v.split(",") if x.strip().isdigit()]
+
+
 @permissao("feriados")
 def dias_sem_estagio(request):
     """Feriados nacionais/estaduais (todos), municipais (pelo município da concedente) e eventos da escola."""
@@ -500,11 +507,12 @@ def dias_sem_estagio(request):
     if request.method == "POST":
         acao = request.POST.get("acao")
         if "excluir" in request.POST:
-            dia = get_object_or_404(DiaSemEstagio, pk=request.POST["excluir"])
-            if not _pode_excluir_feriado(request.user, dia):
+            dias = list(DiaSemEstagio.objects.filter(pk__in=_ids_post(request)))
+            if not dias or not all(_pode_excluir_feriado(request.user, d) for d in dias):
                 raise PermissionDenied
-            dia.delete()
-            messages.success(request, "Data removida.")
+            for d in dias:
+                d.delete()
+            messages.success(request, f"{len(dias)} dia(s) removido(s).")
             return redirect(request.get_full_path())
         if acao == "nacionais":
             escolhidos = set(request.POST.getlist("f"))
@@ -522,21 +530,25 @@ def dias_sem_estagio(request):
             dia, ate = d["data"], d.get("ate") or d["data"]
             chave = chave_municipio(d["municipio"]) if d["abrangencia"] == A.MUNICIPIO else ""
             n = cadastrar_dias(request.user, d["abrangencia"], dia, d["descricao"], ate, d["municipio"], d["anual"],
-                               d["curso"])
+                               d["curso"], concedente=d.get("concedente"))
             if d["abrangencia"] == A.ESCOLA:
                 estagios = _meus_estagios(request)
                 if d["curso"]:
                     estagios = estagios.filter(curso=d["curso"])
             elif d["abrangencia"] == A.MUNICIPIO:
                 estagios = estagios_do_municipio(chave)
+            elif d["abrangencia"] == A.CONCEDENTE:
+                estagios = Estagio.objects.filter(ativo=True, local=d["concedente"]).select_related("estagiario", "supervisor")
             else:
                 estagios = Estagio.objects.filter(ativo=True).select_related("estagiario", "supervisor")
             pessoas = [p for e in estagios for p in (e.estagiario, e.supervisor)]
             periodo = f"{d['data']:%d/%m}" + (f" a {ate:%d/%m}" if ate != d["data"] else "")
-            onde = f" ({d['municipio'].strip()})" if chave else ""
+            onde = f" ({d['municipio'].strip()})" if chave else f" ({d['concedente']})" if d.get("concedente") else ""
             notificar(pessoas, f"Sem estágio em {periodo}{onde}: {d['descricao']}.", reverse("inicio"))
             messages.success(request, f"{n} dia(s) cadastrado(s)" + (f"; {len(estagios)} estágio(s) neste município" if chave else "")
                              + ".")
+            if d["abrangencia"] == A.CONCEDENTE:
+                return redirect(f"{reverse('recessos')}?concedente={d['concedente'].pk}")
             destino = {A.MUNICIPIO: "municipais", A.TODOS: "nacionais"}.get(d["abrangencia"], "escola")
             return redirect(f"{reverse('dias_sem_estagio')}?aba={destino}")
 
@@ -566,6 +578,63 @@ def dias_sem_estagio(request):
     return render(request, "core/dias_sem_estagio.html", ctx)
 
 
+def _concedentes_dos_recessos(user):
+    """Concedentes cujos recessos a pessoa pode ver e cadastrar."""
+    if user.is_supervisor:
+        return user.concedentes.filter(ativa=True)
+    if user.pode("feriados") or user.pode("cadastros"):
+        return LocalEstagio.objects.filter(ativa=True)
+    raise PermissionDenied
+
+
+@login_required
+def recessos(request):
+    """Recessos de cada concedente: períodos em que ela não recebe os estagiários.
+
+    O orientador/coordenador cadastra para qualquer concedente; o supervisor, para as concedentes em que atua.
+    """
+    A = DiaSemEstagio.Abrangencia
+    permitidas = _concedentes_dos_recessos(request.user)
+    filtro = request.GET.get("concedente", "")
+    form = RecessoForm(request.POST if request.POST.get("acao") == "adicionar" else None, concedentes=permitidas,
+                       initial={"concedente": filtro} if filtro.isdigit() else {})
+    if request.method == "POST":
+        if "excluir" in request.POST:
+            dias = list(DiaSemEstagio.objects.filter(pk__in=_ids_post(request), abrangencia=A.CONCEDENTE,
+                                                     concedente__in=permitidas))
+            for d in dias:
+                d.delete()
+            messages.success(request, f"Recesso removido ({len(dias)} dia(s)).")
+            return redirect(request.get_full_path())
+        if form.is_valid():
+            d = form.cleaned_data
+            local = d["concedente"]
+            n = cadastrar_dias(request.user, A.CONCEDENTE, d["data"], d["descricao"], d.get("ate"), concedente=local)
+            periodo = f"{d['data']:%d/%m}" + (f" a {d['ate']:%d/%m}" if d.get("ate") and d["ate"] != d["data"] else "")
+            notificar(pessoas_da_concedente(local), f"{local} em recesso em {periodo}: {d['descricao']}. "
+                      "Nesses dias não há estágio.", reverse("inicio"), exceto=request.user)
+            messages.success(request, f"Recesso de {local} cadastrado: {periodo} ({n} dia(s) novo(s)). "
+                             "Estagiários, supervisores e orientadores foram avisados.")
+            return redirect(f"{reverse('recessos')}?concedente={local.pk}")
+    hoje = timezone.localdate()
+    qs = DiaSemEstagio.objects.filter(abrangencia=A.CONCEDENTE, concedente__in=permitidas).select_related("concedente")
+    if filtro.isdigit():
+        qs = qs.filter(concedente_id=filtro)
+    grupos = {}
+    for d in qs.order_by("concedente__nome", "data"):
+        grupos.setdefault(d.concedente, []).append(d)
+    lista = []
+    for local, dias in grupos.items():
+        periodos = agrupar_periodos(dias)
+        lista.append({"local": local, "futuros": [p for p in periodos if p["fim"] >= hoje],
+                      "passados": [p for p in periodos if p["fim"] < hoje][-5:]})
+    lista.sort(key=lambda g: (not g["futuros"], g["local"].nome))
+    return render(request, "core/recessos.html", {
+        "form": form, "grupos": lista, "filtro": filtro, "concedentes": permitidas,
+        "local_filtrado": permitidas.filter(pk=filtro).first() if filtro.isdigit() else None,
+    })
+
+
 CHAVE_CALENDARIO = "importacao_calendario"
 
 
@@ -591,21 +660,28 @@ def importar_feriados(request):
         with transaction.atomic():
             if guardado["substituir"] and escolhidos:
                 anos = {i.data.year for i in escolhidos} | {i.ate.year for i in escolhidos if i.ate}
-                grupos = {(i.abrangencia, chave_municipio(i.municipio)) for i in escolhidos}
-                for abr, chave in grupos:
-                    antigos = DiaSemEstagio.objects.filter(origem="importado", abrangencia=abr, municipio_chave=chave).filter(
+                grupos = {(i.abrangencia, chave_municipio(i.municipio), i.concedente_id) for i in escolhidos}
+                for abr, chave, conc in grupos:
+                    antigos = DiaSemEstagio.objects.filter(origem="importado", abrangencia=abr, municipio_chave=chave,
+                                                           concedente_id=conc).filter(
                         Q(data__year__in=anos) | Q(anual=True))
                     if abr == A.ESCOLA:
                         antigos = antigos.filter(orientador=request.user)
                     removidos += antigos.delete()[0]
             cursos = {c.pk: c for c in Curso.objects.all()}
+            locais = LocalEstagio.objects.in_bulk({i.concedente_id for i in escolhidos if i.concedente_id})
             for i in escolhidos:
+                if i.abrangencia == A.CONCEDENTE and i.concedente_id not in locais:
+                    continue  # concedente removida entre a prévia e a confirmação
                 criados += cadastrar_dias(request.user, i.abrangencia, i.data, i.descricao, i.ate, i.municipio, i.anual,
-                                          cursos.get(i.curso_id), origem="importado")
+                                          cursos.get(i.curso_id), origem="importado",
+                                          concedente=locais.get(i.concedente_id))
         del request.session[CHAVE_CALENDARIO]
         messages.success(request, f"Calendário importado: {criados} dia(s) cadastrado(s)"
                          + (f", {removidos} da importação anterior substituído(s)" if removidos else "") + ".")
         abas = {i.abrangencia for i in escolhidos}
+        if abas == {A.CONCEDENTE}:
+            return redirect("recessos")
         destino = "municipais" if A.MUNICIPIO in abas else "nacionais" if A.TODOS in abas else "escola"
         return redirect(f"{reverse('dias_sem_estagio')}?aba={destino}")
 
@@ -614,7 +690,7 @@ def importar_feriados(request):
         "abrangencia": request.GET.get("abrangencia") or A.MUNICIPIO})
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
-        padrao = Padrao(d["abrangencia"], d["municipio"].strip(), d["ano"])
+        padrao = Padrao(d["abrangencia"], d["municipio"].strip(), d["ano"], d.get("concedente"))
         try:
             itens, erros = ler_calendario(d["arquivo"].read(), d["arquivo"].name, padrao)
         except ErroCalendario as exc:
@@ -623,7 +699,7 @@ def importar_feriados(request):
             for i in itens:  # já cadastrados (todos os dias do item)
                 existentes = DiaSemEstagio.objects.filter(
                     abrangencia=i.abrangencia, municipio_chave=chave_municipio(i.municipio),
-                    data__range=(i.data, i.ate or i.data))
+                    concedente_id=i.concedente_id, data__range=(i.data, i.ate or i.data))
                 if i.abrangencia == A.ESCOLA:
                     existentes = existentes.filter(orientador=request.user, curso_id=i.curso_id)
                 i.ja = existentes.count() >= i.dias

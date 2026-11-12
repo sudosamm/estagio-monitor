@@ -245,6 +245,8 @@ def filtro_feriados_do_estagio(estagio):
     chave = chave_municipio(estagio.local.cidade) if estagio.local_id else ""
     if chave:
         filtro |= Q(abrangencia=A.MUNICIPIO, municipio_chave=chave)
+    if estagio.local_id:
+        filtro |= Q(abrangencia=A.CONCEDENTE, concedente_id=estagio.local_id)
     return filtro
 
 
@@ -253,7 +255,8 @@ def dias_sem_estagio(estagio, inicio, fim):
         Q(anual=False, data__range=(inicio, fim)) | Q(anual=True, data__lte=fim))
     dias = {}
     # o municipal vem primeiro: em dia com dois cadastros, a folha mostra o nome do feriado da cidade
-    ordem = {DiaSemEstagio.Abrangencia.MUNICIPIO: 0, DiaSemEstagio.Abrangencia.TODOS: 1, DiaSemEstagio.Abrangencia.ESCOLA: 2}
+    A = DiaSemEstagio.Abrangencia
+    ordem = {A.MUNICIPIO: 0, A.TODOS: 1, A.CONCEDENTE: 2, A.ESCOLA: 3}
     for d in sorted(qs, key=lambda d: (ordem.get(d.abrangencia, 3), d.pk)):
         for dia in d.ocorrencias(inicio, fim):
             dias.setdefault(dia, d.descricao)
@@ -261,16 +264,21 @@ def dias_sem_estagio(estagio, inicio, fim):
 
 
 def cadastrar_dias(usuario, abrangencia, data, descricao, ate=None, municipio="", anual=False, curso=None,
-                   origem="manual"):
+                   origem="manual", concedente=None):
     """Cadastra um dia (ou um período) sem estágio sem duplicar. Devolve quantos dias novos foram criados."""
     A = DiaSemEstagio.Abrangencia
     municipio = (municipio or "").strip() if abrangencia == A.MUNICIPIO else ""
     chave = chave_municipio(municipio)
     if abrangencia != A.ESCOLA:
         curso = None
+    if abrangencia != A.CONCEDENTE:
+        concedente = None
+    elif concedente is None:
+        raise ValueError("Recesso de concedente sem concedente.")
     n, dia = 0, data
     while dia <= (ate or data):
-        busca = {"data": dia, "abrangencia": abrangencia, "municipio_chave": chave, "curso": curso}
+        busca = {"data": dia, "abrangencia": abrangencia, "municipio_chave": chave, "curso": curso,
+                 "concedente": concedente}
         if abrangencia == A.ESCOLA:
             busca["orientador"] = usuario
         _, criado = DiaSemEstagio.objects.get_or_create(**busca, defaults={
@@ -323,6 +331,32 @@ def feriados_nacionais(ano):
         (date(ano, 12, 25), "Natal", "nacional", True),
     ]
     return sorted(lista, key=lambda x: x[0])
+
+
+def agrupar_periodos(dias):
+    """Dias seguidos com a mesma descrição viram um período (02/02 a 06/02 — Recesso). `dias` ordenados por data."""
+    periodos = []
+    for d in dias:
+        p = periodos[-1] if periodos else None
+        if (p and not d.anual and not p["anual"] and d.descricao == p["descricao"] and d.concedente_id == p["concedente_id"]
+                and (d.data - p["fim"]).days == 1):
+            p["fim"] = d.data
+            p["ids"].append(d.pk)
+        else:
+            periodos.append({"inicio": d.data, "fim": d.data, "descricao": d.descricao, "anual": d.anual,
+                             "concedente_id": d.concedente_id, "ids": [d.pk], "origem": d.origem})
+    for p in periodos:
+        p["dias"] = (p["fim"] - p["inicio"]).days + 1
+        p["ids_txt"] = ",".join(map(str, p["ids"]))
+    return periodos
+
+
+def pessoas_da_concedente(local):
+    """Estagiários ativos da concedente, seus supervisores e orientadores (para avisar de um recesso)."""
+    pessoas = []
+    for e in Estagio.objects.filter(ativo=True, local=local).select_related("estagiario", "supervisor", "orientador"):
+        pessoas += [e.estagiario, e.supervisor, e.orientador]
+    return pessoas
 
 
 def municipios_das_concedentes():

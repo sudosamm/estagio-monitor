@@ -59,12 +59,13 @@
         <a href="{% url 'usuarios' %}" class="{% if n in 'usuarios,editar_usuario,criar_supervisores,criar_orientador,criar_coordenador' %}ativo{% endif %}">Contas</a>
         <a href="{% url 'locais' %}" class="{% if n in 'locais,local_editar,local_novo' %}ativo{% endif %}">Concedentes</a>
         <a href="{% url 'turmas' %}" class="{% if n in 'turmas,turma_editar,cursos,curso_editar' %}ativo{% endif %}">Turmas e cursos</a>
-        {% if user|pode:"feriados" %}<a href="{% url 'dias_sem_estagio' %}" class="{% if n == 'dias_sem_estagio' %}ativo{% endif %}">Feriados</a>{% endif %}
+        {% if user|pode:"feriados" %}<a href="{% url 'dias_sem_estagio' %}" class="{% if n in 'dias_sem_estagio,importar_feriados,recessos' %}ativo{% endif %}">Feriados</a>{% elif user|pode:"cadastros" %}<a href="{% url 'recessos' %}" class="{% if n == 'recessos' %}ativo{% endif %}">Recessos</a>{% endif %}
         {% if CONFIG.banco_talentos_habilitado or CONFIG.curriculos_habilitados %}<a href="{% url 'banco_talentos' %}" class="{% if n == 'banco_talentos' %}ativo{% endif %}">Talentos</a>{% endif %}
       {% elif user.is_supervisor %}
         <a href="{% url 'painel_supervisor' %}" class="{% if n in 'painel_supervisor,estagio_detalhe,estagio_dia' %}ativo{% endif %}">Meus estagiários</a>
         <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Visitas e conversas</a>
         <a href="{% url 'escala_lote' %}" class="{% if n == 'escala_lote' %}ativo{% endif %}">Dias e horários</a>
+        <a href="{% url 'recessos' %}" class="{% if n == 'recessos' %}ativo{% endif %}">Recessos</a>
         <a href="{% url 'frequencias' %}" class="{% if n == 'frequencias' %}ativo{% endif %}">Frequências</a>
         {% if CONFIG.banco_talentos_habilitado %}<a href="{% url 'banco_talentos' %}" class="{% if n == 'banco_talentos' %}ativo{% endif %}">Banco de talentos</a>{% endif %}
       {% else %}

@@ -1049,3 +1049,62 @@ class HistoricoRegistroTests(Base):
         self.client.post(reverse("estagio_dia", args=[self.est.pk, "2026-11-16"]), {"planejar": "cancelar_ausencia"})
         self.assertFalse(Registro.objects.exists())
         self.assertEqual(list(HistoricoRegistro.objects.values_list("acao", flat=True)), ["CANCELOU", "AUSENCIA"])
+
+
+class RecessoConcedenteTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.outro_local = LocalEstagio.objects.create(nome="Empresa Y")
+        sup_y = _ativo(criar_usuario("Yara Supervisora", Usuario.Papel.SUPERVISOR, concedente=self.outro_local))
+        aluno = _ativo(criar_usuario("Davi Outro", Usuario.Papel.ESTAGIARIO))
+        self.est_y = Estagio.objects.create(estagiario=aluno, orientador=self.ori, supervisor=sup_y, curso=self.curso,
+                                            turma=self.turma, local=self.outro_local, data_inicio=date(2026, 11, 2))
+
+    def test_orientador_cadastra_periodo_que_vale_so_para_a_concedente(self):
+        self.entrar(self.ori)
+        r = self.client.post(reverse("recessos"), {"acao": "adicionar", "concedente": self.local.pk,
+                                                   "data": "2026-12-21", "ate": "2026-12-31", "descricao": "Férias coletivas"})
+        self.assertEqual(r.status_code, 302)
+        from .services import dias_sem_estagio
+
+        dias = dias_sem_estagio(self.est, date(2026, 12, 1), date(2026, 12, 31))
+        self.assertEqual(len(dias), 11)
+        self.assertEqual(dias_sem_estagio(self.est_y, date(2026, 12, 1), date(2026, 12, 31)), {})
+        self.assertEqual(linhas_folha(self.est, 2026, 12)[21]["feriado"], "Férias coletivas")
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="recesso").exists())
+        self.assertFalse(Notificacao.objects.filter(usuario=self.est_y.estagiario).exists())
+        # a lista mostra um período só, e remover apaga o período inteiro
+        r = self.client.get(reverse("recessos"))
+        self.assertContains(r, "21/12/2026 a 31/12/2026")
+        ids = ",".join(str(i) for i in DiaSemEstagio.objects.values_list("pk", flat=True))
+        self.client.post(reverse("recessos"), {"excluir": ids})
+        self.assertFalse(DiaSemEstagio.objects.exists())
+
+    def test_supervisor_so_cadastra_na_propria_concedente(self):
+        self.entrar(self.sup)
+        r = self.client.post(reverse("recessos"), {"acao": "adicionar", "concedente": self.outro_local.pk,
+                                                   "data": "2026-12-21", "descricao": "Recesso"})
+        self.assertEqual(r.status_code, 200)  # Empresa Y não está entre as opções dele
+        self.assertFalse(DiaSemEstagio.objects.exists())
+        self.client.post(reverse("recessos"), {"acao": "adicionar", "concedente": self.local.pk,
+                                               "data": "2026-12-21", "descricao": "Recesso"})
+        self.assertEqual(DiaSemEstagio.objects.get().concedente, self.local)
+        outro = DiaSemEstagio.objects.create(data=date(2026, 12, 22), descricao="X", abrangencia="CONCEDENTE",
+                                             concedente=self.outro_local, orientador=self.ori)
+        self.client.post(reverse("recessos"), {"excluir": str(outro.pk)})
+        self.assertTrue(DiaSemEstagio.objects.filter(pk=outro.pk).exists())
+        self.entrar(self.aluno)
+        self.assertEqual(self.client.get(reverse("recessos")).status_code, 403)
+
+    def test_importa_recesso_por_nome_da_concedente(self):
+        self.entrar(self.ori)
+        csv_txt = ("data;descricao;ate;tipo;concedente\n"
+                   "21/12/2026;Férias coletivas;23/12/2026;concedente;empresa x\n"
+                   "21/12/2026;Recesso;;concedente;Empresa Inexistente\n")
+        r = self.client.post(reverse("importar_feriados"), {
+            "etapa": "previa", "abrangencia": "MUNICIPIO", "ano": "2026",
+            "arquivo": SimpleUploadedFile("r.csv", csv_txt.encode())})
+        self.assertEqual(len(r.context["itens"]), 1)
+        self.assertIn("não encontrada", r.context["erros"][0][1])
+        self.client.post(reverse("importar_feriados"), {"etapa": "confirmar", "i": ["0"]})
+        self.assertEqual(DiaSemEstagio.objects.filter(abrangencia="CONCEDENTE", concedente=self.local).count(), 3)

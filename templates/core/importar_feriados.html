@@ -25,7 +25,7 @@
           <td><input type="checkbox" name="i" value="{{ forloop.counter0 }}"{% if i.marcado and not i.ja %} checked{% endif %} aria-label="Importar {{ i.descricao }}"></td>
           <td class="nowrap">{% if i.anual %}{{ i.data|date:"d/m" }} <span class="etiqueta">todo ano</span>{% else %}{{ i.data|date:"D, d/m/Y" }}{% endif %}{% if i.ate %}<br><small>até {{ i.ate|date:"d/m/Y" }} ({{ i.dias }} dias)</small>{% endif %}</td>
           <td><strong>{{ i.descricao }}</strong>{% if i.observacao %}<br><small class="muted">{{ i.observacao }}</small>{% endif %}</td>
-          <td>{% if i.abrangencia == "MUNICIPIO" %}{{ i.municipio }}{% elif i.abrangencia == "TODOS" %}Todos{% else %}Seus estagiários{% if i.curso_nome %} · {{ i.curso_nome }}{% endif %}{% endif %}</td>
+          <td>{% if i.abrangencia == "MUNICIPIO" %}{{ i.municipio }}{% elif i.abrangencia == "CONCEDENTE" %}Recesso · {{ i.concedente_nome }}{% elif i.abrangencia == "TODOS" %}Todos{% else %}Seus estagiários{% if i.curso_nome %} · {{ i.curso_nome }}{% endif %}{% endif %}</td>
           <td>{% if i.ja %}<span class="selo confirmado">já cadastrado</span>{% endif %}<small class="muted">{{ i.origem }}</small></td>
         </tr>{% endfor %}</tbody>
     </table></div>

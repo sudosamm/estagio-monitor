@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Recessos das concedentes{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div>{% if user.is_gestor %}<div class="migalha"><a href="{% url 'dias_sem_estagio' %}">← Feriados</a></div>{% endif %}
+    <h1>Recessos {% if local_filtrado %}de {{ local_filtrado }}{% else %}das concedentes{% endif %}</h1>
+    <p>Períodos em que a concedente não recebe estagiários (férias coletivas, reforma, recesso de fim de ano…). Valem só para os estagiários dela: não contam como falta, saem da previsão de término e aparecem na folha de frequência.</p></div>
+  {% if user.is_gestor %}<div class="acoes"><a class="btn sec" href="{% url 'importar_feriados' %}?abrangencia=CONCEDENTE">{% icone "upload" %} Importar</a></div>{% endif %}
+</div>
+{% if concedentes|length > 1 %}
+<form method="get" class="filtros card">
+  <div><label class="rotulo" for="f-conc">Concedente</label><select id="f-conc" name="concedente" data-autoenvio><option value="">Todas</option>{% for c in concedentes %}<option value="{{ c.pk }}"{% if filtro == c.pk|stringformat:"s" %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+  <noscript><button class="btn" type="submit">Filtrar</button></noscript>
+</form>
+{% endif %}
+<div class="grade grade-lado">
+  <div>
+  {% for g in grupos %}
+    <div class="card">
+      <div class="card-cab"><h3>{{ g.local }}</h3>{% if not local_filtrado %}<a class="btn sec sm" href="?concedente={{ g.local.pk }}">Só esta</a>{% endif %}</div>
+      <ul class="lista compacta">{% for p in g.futuros %}
+        <li><span class="cresce"><strong>{% if p.dias > 1 %}{{ p.inicio|date:"d/m/Y" }} a {{ p.fim|date:"d/m/Y" }}{% else %}{{ p.inicio|date:"D, d/m/Y" }}{% endif %}</strong> — {{ p.descricao }}{% if p.dias > 1 %} <span class="etiqueta">{{ p.dias }} dias</span>{% endif %}</span>
+          <form method="post" data-confirmar="Remover este recesso de {{ g.local }}?">{% csrf_token %}<button class="btn perigo sm" name="excluir" value="{{ p.ids_txt }}" type="submit" title="Remover">{% icone "lixo" %}</button></form></li>
+      {% empty %}<li class="vazio">Nenhum recesso previsto.</li>{% endfor %}</ul>
+      {% if g.passados %}<details><summary class="muted" style="cursor:pointer;font-size:.85rem">Anteriores</summary><ul class="lista compacta">{% for p in g.passados %}<li class="muted">{% if p.dias > 1 %}{{ p.inicio|date:"d/m/Y" }} a {{ p.fim|date:"d/m/Y" }}{% else %}{{ p.inicio|date:"d/m/Y" }}{% endif %} — {{ p.descricao }}</li>{% endfor %}</ul></details>{% endif %}
+    </div>
+  {% empty %}
+    <div class="card"><p class="vazio">Nenhum recesso cadastrado{% if local_filtrado %} para {{ local_filtrado }}{% endif %}.</p></div>
+  {% endfor %}
+  </div>
+  <div class="card destaque"><h3>Cadastrar recesso</h3>
+    {% if concedentes %}
+    <form method="post" novalidate>{% csrf_token %}<input type="hidden" name="acao" value="adicionar">{% include "core/_form.html" %}<button class="btn bloco" type="submit">Cadastrar e avisar</button></form>
+    {% else %}<p class="vazio">Você não está vinculado a nenhuma concedente ativa.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

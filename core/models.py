@@ -448,6 +448,7 @@ class DiaSemEstagio(models.Model):
     - ESCOLA: eventos e recessos do orientador (só os estagiários dele; pode ser de um curso).
     - MUNICIPIO: feriado municipal — vale para os estágios em concedentes daquele município.
     - TODOS: feriado nacional ou estadual — vale para todos os estágios.
+    - CONCEDENTE: recesso de uma concedente — vale só para os estágios nela.
     `anual` repete o feriado na mesma data todo ano (aniversário da cidade, padroeiro…).
     `origem` diz de onde veio ("manual", "calendario"); prepara a importação automática de calendários.
     """
@@ -456,6 +457,7 @@ class DiaSemEstagio(models.Model):
         ESCOLA = "ESCOLA", "Evento ou recesso da escola"
         MUNICIPIO = "MUNICIPIO", "Feriado municipal"
         TODOS = "TODOS", "Feriado nacional ou estadual"
+        CONCEDENTE = "CONCEDENTE", "Recesso de uma concedente"
 
     data = models.DateField()
     descricao = models.CharField(max_length=120)
@@ -463,6 +465,8 @@ class DiaSemEstagio(models.Model):
     municipio = models.CharField("Município", max_length=80, blank=True)
     municipio_chave = models.CharField(max_length=80, blank=True, db_index=True, editable=False)
     uf = models.CharField("UF", max_length=2, blank=True, default="CE")
+    concedente = models.ForeignKey("LocalEstagio", null=True, blank=True, on_delete=models.CASCADE,
+                                   related_name="recessos", help_text="Para recesso de uma concedente")
     anual = models.BooleanField("Repete todo ano nesta data", default=False)
     origem = models.CharField(max_length=20, blank=True, default="manual")
     orientador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="dias_sem_estagio",

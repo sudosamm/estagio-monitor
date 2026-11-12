@@ -542,7 +542,7 @@ class DiaSemEstagioForm(FormularioModelo):
 
     class Meta:
         model = DiaSemEstagio
-        fields = ["abrangencia", "municipio", "data", "ate", "descricao", "anual", "curso"]
+        fields = ["abrangencia", "municipio", "concedente", "data", "ate", "descricao", "anual", "curso"]
         widgets = {"data": DataInput(), "abrangencia": forms.RadioSelect,
                    "municipio": forms.TextInput(attrs={"list": "municipios", "autocomplete": "off",
                                                        "placeholder": "Ex.: General Sampaio"})}
@@ -550,7 +550,12 @@ class DiaSemEstagioForm(FormularioModelo):
         help_texts = {
             "municipio": "Vale para os estagiários de concedentes deste município (pelo município da ficha da concedente).",
             "anual": "Para datas fixas como o aniversário da cidade e o padroeiro: não precisa cadastrar de novo a cada ano.",
+            "concedente": "O recesso vale só para os estagiários desta concedente.",
         }
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.fields["concedente"].queryset = LocalEstagio.objects.filter(ativa=True)
 
     def clean(self):
         d = super().clean()
@@ -558,6 +563,10 @@ class DiaSemEstagioForm(FormularioModelo):
         abr = d.get("abrangencia")
         if abr == A.MUNICIPIO and not (d.get("municipio") or "").strip():
             self.add_error("municipio", "Informe o município do feriado.")
+        if abr == A.CONCEDENTE and not d.get("concedente"):
+            self.add_error("concedente", "Escolha a concedente do recesso.")
+        if abr != A.CONCEDENTE:
+            d["concedente"] = None
         if d.get("anual") and d.get("ate"):
             self.add_error("anual", "Um período (com “até”) não pode repetir todo ano. Cadastre cada data.")
         if d.get("ate") and d.get("data") and d["ate"] < d["data"]:
@@ -993,6 +1002,30 @@ class FolhaEnviadaForm(Formulario):
 # ------------------------------------------------------------------ importação de calendários
 
 
+class RecessoForm(Formulario):
+    """Recesso de uma concedente (período em que ela não recebe os estagiários)."""
+
+    concedente = forms.ModelChoiceField(queryset=LocalEstagio.objects.none(), label="Concedente")
+    data = forms.DateField(label="Primeiro dia", widget=DataInput())
+    ate = forms.DateField(label="Último dia", widget=DataInput(), required=False, help_text="Vazio = um dia só.")
+    descricao = forms.CharField(label="Descrição", max_length=120, initial="Recesso da concedente")
+
+    def __init__(self, *a, concedentes=None, **kw):
+        super().__init__(*a, **kw)
+        self.fields["concedente"].queryset = concedentes if concedentes is not None else LocalEstagio.objects.filter(ativa=True)
+        if concedentes is not None and len(concedentes) == 1:
+            self.fields["concedente"].initial = concedentes[0]
+
+    def clean(self):
+        d = super().clean()
+        if d.get("ate") and d.get("data"):
+            if d["ate"] < d["data"]:
+                self.add_error("ate", "O último dia é antes do primeiro.")
+            elif (d["ate"] - d["data"]).days > 120:
+                self.add_error("ate", "Período longo demais (máximo de 120 dias).")
+        return d
+
+
 class ImportarCalendarioForm(Formulario):
     arquivo = forms.FileField(label="Arquivo do calendário (CSV ou ICS)",
                               widget=forms.ClearableFileInput(attrs={"accept": ".csv,.ics,text/csv,text/calendar"}),
@@ -1003,6 +1036,9 @@ class ImportarCalendarioForm(Formulario):
     municipio = forms.CharField(label="Município", required=False, max_length=80,
                                 widget=forms.TextInput(attrs={"list": "municipios", "autocomplete": "off"}),
                                 help_text="Para feriados municipais (no CSV, a coluna “municipio” tem prioridade).")
+    concedente = forms.ModelChoiceField(queryset=LocalEstagio.objects.filter(ativa=True), required=False,
+                                        label="Concedente", help_text="Para recessos de uma concedente (no CSV, a "
+                                                                      "coluna “concedente” tem prioridade).")
     ano = forms.IntegerField(label="Ano das datas sem ano (dd/mm)", min_value=2000, max_value=2100,
                              help_text="Datas como “23/11” repetem todo ano a partir deste.")
     substituir = forms.BooleanField(

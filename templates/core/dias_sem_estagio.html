@@ -8,6 +8,7 @@
 <nav class="abas">
   <a href="?aba=municipais" class="{% if aba == 'municipais' %}ativo{% endif %}">Municipais{% if faltando %} <span class="contador">{{ faltando|length }}</span>{% endif %}</a>
   <a href="?aba=nacionais&ano={{ ano }}" class="{% if aba == 'nacionais' %}ativo{% endif %}">Nacionais e estaduais</a>
+  <a href="{% url 'recessos' %}">Recessos das concedentes</a>
   <a href="?aba=escola" class="{% if aba == 'escola' %}ativo{% endif %}">Da escola</a>
 </nav>
 

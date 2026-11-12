@@ -74,12 +74,17 @@ Em **Feriados** há três abas. Todos esses dias saem da previsão de término, 
   - Estagiários e supervisores daquele município recebem aviso.
 - **Nacionais e estaduais:** o sistema calcula os feriados nacionais e do Ceará do ano escolhido, inclusive os móveis (Paixão de Cristo, Carnaval, Corpus Christi). O orientador confere, marca os que valem e cadastra. Pontos facultativos vêm desmarcados. Valem para todos os estagiários.
 - **Da escola:** eventos e recessos do orientador, como antes. Valem só para os estagiários dele (ou de um curso).
+- **Recessos das concedentes** (*Feriados → Recessos das concedentes*, ou o quadro *Recessos* na ficha da concedente): períodos em que uma concedente não recebe estagiários, como férias coletivas, recesso de fim de ano ou reforma.
+  - Valem só para os estagiários daquela concedente.
+  - O supervisor também cadastra, no menu *Recessos*, mas só para as concedentes em que atua.
+  - Estagiários, supervisores e orientadores da concedente são avisados.
+  - O período aparece como um item só (ex.: 21/12 a 31/12) e é removido de uma vez.
 
 Feriados municipais e nacionais são compartilhados: qualquer orientador pode cadastrar ou remover.
 
 **Importar calendário** (botão na página de Feriados) carrega feriados municipais, nacionais e o calendário letivo de um arquivo:
 - **ICS:** o formato exportado pelo Google Agenda, Outlook e muitas prefeituras. Eventos de dia inteiro viram dias sem estágio, eventos de vários dias viram um período e eventos anuais viram “todo ano”. Datas comemorativas que o Google marca como “observância” (Dia das Mães…) vêm desmarcadas.
-- **CSV:** use o modelo (*Baixar modelo CSV*). Colunas `data` e `descricao` são obrigatórias; `ate`, `tipo` (municipal, nacional, estadual, escola), `municipio`, `uf`, `anual` e `curso` são opcionais. Data só com dia/mês (`23/11`) repete todo ano. Serve para vários municípios de uma vez e para recessos e férias do calendário letivo.
+- **CSV:** use o modelo (*Baixar modelo CSV*). Colunas `data` e `descricao` são obrigatórias; `ate`, `tipo` (municipal, nacional, estadual, concedente ou escola), `municipio`, `uf`, `anual`, `curso` e `concedente` (nome da unidade ou razão social, para recessos) são opcionais. Data só com dia/mês (`23/11`) repete todo ano. Serve para vários municípios de uma vez e para recessos e férias do calendário letivo.
 - **Prévia:** nada é gravado antes de você conferir. Dá para desmarcar itens, e os que já existem aparecem como “já cadastrado”.
 - **Versão nova do calendário:** “Substituir o que foi importado antes” troca a importação anterior do mesmo município e anos, sem apagar o que foi cadastrado à mão.
 - **Origem:** cada dia guarda de onde veio (`manual`, `calendario` ou `importado`).

@@ -89,8 +89,9 @@ document.querySelectorAll("select[data-autoenvio]").forEach((sel) => {
   const caixa = (id) => document.getElementById(id)?.closest(".campo");
   const atualizar = () => {
     const v = [...radios].find((r) => r.checked)?.value;
-    const mun = caixa("id_municipio"), curso = caixa("id_curso");
+    const mun = caixa("id_municipio"), curso = caixa("id_curso"), conc = caixa("id_concedente");
     if (mun) mun.hidden = v !== "MUNICIPIO";
+    if (conc) conc.hidden = v !== "CONCEDENTE";
     if (curso) curso.hidden = v !== "ESCOLA";
   };
   radios.forEach((r) => r.addEventListener("change", atualizar));

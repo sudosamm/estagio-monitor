@@ -27,6 +27,13 @@
       {% empty %}<li class="vazio">Nenhum supervisor ainda. Cadastre no campo “Supervisores” do formulário: basta o nome e o telefone.</li>{% endfor %}
       </ul>
     </div>
+    {% if obj %}
+    <div class="card">
+      <div class="card-cab"><h3>Recessos</h3><a class="btn sec sm" href="{% url 'recessos' %}?concedente={{ obj.pk }}">{% icone "mais" %} Cadastrar</a></div>
+      <ul class="lista compacta">{% for p in recessos %}<li><span class="cresce"><strong>{% if p.dias > 1 %}{{ p.inicio|date:"d/m" }} a {{ p.fim|date:"d/m/Y" }}{% else %}{{ p.inicio|date:"d/m/Y" }}{% endif %}</strong> — {{ p.descricao }}</span></li>
+      {% empty %}<li class="vazio">Nenhum recesso previsto.</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
     <div class="caixa-info" style="font-size:.85rem">O <strong>nome fantasia / unidade</strong> e o <strong>CNPJ</strong> saem na folha de frequência dos estagiários desta concedente. Para órgãos com várias unidades no mesmo CNPJ (escolas, secretarias), cadastre uma concedente por unidade.</div>
   </div>
 </div>
