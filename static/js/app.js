@@ -265,3 +265,21 @@ document.querySelectorAll("details.nav-secao").forEach((d) => {
 document.addEventListener("keydown", (ev) => {
   if (ev.key === "Escape") document.querySelectorAll("details.nav-secao[open], details.drop[open]").forEach((d) => { d.open = false; });
 });
+// troca de tema sem recarregar a página
+document.querySelectorAll("[data-tema-form]").forEach((form) => {
+  form.addEventListener("submit", async (ev) => {
+    const botao = ev.submitter;
+    if (!botao || !window.fetch) return;
+    ev.preventDefault();
+    const dados = new FormData(form);
+    dados.set("tema", botao.value);
+    try {
+      const r = await fetch(form.action, { method: "POST", body: dados, headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" });
+      const { tema } = await r.json();
+      document.documentElement.setAttribute("data-preferencia", tema);
+      if (window.aplicarTema) window.aplicarTema();
+      form.querySelectorAll("button").forEach((b) => b.classList.toggle("ativo", b === botao));
+      setTimeout(() => { botao.disabled = false; }, 0);
+    } catch (e) { form.submit(); }
+  });
+});

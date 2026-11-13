@@ -2246,3 +2246,108 @@ class EncerramentoTests(Base):
         for u in (coord, self.sup, self.aluno):
             self.entrar(u)
             self.assertEqual(self.client.get(reverse("encerramento")).status_code, 403)
+
+
+class CheckinQRTests(Base):
+    def setUp(self):
+        super().setUp()
+        Escala.objects.filter(estagio=self.est).update(dias="0,1,2,3,4")
+
+    def _token(self, sup=None):
+        from . import qrcheckin
+
+        return qrcheckin.gerar(sup or self.sup)
+
+    def test_supervisor_ve_o_qr_e_estagiario_marca_ja_confirmado(self):
+        self.entrar(self.sup)
+        self.assertContains(self.client.get(reverse("qr_supervisor")), "QR code de presença")
+        d = self.client.get(reverse("qr_novo")).json()
+        self.assertTrue(d["svg"].startswith("<svg"))
+        self.entrar(self.aluno)
+        r = self.client.get(reverse("checkin_qr", args=[self._token()]), follow=True)
+        self.assertContains(r, "Sérgio Supervisor está confirmando")
+        self.assertContains(r, "Marcar entrada")
+        self.client.post(reverse("checkin_qr_confirmar"), {"acao": "entrada"})
+        reg = Registro.objects.get(estagio=self.est, data=QUARTA)
+        self.assertEqual((reg.situacao, reg.confirmacao, reg.confirmado_por), ("PRESENTE", "CONFIRMADA", self.sup))
+        self.assertTrue(HistoricoRegistro.objects.filter(registro=reg, acao="QRCODE").exists())
+        # o mesmo QR não serve de novo: cada marcação pede um código novo
+        self.assertContains(self.client.get(reverse("checkin_qr_confirmar")), "Escaneie o QR code")
+        self.client.get(reverse("checkin_qr", args=[self._token()]))
+        r = self.client.get(reverse("checkin_qr_confirmar"))
+        self.assertContains(r, "Marcar saída")
+        self.assertNotContains(r, "Marcar entrada")
+        self.client.post(reverse("checkin_qr_confirmar"), {"acao": "hora_saida"})
+        reg.refresh_from_db()
+        self.assertIsNotNone(reg.hora_saida)
+        self.entrar(self.sup)
+        self.assertEqual(self.client.get(reverse("qr_novo")).json()["marcados"][0]["nome"], "Maria da Silva Souza")
+
+    def test_qr_expirado_ou_falso(self):
+        from unittest import mock as m
+
+        self.entrar(self.aluno)
+        r = self.client.get(reverse("checkin_qr", args=["falso"]))
+        self.assertEqual(r.status_code, 410)
+        token = self._token()
+        with m.patch("django.core.signing.time.time", return_value=__import__("time").time() + 120):
+            self.assertEqual(self.client.get(reverse("checkin_qr", args=[token])).status_code, 410)
+
+    def test_qr_de_outro_supervisor(self):
+        outro = _ativo(criar_usuario("Olga Outra", Usuario.Papel.SUPERVISOR, concedente=self.local))
+        self.entrar(self.aluno)
+        r = self.client.get(reverse("checkin_qr", args=[self._token(outro)]), follow=True)
+        self.assertContains(r, "não é seu supervisor")
+        self.assertFalse(Registro.objects.exists())
+
+    def test_sem_login_entra_e_continua(self):
+        r = self.client.get(reverse("checkin_qr", args=[self._token()]))
+        self.assertIn(reverse("login"), r["Location"])
+        self.entrar(self.aluno)  # o login mantém a sessão (e o QR lido)
+        self.assertContains(self.client.get(reverse("checkin_qr_confirmar")), "Marcar entrada")
+
+    def test_so_supervisor_gera(self):
+        self.entrar(self.aluno)
+        self.assertEqual(self.client.get(reverse("qr_novo")).status_code, 403)
+
+
+class TemaTests(Base):
+    def test_preferencia_vai_para_a_pagina_e_troca_pelo_menu(self):
+        self.entrar(self.ori)
+        r = self.client.get(reverse("painel"))
+        self.assertContains(r, 'data-preferencia="auto"')
+        self.assertContains(r, 'name="tema" value="ESCURO"')
+        r = self.client.post(reverse("trocar_tema"), {"tema": "ESCURO"}, HTTP_X_REQUESTED_WITH="fetch")
+        self.assertEqual(r.json(), {"tema": "escuro"})
+        r = self.client.get(reverse("painel"))
+        self.assertContains(r, 'data-preferencia="escuro" data-tema="escuro"')
+        self.client.post(reverse("trocar_tema"), {"tema": "ROXO"})  # valor inválido é ignorado
+        self.ori.refresh_from_db()
+        self.assertEqual(self.ori.tema, "ESCURO")
+        r = self.client.post(reverse("trocar_tema"), {"tema": "CLARO"}, HTTP_REFERER="https://outro-site.com/x")
+        self.assertEqual(r["Location"], "/")  # não volta para outro site
+
+    def test_administrador_desliga_o_tema_escuro(self):
+        self.ori.tema = "ESCURO"
+        self.ori.save()
+        c = Configuracao.atual()
+        c.tema_escuro = False
+        c.save()
+        self.entrar(self.ori)
+        r = self.client.get(reverse("painel"))
+        self.assertContains(r, 'data-preferencia="claro" data-tema="claro"')
+        self.assertNotContains(r, 'name="tema" value="ESCURO"')
+        self.client.post(reverse("trocar_tema"), {"tema": "AUTO"})
+        self.ori.refresh_from_db()
+        self.assertEqual(self.ori.tema, "ESCURO")  # sem mudar enquanto estiver desligado
+
+    def test_opcao_no_admin_e_nas_configuracoes(self):
+        self.ori.is_superuser = self.ori.is_staff = True
+        self.ori.save()
+        self.entrar(self.ori)
+        self.assertContains(self.client.get(reverse("admin:core_configuracao_change", args=[Configuracao.atual().pk])),
+                            "Permitir o tema escuro")
+        self.assertContains(self.client.get(reverse("configuracoes")), "Permitir o tema escuro")
+
+    def test_visitante_segue_o_aparelho(self):
+        self.assertContains(self.client.get(reverse("login")), 'data-preferencia="auto"')

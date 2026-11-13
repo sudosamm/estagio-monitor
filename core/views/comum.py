@@ -146,6 +146,27 @@ def notificacoes_marcar_lidas(request):
 
 
 @login_required
+@require_POST
+def trocar_tema(request):
+    from ..models import Configuracao, Usuario
+
+    tema = request.POST.get("tema", "")
+    if Configuracao.atual().tema_escuro and tema in Usuario.Tema.values:
+        request.user.tema = tema
+        request.user.save(update_fields=["tema"])
+    if request.headers.get("X-Requested-With") == "fetch":
+        from django.http import JsonResponse
+
+        return JsonResponse({"tema": request.user.tema.lower()})
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    volta = request.META.get("HTTP_REFERER", "")
+    if not url_has_allowed_host_and_scheme(volta, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        volta = "/"
+    return redirect(volta)
+
+
+@login_required
 def notificacao_abrir(request, pk):
     n = get_object_or_404(Notificacao, pk=pk, usuario=request.user)
     if not n.lida:

@@ -54,9 +54,27 @@ def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0):
     return {"soltos": soltos, "secoes": secoes}
 
 
+def preferencia_tema(user, config):
+    """auto, claro ou escuro (sempre claro se o administrador desligou o tema escuro)."""
+    if not config.tema_escuro:
+        return "claro"
+    if user and user.is_authenticated:
+        return user.tema.lower()
+    return "auto"
+
+
 def globais(request):
+    from .models import Configuracao
+
     ctx = {"NOME_SISTEMA": settings.NOME_SISTEMA, "NOME_INSTITUICAO": settings.NOME_INSTITUICAO}
     user = getattr(request, "user", None)
+    config = Configuracao.atual()
+    ctx["TEMA"] = preferencia_tema(user, config)
+    ctx["TEMA_LIBERADO"] = config.tema_escuro
+    if config.tema_escuro:
+        from .models import Usuario
+
+        ctx["TEMAS"] = Usuario.Tema.choices
     if user and user.is_authenticated:
         from .models import Configuracao
 

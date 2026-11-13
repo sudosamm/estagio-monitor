@@ -9,6 +9,7 @@
       <details><summary>Adicionar anotação (opcional)</summary><textarea name="diario" rows="3" placeholder="Como está sendo o dia?"></textarea></details>
       <div class="acoes mt-1"><button class="btn grande" type="submit">{% icone "check" %} Estou no estágio</button>
         <a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">{% icone "relogio" %} Digitar meus horários</a></div>
+      <p class="geo-aviso">{% icone "check" %} Seu supervisor está aí? Abra a câmera do celular no QR code de presença dele: a entrada já sai confirmada.</p>
       {% if CONFIG.checkin_localizacao != "DESLIGADO" %}<p class="geo-aviso">{% icone "pin" %} O celular vai pedir sua localização: ela é conferida só na hora de marcar a entrada e a saída{% if CONFIG.checkin_localizacao == "EXIGIR" %}, e a presença só vale perto da concedente{% endif %}.</p>{% endif %}
     </form>
   {% elif st.codigo == "aguardando" or st.codigo == "confirmado" or st.codigo == "contestado" %}

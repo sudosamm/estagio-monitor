@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
-from core.views import agenda, atestados, avisos, captacao, comum, encerramento, estagio, feedback, frequencia, importacao, orientador, pasta, pwa, relatorios, supervisor
+from core.views import agenda, atestados, avisos, captacao, comum, encerramento, estagio, feedback, frequencia, importacao, orientador, pasta, pwa, qrcheckin, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
@@ -11,6 +11,7 @@ urlpatterns = [
     path("sair/", auth_views.LogoutView.as_view(), name="logout"),
     path("senha/", comum.trocar_senha, name="trocar_senha"),
     path("perfil/", comum.perfil, name="perfil"),
+    path("tema/", comum.trocar_tema, name="trocar_tema"),
     path("notificacoes/", comum.notificacoes, name="notificacoes"),
     path("notificacoes/lidas/", comum.notificacoes_marcar_lidas, name="notificacoes_lidas"),
     path("notificacoes/<int:pk>/", comum.notificacao_abrir, name="notificacao_abrir"),
@@ -102,6 +103,10 @@ urlpatterns = [
     # supervisor
     path("supervisao/", supervisor.painel_supervisor, name="painel_supervisor"),
     path("supervisao/confirmar/", supervisor.confirmar_lote, name="confirmar_lote"),
+    path("supervisao/qr/", qrcheckin.qr_supervisor, name="qr_supervisor"),
+    path("supervisao/qr/novo/", qrcheckin.qr_novo, name="qr_novo"),
+    path("p/ok/", qrcheckin.checkin_qr_confirmar, name="checkin_qr_confirmar"),
+    path("p/<str:token>/", qrcheckin.checkin_qr, name="checkin_qr"),
     # agenda
     path("agenda/", agenda.agendamentos, name="agendamentos"),
     path("agenda/novo/", agenda.novo_agendamento, name="novo_agendamento"),

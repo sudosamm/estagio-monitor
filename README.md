@@ -23,6 +23,12 @@ Para orientador, coordenação e administrador, a barra tem **Painel** e **Estag
 
 O número de pendências (atestados para analisar, concedentes na captação) aparece no nome do menu e no item. Cada pessoa só vê o que tem permissão de usar. Estagiários e supervisores continuam com a barra simples.
 
+### Tema escuro
+Além do visual claro dos portais do governo, há um tema escuro próprio, **“Noite no sertão”**. O fundo é verde-mata profundo, em vez de cinza. O amarelo do sol marca a aba e o campo em foco, e os botões ficam no verde do Ceará. A faixa verde, amarela e laranja do cabeçalho continua. Os contrastes foram conferidos: textos com pelo menos 4,5:1, bordas e gráficos com pelo menos 3:1.
+- Cada pessoa escolhe no menu dela (foto, no canto): **Auto** (segue o modo do celular ou do computador), **Claro** ou **Escuro**. A troca é na hora e fica salva na conta.
+- O administrador libera ou bloqueia a escolha em **Configurações** ou no **painel Django** (*Administração → Configurações do sistema → Permitir o tema escuro*). Bloqueado, o sistema fica sempre claro para todos.
+- Folha de frequência, relatórios e declaração continuam brancos, porque são para imprimir.
+
 ### App no celular
 O sistema pode ser **instalado como app** (PWA): ícone na tela inicial, abre em tela cheia, sem barra do navegador.
 - **Android (Chrome):** menu do usuário → *Instalar no celular*, ou o aviso “Instalar app” do próprio Chrome.
@@ -220,6 +226,14 @@ Abaixo do texto vai um quadro com carga exigida, horas cumpridas, presenças, au
 ### Agenda no calendário do celular
 Em **Agenda → No meu calendário**, cada pessoa gera um link secreto (.ics) para assinar no Google Agenda, no calendário do iPhone ou no Outlook. As visitas e conversas agendadas aparecem lá com local, estagiários e lembrete 1 hora antes. Remarcações e cancelamentos se atualizam sozinhos (o Google Agenda leva algumas horas). Vale para orientadores, supervisores e estagiários, cada um com as visitas que lhe dizem respeito. Quem tem o link vê a agenda sem senha: se ele vazar, *Gerar novo link* invalida o antigo.
 
+### Check-in por QR code
+Quando o supervisor está junto, ele toca em **QR code de presença** no painel dele e mostra a tela ao estagiário. O estagiário aponta a câmera do celular, o sistema abre e ele toca em *Marcar entrada*. A presença **já sai confirmada pelo supervisor**, sem precisar validar depois. O mesmo vale para a saída para o intervalo, a volta e a saída do dia.
+- O código **muda a cada 20 segundos** e cada leitura serve para uma marcação só. Uma foto do QR mandada para quem está em casa não funciona.
+- O QR só vale para os estagiários daquele supervisor.
+- Se o estagiário não estiver logado no navegador da câmera (comum no iPhone), ele entra com usuário e senha e a marcação continua de onde parou.
+- A tela do supervisor mostra quem marcou pelo QR naquele dia e mantém o celular aceso enquanto está aberta.
+- No histórico do dia fica “marcou pelo QR code do supervisor”.
+
 ### Check-in com localização
 Em **Configurações → Localização ao marcar presença**:
 - **Não pedir a localização** (padrão).
@@ -393,12 +407,12 @@ core/push.py        Notificações no celular (Web Push): chaves VAPID e envio
 core/indicadores.py Indicadores por turma, por concedente e semana a semana
 core/feedback.py    Feedback mensal do supervisor: meses abertos, pendências e lembrete
 core/encerramento.py Encerramento do ano (com desfazer) e anonimização (LGPD)
+core/qrcheckin.py   Check-in por QR code: código assinado que troca a cada 20 s
 templates/          HTML (visual inspirado no portal ce.gov.br)
 static/             CSS e JS próprios, sem frameworks
 ```
 
 ## Ideias para as próximas versões
-- Check-in por QR code mostrado pelo supervisor (confirma a chegada na hora)
 - Integração com o SICE por API oficial da SEDUC (dados dos estagiários, avaliações e certificado)
 - Autoavaliação do estagiário e avaliação do orientador, com texto pronto para copiar no SICE
 - WhatsApp automático pela API oficial do WhatsApp Business

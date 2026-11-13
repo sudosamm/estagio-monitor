@@ -1,6 +1,23 @@
 {% load static ui %}<!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-preferencia="{{ TEMA|default:'claro' }}" data-tema="{% if TEMA == 'escuro' %}escuro{% else %}claro{% endif %}">
 <head>
+  <script>
+    // aplica o tema antes de desenhar a página (sem “piscar” de claro para escuro)
+    (function () {
+      var h = document.documentElement, m = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+      function aplicar() {
+        var p = h.getAttribute("data-preferencia");
+        var escuro = p === "escuro" || (p === "auto" && m && m.matches);
+        h.setAttribute("data-tema", escuro ? "escuro" : "claro");
+        var cor = document.querySelector('meta[name="theme-color"]');
+        if (cor) cor.setAttribute("content", escuro ? "#032514" : "#005a2b");
+      }
+      window.aplicarTema = aplicar;
+      aplicar();
+      if (m && m.addEventListener) m.addEventListener("change", aplicar);
+      document.addEventListener("DOMContentLoaded", aplicar);
+    })();
+  </script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titulo %}{{ NOME_SISTEMA }}{% endblock %} · {{ NOME_SISTEMA }}</title>
@@ -41,6 +58,10 @@
             <a href="{% url 'perfil' %}">Meus dados</a>
             <a href="{% url 'trocar_senha' %}">Alterar senha</a>
             <button type="button" data-instalar hidden>Instalar no celular</button>
+            {% if TEMA_LIBERADO %}<form method="post" action="{% url 'trocar_tema' %}" class="escolha-tema" data-tema-form>{% csrf_token %}
+              <span>Tema</span>
+              <div>{% for valor, rotulo in TEMAS %}<button type="submit" name="tema" value="{{ valor }}" data-sem-trava="1" class="{% if user.tema == valor %}ativo{% endif %}" title="{{ rotulo }}">{% if valor == "AUTO" %}Auto{% else %}{{ rotulo }}{% endif %}</button>{% endfor %}</div>
+            </form>{% endif %}
             {% if user.is_superuser %}<a href="{% url 'configuracoes' %}">Configurações</a><a href="{% url 'admin:index' %}">Administração</a>{% endif %}
             <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
           </div>

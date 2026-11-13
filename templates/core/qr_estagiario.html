@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Presença pelo QR code{% endblock %}
+{% block conteudo %}
+<div class="qr-estagiario card destaque">
+  {% if erro %}
+    <h1>{% icone "alerta" %} Não deu certo</h1>
+    <p>{{ erro }}</p>
+    <a class="btn sec" href="{% url 'inicio' %}">Ir para o meu estágio</a>
+  {% else %}
+    <p class="muted" style="margin:0">{{ agora|date:"l, d/m" }} · {{ e.local|default:"" }}</p>
+    <h1>Olá, {{ user.primeiro_nome }}</h1>
+    <p>{{ supervisor.nome_completo }} está confirmando a sua marcação de agora, <strong>{{ agora|time:"H:i" }}</strong>.</p>
+    {% if reg and reg.hora_chegada %}<p class="muted" style="font-size:.88rem">Hoje: entrada {{ reg.hora_chegada|time:"H:i" }}{% if reg.saida_intervalo %} · intervalo {{ reg.saida_intervalo|time:"H:i" }}{% endif %}{% if reg.volta_intervalo %} · volta {{ reg.volta_intervalo|time:"H:i" }}{% endif %}{% if reg.hora_saida %} · saída {{ reg.hora_saida|time:"H:i" }}{% endif %}</p>{% endif %}
+    {% if opcoes %}
+    <form method="post" class="qr-acoes">{% csrf_token %}
+      {% for valor, rotulo in opcoes %}<button class="btn {% if not forloop.first %}sec{% endif %} bloco" name="acao" value="{{ valor }}" type="submit">{{ rotulo }}</button>{% endfor %}
+    </form>
+    {% else %}<p>Você já registrou a saída de hoje. Até a próxima!</p>{% endif %}
+  {% endif %}
+</div>
+{% endblock %}

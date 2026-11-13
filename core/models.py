@@ -85,6 +85,12 @@ class Usuario(AbstractUser):
         help_text="Vazio = todos os cursos.",
     )
     deve_trocar_senha = models.BooleanField(default=True)
+    class Tema(models.TextChoices):
+        AUTO = "AUTO", "Automático (igual ao celular)"
+        CLARO = "CLARO", "Claro"
+        ESCURO = "ESCURO", "Escuro"
+
+    tema = models.CharField("Tema", max_length=6, choices=Tema.choices, default=Tema.AUTO)
     anonimizado_em = models.DateTimeField(null=True, blank=True, editable=False,
                                           help_text="Dados pessoais apagados (LGPD) nesta data")
     criado_por = models.ForeignKey(
@@ -784,6 +790,7 @@ class HistoricoRegistro(models.Model):
         VALIDACAO = "VALIDACAO", "validou"
         CANCELOU = "CANCELOU", "cancelou a ausência"
         REVOGOU = "REVOGOU", "revogou a presença"
+        QRCODE = "QRCODE", "marcou pelo QR code do supervisor"
         CRIOU = "CRIOU", "criou o registro"
         ALTEROU = "ALTEROU", "alterou o registro"
         EXCLUIU = "EXCLUIU", "excluiu o registro"
@@ -1197,6 +1204,11 @@ class Configuracao(models.Model):
                   "atenção dos seus estagiários. Quem não quiser pode desligar em Meus dados.",
     )
     resumo_enviado_em = models.DateTimeField(null=True, blank=True, editable=False)
+    tema_escuro = models.BooleanField(
+        "Permitir o tema escuro", default=True,
+        help_text="Cada pessoa escolhe no menu dela: automático (segue o celular), claro ou escuro. Desligado: o "
+                  "sistema fica sempre claro, como os portais do governo.",
+    )
     retencao_anos = models.PositiveSmallIntegerField(
         "Guardar dados pessoais por (anos)", default=5,
         help_text="Depois desse prazo, contado do fim do ano do estágio, os dados de estagiários encerrados podem ser "

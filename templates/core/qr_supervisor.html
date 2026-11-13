@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}QR code de presença{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><div class="migalha"><a href="{% url 'painel_supervisor' %}">← Meus estagiários</a></div>
+  <h1>QR code de presença</h1><p>Mostre esta tela ao estagiário: ele aponta a câmera do celular e a entrada (ou a saída) já sai confirmada por você.</p></div></div>
+<div class="grade grade-lado">
+  <div class="card destaque qr-cartao">
+    <div id="qr-codigo" class="qr-codigo" aria-label="QR code de presença" role="img"><p class="muted">Gerando…</p></div>
+    <div class="qr-tempo"><div class="qr-barra"><span id="qr-progresso"></span></div><small class="muted" id="qr-legenda">O código muda a cada {{ troca }} segundos.</small></div>
+    <p class="muted" style="font-size:.82rem;margin-bottom:0">Por segurança o código troca sozinho, então uma foto dele não serve depois. Deixe a tela aberta enquanto os estagiários chegam.</p>
+  </div>
+  <div class="card"><h3>Marcaram agora pelo QR</h3>
+    <ul class="lista compacta" id="qr-marcados"><li class="vazio">Ninguém ainda hoje.</li></ul>
+    <p class="muted" style="font-size:.8rem">Dica: deixe o brilho da tela alto. No celular do estagiário, basta abrir a câmera; se ele não estiver logado, entra e a marcação continua.</p>
+  </div>
+</div>
+<script>
+(() => {
+  const caixa = document.getElementById("qr-codigo"), barra = document.getElementById("qr-progresso"),
+        lista = document.getElementById("qr-marcados"), legenda = document.getElementById("qr-legenda");
+  let troca = {{ troca }}, inicio = 0, falhas = 0;
+  async function atualizar() {
+    try {
+      const r = await fetch("{% url 'qr_novo' %}", { credentials: "same-origin", cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      const d = await r.json();
+      caixa.innerHTML = d.svg;  // SVG gerado pelo próprio servidor
+      troca = d.troca; inicio = performance.now(); falhas = 0;
+      legenda.textContent = `O código muda a cada ${troca} segundos.`;
+      lista.replaceChildren();
+      if (!d.marcados.length) { const li = document.createElement("li"); li.className = "vazio"; li.textContent = "Ninguém ainda hoje."; lista.appendChild(li); }
+      d.marcados.forEach((m) => {
+        const li = document.createElement("li");
+        const a = document.createElement("span"); a.className = "cresce"; a.textContent = m.nome;
+        const b = document.createElement("small"); b.className = "muted"; b.textContent = `${m.hora}${m.o_que ? " · " + m.o_que : ""}`;
+        li.append(a, b); lista.appendChild(li);
+      });
+    } catch (e) {
+      falhas += 1;
+      legenda.textContent = "Sem conexão: tentando de novo…";
+    }
+    setTimeout(atualizar, falhas ? 5000 : troca * 1000);
+  }
+  (function animar() {
+    const p = inicio ? Math.min(1, (performance.now() - inicio) / (troca * 1000)) : 0;
+    barra.style.width = `${(1 - p) * 100}%`;
+    requestAnimationFrame(animar);
+  })();
+  atualizar();
+  if ("wakeLock" in navigator) navigator.wakeLock.request("screen").catch(() => {});  // tela não apaga
+})();
+</script>
+{% endblock %}

@@ -3,7 +3,7 @@
 {% block titulo %}Meus estagiários{% endblock %}
 {% block conteudo %}
 <div class="titulo-pagina"><div><h1>Olá, {{ user.primeiro_nome }}</h1><p>{% now "l, d \d\e F" %} · {{ user.concedentes_txt }}</p></div>
-  <div class="acoes"><a class="btn sec" href="{% url 'escala_lote' %}">{% icone "relogio" %} Dias e horários</a><a class="btn" href="{% url 'novo_agendamento' %}">{% icone "mensagem" %} Pedir visita ou conversa</a></div></div>
+  <div class="acoes"><a class="btn" href="{% url 'qr_supervisor' %}">{% icone "check" %} QR code de presença</a><a class="btn sec" href="{% url 'escala_lote' %}">{% icone "relogio" %} Dias e horários</a><a class="btn" href="{% url 'novo_agendamento' %}">{% icone "mensagem" %} Pedir visita ou conversa</a></div></div>
 {% if sem_horario %}
 <a class="faixa-aviso" href="{% url 'escala_lote' %}">{% icone "relogio" %}<span><strong>{{ sem_horario|length }} estagiário{{ sem_horario|pluralize }} sem horário definido:</strong> {% for e in sem_horario %}{{ e.estagiario.primeiro_nome }}{% if not forloop.last %}, {% endif %}{% endfor %}. Os horários são definidos por você, supervisor.</span><span class="btn sm">Definir</span></a>
 {% endif %}
