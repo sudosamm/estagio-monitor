@@ -53,6 +53,10 @@ VERSOES = (
         (GESTAO, "Menu reorganizado em seções: Acompanhamento, Comunicação e Cadastros, com o número de pendências."),
         (GESTAO, "Indicadores: frequência semana a semana, situação, e quadros por turma e por concedente."),
         (GESTAO, "Avaliações (SICE): veja, mês a mês, quem já respondeu a autoavaliação e a avaliação do orientador."),
+        (GESTAO, "Avaliações sobre mim: as respostas da Avaliação de Orientador chegam juntas e sem nomes."),
+        (("orientador",), "Acompanhamento de visita: a avaliação prática e atitudinal do SICE, preenchida na visita "
+                          "(até no celular) e pronta para lançar no SICE."),
+        (_p("estagiario"), "Acompanhamento de visita: veja, na aba Visitas, a avaliação que o orientador fez na visita."),
         (GESTAO, "Feedback dos supervisores: médias mês a mês e quem ainda não respondeu."),
         (GESTAO, "Pasta de documentos: quadro do que falta, conferência e “entregue em papel” em lote."),
         (GESTAO, "Resumo semanal por e-mail, exportação em PDF e planilha, e declaração de estágio para imprimir."),

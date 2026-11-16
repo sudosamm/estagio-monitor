@@ -2410,14 +2410,13 @@ class AvaliacoesSICETests(Base):
         self.assertContains(r, "copiar as respostas para o SICE")
         self.assertContains(r, "<strong>NOV</strong>", html=False)
         self.assertContains(r, "PAULA ORIENTADORA")  # campo “Orientador” do SICE
-        self.assertContains(r, "Selecione: <strong>Sempre</strong>", html=False)
+        self.assertContains(r, "Selecione: <strong>SIM</strong>", html=False)
         self.assertContains(r, "https://sice.exemplo.ce.gov.br/")
-        self.assertTrue(Notificacao.objects.filter(usuario=self.ori, texto__contains="de novembro de 2026").exists())
         self.client.post(reverse("copiar_avaliacao", args=["orientador", self.MES]), {"acao": "feito"})
         av.refresh_from_db()
         self.assertIsNotNone(av.copiada_sice_em)
 
-    def test_quem_le_a_avaliacao_do_orientador(self):
+    def test_avaliacao_do_orientador_e_anonima_para_ele(self):
         from .models import Avaliacao
 
         self._liberar()
@@ -2428,11 +2427,47 @@ class AvaliacoesSICETests(Base):
         self.entrar(self.ori)
         self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[av.pk])).status_code, 403)
         self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[auto.pk])).status_code, 200)
-        self.assertContains(self.client.get(reverse("avaliacoes_escola"), {"mes": self.MES}), "concluída")
-        self._liberar(orientador_le_avaliacao=True)
+        self.ori.is_superuser = True  # nem sendo administrador ele lê a avaliação sobre si mesmo
+        self.ori.save()
+        self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[av.pk])).status_code, 403)
+        coord = _ativo(criar_usuario("Carla Coord", Usuario.Papel.COORDENADOR))
+        self.entrar(coord)
         self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[av.pk])).status_code, 200)
         self.entrar(self.sup)
         self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[auto.pk])).status_code, 403)
+
+    def test_orientador_recebe_respostas_juntas_sem_nomes(self):
+        from .models import Avaliacao, PerguntaAvaliacao
+
+        self.assertEqual(set(PerguntaAvaliacao.objects.filter(avaliacao="ORIENTADOR", resposta="ESCOLHA")
+                             .values_list("opcoes", flat=True)), {"SIM\nNÃO"})
+        itens = list(PerguntaAvaliacao.objects.filter(avaliacao="ORIENTADOR"))
+        obs = itens[-1]
+        alunos = []
+        for i, nome in enumerate(["Ana Um", "Beto Dois", "Caio Três"]):
+            u = _ativo(criar_usuario(nome, Usuario.Papel.ESTAGIARIO))
+            e = Estagio.objects.create(estagiario=u, orientador=self.ori, curso=self.curso, turma=self.turma,
+                                       data_inicio=date(2026, 11, 2))
+            resp = {str(p.pk): ("SIM" if i else "NÃO") for p in itens if p.resposta == "ESCOLHA"}
+            resp[str(obs.pk)] = f"Comentário {i}"
+            Avaliacao.objects.create(estagio=e, tipo="ORIENTADOR", respostas=resp, concluida_em=timezone.now(),
+                                     mes=date(2026, 11, 1))
+            alunos.append(u)
+        self.entrar(self.ori)
+        r = self.client.get(reverse("avaliacoes_sobre_mim"))
+        self.assertContains(r, "SIM 2 (67%)")
+        self.assertContains(r, "Comentário 1")
+        for u in alunos:
+            self.assertNotContains(r, u.nome_completo)
+        Avaliacao.objects.filter(estagio__estagiario=alunos[0]).delete()  # só 2 pessoas: não mostra
+        self.assertContains(self.client.get(reverse("avaliacoes_sobre_mim")), "daria para saber quem respondeu")
+
+    def test_orientador_nao_e_avisado_de_quem_o_avaliou(self):
+        self._liberar()
+        self.entrar(self.aluno)
+        self.client.post(reverse("responder_avaliacao", args=["orientador", self.MES]),
+                         {**self._respostas("ORIENTADOR"), "acao": "concluir"})
+        self.assertFalse(Notificacao.objects.filter(usuario=self.ori, texto__contains="avaliação do orientador").exists())
 
     def test_perguntas_editaveis_e_lembrete(self):
         from .models import PerguntaAvaliacao
@@ -2486,7 +2521,7 @@ class NovidadesTests(Base):
 
         aluno = [i["texto"] for v in novidades.para(self.aluno) for i in v["itens"]]
         sup = [i["texto"] for v in novidades.para(self.sup) for i in v["itens"]]
-        self.assertTrue(any("Avaliações para o SICE" in t for t in aluno))
+        self.assertTrue(any("Avaliações mensais do SICE" in t for t in aluno))
         self.assertFalse(any("QR code de presença: mostre" in t for t in aluno))
         self.assertTrue(any("QR code de presença: mostre" in t for t in sup))
         self.assertFalse(any("Encerramento do ano" in t for t in sup))
@@ -2501,7 +2536,7 @@ class NovidadesTests(Base):
         self.entrar(self.aluno)
         r = self.client.get(self.est.get_absolute_url())
         self.assertContains(r, "O que há de novo")
-        self.assertContains(r, "Avaliações para o SICE")
+        self.assertContains(r, "Avaliações mensais do SICE")
         self.client.post(reverse("novidades_visto"), {"acao": "sempre"}, HTTP_X_REQUESTED_WITH="fetch")
         self.aluno.refresh_from_db()
         from .novidades import ultima_versao
@@ -2606,3 +2641,49 @@ class SugestoesTests(Base):
         self.ori.save()
         self.entrar(self.ori)
         self.assertEqual(self.client.get(reverse("anexo_sugestao", args=[a.pk])).status_code, 200)
+
+
+class AcompanhamentoVisitaTests(Base):
+    def _respostas(self):
+        from .avaliacoes import perguntas
+
+        dados = {"v-data": "2026-11-10", "v-observacoes": "nada a declarar", "v-intervencoes": ""}
+        for tipo in ("PRATICA", "ATITUDINAL"):
+            for p in perguntas(tipo, self.curso.pk):
+                dados[f"r-p{p.pk}"] = p.lista_opcoes[0]
+        return dados
+
+    def test_perguntas_do_sice(self):
+        from .models import PerguntaAvaliacao
+
+        self.assertEqual(PerguntaAvaliacao.objects.filter(avaliacao="ATITUDINAL").count(), 23)
+        # o curso “Informática” do teste recebeu as 13 atividades práticas do relatório do SICE
+        self.assertEqual(PerguntaAvaliacao.objects.filter(avaliacao="PRATICA", curso=self.curso).count(), 13)
+
+    def test_orientador_preenche_na_visita_e_estagiario_ve(self):
+        from .models import AcompanhamentoVisita
+
+        ag = Agendamento.objects.create(orientador=self.ori, solicitante=self.ori, local=self.local, assunto="Visita",
+                                        status=Agendamento.Status.REALIZADO, data_hora=timezone.now())
+        ag.estagios.add(self.est)
+        self.entrar(self.ori)
+        self.assertContains(self.client.get(ag.get_absolute_url()), "Acompanhamento de visita (SICE)")
+        url = reverse("acompanhamento_novo", args=[self.est.pk]) + f"?visita={ag.pk}"
+        r = self.client.post(url, {"v-data": "2026-11-10"})
+        self.assertContains(r, "Faltam respostas")
+        r = self.client.post(url, self._respostas(), follow=True)
+        ac = AcompanhamentoVisita.objects.get()
+        self.assertEqual((ac.agendamento, ac.data), (ag, date(2026, 11, 10)))
+        self.assertContains(r, "REALIZAR A INSTALAÇÃO DOS DRIVERS")
+        self.assertContains(r, "Realizou Sem Auxílio")
+        self.assertContains(r, "Sempre (100%)")
+        self.assertContains(r, "MARIA DA SILVA SOUZA")
+        self.client.post(reverse("acompanhamento_sice", args=[ac.pk]), {"acao": "feito"})
+        ac.refresh_from_db()
+        self.assertIsNotNone(ac.lancado_sice_em)
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="acompanhamento da visita").exists())
+        self.entrar(self.aluno)
+        self.assertContains(self.client.get(reverse("acompanhamento_ver", args=[ac.pk])), "nada a declarar")
+        self.assertEqual(self.client.get(reverse("acompanhamento_sice", args=[ac.pk])).status_code, 403)
+        self.entrar(self.sup)
+        self.assertEqual(self.client.get(reverse("acompanhamento_ver", args=[ac.pk])).status_code, 403)

@@ -165,6 +165,8 @@ def estagio_detalhe(request, pk):
         ctx["ver_reservado"] = ctx["e_orientador"] or ctx["e_supervisor"]
     elif aba == "agenda":
         ctx["agendamentos"] = estagio.agendamentos.select_related("solicitante").order_by("-criado_em")
+        if ctx["e_estagiario"] or ctx["e_orientador"]:
+            ctx["acompanhamentos"] = estagio.acompanhamentos.all()
     elif aba == "escalas":
         ctx["escalas"] = estagio.escalas.select_related("criado_por")
         if ctx["pode_escalas"]:

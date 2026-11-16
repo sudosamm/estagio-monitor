@@ -1,0 +1,6 @@
+<div class="cabecalho-sice">{% for rotulo, valor in cabecalho %}<div><small class="muted">{{ rotulo }}</small><strong>{{ valor }}</strong></div>{% endfor %}</div>
+{% for titulo, coluna, linhas in secoes %}{% if linhas %}
+<h3 class="mt-1">{{ titulo }}</h3>
+<div class="tabela-wrap"><table class="tabela tabela-sice"><thead><tr><th>{{ coluna }}</th><th>Resposta</th></tr></thead>
+  <tbody>{% for p, r in linhas %}<tr><td>{{ p.enunciado }}</td><td><strong>{{ r|default:"—" }}</strong></td></tr>{% endfor %}</tbody></table></div>
+{% endif %}{% endfor %}

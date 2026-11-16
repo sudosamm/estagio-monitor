@@ -195,12 +195,27 @@ Ao concluir, a tela **Copiar para o SICE** mostra:
 - o botão *Abrir o SICE*, se o endereço estiver configurado.
 
 No fim, ele toca em *Já colei tudo no SICE*.
-- **Perguntas:** já vêm iguais às telas do SICE. A autoavaliação tem 8 campos de texto obrigatórios, de até 1000 caracteres, com o contador “caracteres restantes”. A avaliação do orientador tem 12 itens de lista e *Observações/Sugestões*. Os textos e a ordem podem ser ajustados em *Avaliações (SICE) → Perguntas*. **Confira as opções da lista “Selecione” da avaliação do orientador**: as telas não as mostravam, então elas vieram como Sempre / Quase sempre / Às vezes / Raramente / Nunca.
+- **Perguntas:** já vêm iguais às telas do SICE. A autoavaliação tem 8 campos de texto obrigatórios, de até 1000 caracteres, com o contador “caracteres restantes”. A avaliação do orientador tem 12 itens de **SIM ou NÃO** e *Observações/Sugestões*. Os textos e a ordem podem ser ajustados em *Avaliações (SICE) → Perguntas*.
 - **Liberar:** em **Configurações** há *Liberar as avaliações*, *Avaliações a partir de* (o primeiro mês cobrado; vazio = desde o início de cada estágio) e o endereço do SICE.
 - **Lembretes:** o estagiário vê na tela inicial quantos meses faltam. A partir do dia 20, quem não concluiu as do mês recebe um aviso (sino, celular e e-mail), como o aviso que o próprio SICE mostra.
 - **Acompanhar:** o quadro mostra, mês a mês, por estagiário, *não feita*, *rascunho*, *concluída* ou *no SICE*, e quantos meses anteriores ainda estão pendentes. Tem também um botão para lembrar quem ainda não terminou.
 - **Mês a mês:** na aba *Registros* do estágio há a mesma tabela da *Frequência Detalhada* do SICE (dias, horas, CH cumprida / CH total e %), para conferir.
-- **Privacidade:** a autoavaliação é lida pela escola. A avaliação que o estagiário faz do orientador fica com a coordenação e a administração, e o orientador só vê se foi feita (há uma opção em Configurações para liberar a leitura).
+- **Privacidade:** a autoavaliação é lida pela escola, com o nome de quem respondeu. A **avaliação do orientador é anônima para ele**:
+  - o orientador vê no quadro só se cada estagiário já fez, e não é avisado de quem concluiu;
+  - as respostas chegam juntas, sem nomes, em **Avaliações sobre mim**: a contagem de SIM e NÃO por item e os comentários em ordem sorteada;
+  - essa página só aparece com respostas de pelo menos 3 estagiários no período escolhido; com menos, daria para saber quem respondeu;
+  - a coordenação e a administração podem ler individualmente, mas nunca o próprio orientador avaliado, mesmo que ele também seja administrador.
+
+### Acompanhamento de visita
+Na visita, o orientador preenche o **Acompanhamento de Visita** do SICE pelo sistema (até no celular). O formulário abre pela visita na Agenda (*Preencher*, um por estagiário) ou pela aba *Visitas* do estágio. Ele tem:
+- a data;
+- a **Avaliação Prática** (as atividades do curso);
+- a **Avaliação Atitudinal** (os 23 critérios do SICE);
+- **Observações** e **Intervenções**.
+
+Os botões *Marcar todos* preenchem cada parte com a primeira opção (“Realizou Sem Auxílio”, “Sempre (100%)”), e aí é só ajustar as exceções. Depois, a tela **Lançar no SICE** mostra o cabeçalho (escola, curso, aluno, concedente, orientador, data) e todas as respostas na ordem do relatório do SICE, com *Copiar* nos textos e *Já lancei no SICE*. O estagiário vê o acompanhamento na aba *Visitas*, como no SICE.
+- **Atividades práticas:** mudam por curso. Os cursos de Informática recebem sozinhos as 13 atividades do SICE (inclusive cursos criados depois). Para outros cursos, cadastre em *Avaliações (SICE) → Perguntas*, tipo “avaliação prática”, escolhendo o curso.
+- **Opções de resposta:** o relatório só mostrava “Realizou Sem Auxílio” e “Sempre (100%)”. As demais vieram como Realizou Com Auxílio / Não Realizou e Quase Sempre (75%) / Às Vezes (50%) / Raramente (25%) / Nunca (0%). Confira no SICE e ajuste em *Perguntas*, se for preciso.
 
 ### O que há de novo
 Depois de cada atualização, cada pessoa vê um aviso só com o que mudou **para o tipo de conta dela**: o estagiário vê o que é de estagiário, o supervisor o que é de supervisor, e o administrador vê tudo, com a indicação de para quem vale cada item.
@@ -444,6 +459,7 @@ core/feedback.py    Feedback mensal do supervisor: meses abertos, pendências e 
 core/encerramento.py Encerramento do ano (com desfazer) e anonimização (LGPD)
 core/qrcheckin.py   Check-in por QR code: código assinado que troca a cada 20 s
 core/avaliacoes.py  Avaliações do estagiário e o texto para copiar no SICE
+core/sice.py        Listas do SICE (atividades práticas de Informática)
 core/novidades.py   “O que há de novo”: versões e itens por tipo de usuário
 core/sugestoes.py   Envio das sugestões e erros por e-mail, com anexos
 templates/          HTML (visual inspirado no portal ce.gov.br)

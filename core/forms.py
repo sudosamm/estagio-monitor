@@ -433,7 +433,7 @@ class ConfiguracaoForm(FormularioModelo):
     class Meta:
         model = Configuracao
         fields = ["nome_escola", "municipio_escola", "ano_referencia", "cabecalho_folha", "logo_folha",
-                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "email_sugestoes", "avaliacoes_abertas", "avaliacoes_prazo", "orientador_le_avaliacao", "sice_url", "tema_escuro", "retencao_anos", "feedback_mensal", "atestados_supervisor", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
+                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "email_sugestoes", "avaliacoes_abertas", "avaliacoes_prazo", "sice_url", "tema_escuro", "retencao_anos", "feedback_mensal", "atestados_supervisor", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
                   "curriculos_habilitados", "banco_talentos_habilitado"]
         widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(), "avaliacoes_prazo": DataInput(),
                    "texto_captacao": forms.Textarea(attrs={"rows": 3})}
@@ -969,7 +969,8 @@ class SugestaoForm(Formulario):
 class PerguntaAvaliacaoForm(FormularioModelo):
     class Meta:
         model = PerguntaAvaliacao
-        fields = ["avaliacao", "enunciado", "ajuda", "resposta", "opcoes", "limite", "obrigatoria", "ordem", "ativa"]
+        fields = ["avaliacao", "curso", "enunciado", "ajuda", "resposta", "opcoes", "limite", "obrigatoria", "ordem",
+                  "ativa"]
         widgets = {"opcoes": forms.Textarea(attrs={"rows": 3})}
         labels = {"ordem": "Ordem (a mesma do SICE)"}
 

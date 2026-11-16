@@ -116,7 +116,10 @@ def agendamento_detalhe(request, pk):
                 notificar(ag.envolvidos(), texto, ag.get_absolute_url(), exceto=user)
             messages.success(request, "Agendamento atualizado.")
             return redirect(ag)
-    return render(request, "core/agendamento_detalhe.html", {"ag": ag, "form": form, "e_orientador": e_orientador})
+    acomp = {a.estagio_id: a for a in ag.acompanhamentos.all()}
+    estagios = [(e, acomp.get(e.pk)) for e in ag.estagios.select_related("estagiario")]
+    return render(request, "core/agendamento_detalhe.html", {"ag": ag, "form": form, "e_orientador": e_orientador,
+                                                             "estagios_visita": estagios})
 
 
 @login_required

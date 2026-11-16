@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Avaliações sobre mim{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><div class="migalha"><a href="{% url 'avaliacoes_escola' %}">← Avaliações</a></div>
+  <h1>Avaliações sobre a minha orientação</h1><p>O que os seus estagiários responderam na Avaliação de Orientador, <strong>sem nomes</strong>: só as contagens e os comentários, embaralhados.</p></div>
+  <form method="get" class="filtros-linha" data-autoenvio style="margin:0"><label>Período <select name="mes"><option value="">Todos os meses</option>{% for m in meses %}<option value="{{ m|date:'Y-m' }}"{% if m == mes %} selected{% endif %}>{{ m|date:"F/Y"|capfirst }}</option>{% endfor %}</select></label></form></div>
+{% if not r.liberado %}
+<div class="card"><p>{% if r.respostas %}Ainda não dá para mostrar {{ nome_mes }}: as respostas vêm de {{ r.pessoas }} estagiário{{ r.pessoas|pluralize }}, e com menos de {{ minimo }} daria para saber quem respondeu o quê.{% if mes %} Tente <a href="?">todos os meses</a>.{% endif %}{% else %}Nenhuma avaliação concluída {% if mes %}em {{ nome_mes }}{% else %}ainda{% endif %}.{% endif %}</p></div>
+{% else %}
+<div class="kpis"><div class="kpi"><div class="valor">{{ r.respostas }}</div><div class="rotulo">avaliações de {{ r.pessoas }} estagiários · {{ nome_mes }}</div></div></div>
+<div class="grade grade-lado">
+  <div class="card"><h2>Itens</h2>
+    <ul class="lista-anonima">{% for i in r.itens %}<li><span class="cresce">{{ i.pergunta.enunciado }}</span>
+      <span class="contagens">{% for o in i.opcoes %}<span class="selo {% if o.opcao == 'SIM' %}pasta-conferido{% elif o.opcao == 'NÃO' %}pasta-recusado{% else %}pasta-enviado{% endif %}">{{ o.opcao }} {{ o.n }} ({{ o.pct }}%)</span>{% endfor %}</span></li>{% endfor %}</ul>
+  </div>
+  <div class="card"><h2>Observações e sugestões</h2>
+    {% for c in r.comentarios %}<blockquote class="comentario-anonimo">{{ c|linebreaksbr }}</blockquote>{% empty %}<p class="vazio">Nenhum comentário.</p>{% endfor %}
+    <p class="muted" style="font-size:.8rem">A ordem é sorteada a cada visita, para não dar para ligar um comentário a uma pessoa.</p></div>
+</div>
+{% endif %}
+<script>document.querySelectorAll("form[data-autoenvio] select").forEach((s) => s.addEventListener("change", () => s.form.submit()));</script>
+{% endblock %}

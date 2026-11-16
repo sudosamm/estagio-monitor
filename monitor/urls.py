@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
-from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, encerramento, estagio, feedback, frequencia, importacao, novidades, orientador, pasta, pwa, qrcheckin, relatorios, supervisor
+from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, encerramento, estagio, feedback, frequencia, importacao, novidades, visitas, orientador, pasta, pwa, qrcheckin, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
@@ -39,10 +39,15 @@ urlpatterns = [
     path("estagios/<int:pk>/ausencia/", estagio.informar_ausencia, name="informar_ausencia"),
     path("estagios/<int:pk>/atestado/", atestados.enviar_atestado, name="enviar_atestado"),
     path("estagios/<int:pk>/feedback/", feedback.dar_feedback, name="dar_feedback"),
+    path("estagios/<int:estagio_pk>/acompanhamento/", visitas.acompanhamento_form, name="acompanhamento_novo"),
+    path("estagios/<int:estagio_pk>/acompanhamento/<int:pk>/", visitas.acompanhamento_form, name="acompanhamento_editar"),
+    path("acompanhamentos/<int:pk>/", visitas.acompanhamento_ver, name="acompanhamento_ver"),
+    path("acompanhamentos/<int:pk>/sice/", visitas.acompanhamento_sice, name="acompanhamento_sice"),
     path("feedback/", feedback.feedback_geral, name="feedback_geral"),
     path("avaliacoes/", avaliacoes.minhas_avaliacoes, name="minhas_avaliacoes"),
     path("avaliacoes/escola/", avaliacoes.avaliacoes_escola, name="avaliacoes_escola"),
     path("avaliacoes/escola/avisar/", avaliacoes.avisar_avaliacoes, name="avisar_avaliacoes"),
+    path("avaliacoes/sobre-mim/", avaliacoes.avaliacoes_sobre_mim, name="avaliacoes_sobre_mim"),
     path("avaliacoes/perguntas/", avaliacoes.perguntas_avaliacao, name="perguntas_avaliacao"),
     path("avaliacoes/perguntas/<int:pk>/", avaliacoes.perguntas_avaliacao, name="pergunta_avaliacao_editar"),
     path("avaliacoes/ver/<int:pk>/", avaliacoes.ver_avaliacao, name="ver_avaliacao"),

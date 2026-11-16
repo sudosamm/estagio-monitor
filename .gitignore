@@ -6,3 +6,5 @@ staticfiles/
 .env
 .claude/
 importacao/
+# documentos com dados pessoais deixados na raiz (relatórios do SICE etc.)
+/*.pdf

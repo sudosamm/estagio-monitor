@@ -4,7 +4,7 @@
 {% block conteudo %}
 <div class="titulo-pagina">
   <div><h1>Avaliações para o SICE · {{ nome_mes }}</h1><p>Autoavaliação e avaliação do orientador são mensais no SICE: o estagiário responde aqui e cola lá.</p></div>
-  <div class="acoes">{% include "core/_seletor_ano.html" %}{% if user|pode:"avaliacoes" %}<a class="btn sec" href="{% url 'perguntas_avaliacao' %}">{% icone "engrenagem" %} Perguntas</a>{% endif %}</div>
+  <div class="acoes">{% include "core/_seletor_ano.html" %}<a class="btn sec" href="{% url 'avaliacoes_sobre_mim' %}">{% icone "estrela" %} Avaliações sobre mim</a>{% if user|pode:"avaliacoes" %}<a class="btn sec" href="{% url 'perguntas_avaliacao' %}">{% icone "engrenagem" %} Perguntas</a>{% endif %}</div>
 </div>
 {% if not config.avaliacoes_abertas %}<div class="caixa-alerta">As avaliações estão <strong>fechadas</strong> para os estagiários. {% if user.is_superuser %}Libere em <a href="{% url 'configuracoes' %}">Configurações</a> (“Liberar as avaliações”), depois de conferir as perguntas.{% else %}Peça ao administrador para liberar.{% endif %}</div>{% endif %}
 <div class="kpis">
@@ -25,5 +25,5 @@
   {% empty %}<tr><td colspan="4" class="vazio">Nenhum estagiário com estágio neste mês.</td></tr>{% endfor %}</tbody>
 </table></div>
 {% if config.avaliacoes_abertas and user|pode:"avaliacoes" %}<form method="post" action="{% url 'avisar_avaliacoes' %}" class="mt-1" data-confirmar="Mandar um lembrete a quem ainda não concluiu as avaliações deste mês?">{% csrf_token %}<button class="btn sec" type="submit">{% icone "sino" %} Lembrar quem ainda não concluiu</button></form>{% endif %}
-<p class="muted" style="font-size:.8rem">{% if config.orientador_le_avaliacao %}O orientador pode ler a avaliação que o estagiário faz dele.{% else %}A avaliação do orientador só é lida pela coordenação e pela administração; o orientador vê apenas se foi feita.{% endif %}</p></div>
+<p class="muted" style="font-size:.8rem">A autoavaliação pode ser lida pela escola, com o nome de quem respondeu. A avaliação do orientador é anônima para ele: o orientador vê só se foi feita e recebe as respostas juntas, sem nomes, em <a href="{% url 'avaliacoes_sobre_mim' %}">Avaliações sobre mim</a>.</p></div>
 {% endblock %}

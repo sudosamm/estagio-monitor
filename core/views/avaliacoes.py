@@ -18,7 +18,8 @@ from ..services import ano_em_uso, notificar
 from .base import orientador_requerido, permissao
 from .orientador import contexto_ano, filtrar_lista, turmas_do_ano
 
-TIPOS = dict(PerguntaAvaliacao.Tipo.choices)
+TIPOS = {t: r for t, r in PerguntaAvaliacao.Tipo.choices if t in ("AUTO", "ORIENTADOR")}  # mensais, do estagiário
+TODOS_TIPOS = dict(PerguntaAvaliacao.Tipo.choices)
 
 
 def _meu_estagio(request):
@@ -78,7 +79,7 @@ def responder_avaliacao(request, tipo, mes):
             if concluir:
                 av.concluida_em = av.concluida_em or timezone.now()
             av.save()
-            if primeira_vez:
+            if primeira_vez and tipo == PerguntaAvaliacao.Tipo.AUTO:  # a do orientador é anônima para ele
                 notificar([estagio.orientador], f"{estagio.estagiario.primeiro_nome} concluiu a {TIPOS[tipo].lower()} "
                           f"de {nome_mes(mes)}.", "/avaliacoes/escola/")
             if concluir:
@@ -160,6 +161,25 @@ def avaliacoes_escola(request):
     })
 
 
+@orientador_requerido
+def avaliacoes_sobre_mim(request):
+    """O orientador recebe as respostas das avaliações sobre ele juntas e sem nomes."""
+    from ..avaliacoes import MIN_ANONIMATO, resumo_anonimo
+
+    texto = request.GET.get("mes", "")
+    try:
+        mes = date.fromisoformat(texto + "-01") if texto else None
+    except ValueError:
+        mes = None
+    meses = sorted(set(Avaliacao.objects.filter(tipo=PerguntaAvaliacao.Tipo.ORIENTADOR, concluida_em__isnull=False,
+                                                estagio__orientador=request.user).values_list("mes", flat=True)),
+                   reverse=True)
+    return render(request, "core/avaliacoes_sobre_mim.html", {
+        "r": resumo_anonimo(request.user, mes), "mes": mes, "meses": meses, "minimo": MIN_ANONIMATO,
+        "nome_mes": nome_mes(mes) if mes else "todos os meses",
+    })
+
+
 @login_required
 def ver_avaliacao(request, pk):
     av = get_object_or_404(Avaliacao.objects.select_related("estagio__estagiario", "estagio__orientador"), pk=pk)
@@ -178,7 +198,7 @@ def perguntas_avaliacao(request, pk=None):
         form.save()
         messages.success(request, "Pergunta salva.")
         return redirect("perguntas_avaliacao")
-    grupos = [(r, PerguntaAvaliacao.objects.filter(avaliacao=t)) for t, r in TIPOS.items()]
+    grupos = [(r, PerguntaAvaliacao.objects.filter(avaliacao=t).select_related("curso")) for t, r in TODOS_TIPOS.items()]
     return render(request, "core/perguntas_avaliacao.html", {"form": form, "editando": editando, "grupos": grupos})
 
 

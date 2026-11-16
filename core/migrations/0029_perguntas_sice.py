@@ -25,7 +25,7 @@ ORIENTADOR = [
     "Faz acompanhamento individual",
     "Mediação",
 ]
-# As opções da lista “Selecione” do SICE não apareciam nas telas: confira e ajuste em Avaliações → Perguntas.
+# Provisórias: a 0030 troca por SIM/NÃO, as opções reais do SICE.
 OPCOES_ORIENTADOR = "Sempre\nQuase sempre\nÀs vezes\nRaramente\nNunca"
 MODELO_ANTIGO = {"Assiduidade e pontualidade", "Acompanhamento e disponibilidade do orientador"}
 

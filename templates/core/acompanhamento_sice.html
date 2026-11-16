@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Lançar no SICE{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><div class="migalha"><a href="{{ e.get_absolute_url }}?aba=agenda">← {{ e.estagiario }}</a></div>
+  <h1>Acompanhamento de visita: lançar no SICE</h1><p>No SICE, abra o Acompanhamento de Visita deste aluno e vá marcando as mesmas respostas; os textos têm botão “Copiar”.</p></div>
+  <div class="acoes">{% if config.sice_url %}<a class="btn" href="{{ config.sice_url }}" target="_blank" rel="noopener">Abrir o SICE</a>{% endif %}<a class="btn sec" href="{% url 'acompanhamento_editar' e.pk ac.pk %}">{% icone "editar" %} Editar</a></div></div>
+<div class="card" style="max-width:900px">
+  {% include "core/_acompanhamento_corpo.html" %}
+  <div class="form-linha mt-1">
+    <div class="campo"><label>Observações</label><textarea readonly rows="3" id="obs">{{ ac.observacoes }}</textarea>{% if ac.observacoes %}<button class="btn sec sm mt-1" type="button" data-copiar="#obs" data-sem-trava="1">Copiar</button>{% endif %}</div>
+    <div class="campo"><label>Intervenções</label><textarea readonly rows="3" id="int">{{ ac.intervencoes }}</textarea>{% if ac.intervencoes %}<button class="btn sec sm mt-1" type="button" data-copiar="#int" data-sem-trava="1">Copiar</button>{% endif %}</div>
+  </div>
+  <hr>
+  {% if ac.lancado_sice_em %}<p><span class="selo pasta-conferido">Lançado no SICE em {{ ac.lancado_sice_em|date:"d/m/Y H:i" }}</span></p>
+    <form method="post">{% csrf_token %}<button class="btn sec sm" name="acao" value="desfazer" type="submit">Ainda não lancei</button></form>
+  {% else %}<form method="post">{% csrf_token %}<button class="btn" name="acao" value="feito" type="submit">{% icone "check" %} Já lancei no SICE</button></form>{% endif %}
+</div>
+{% endblock %}

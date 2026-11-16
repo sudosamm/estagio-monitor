@@ -264,6 +264,15 @@
   <div class="card-cab"><h2>Visitas e conversas</h2>{% if pode_agenda %}<a class="btn sm" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "mais" %} {% if e_orientador %}Agendar{% else %}Solicitar{% endif %}</a>{% endif %}</div>
   {% include "core/_lista_agendamentos.html" with itens=agendamentos %}
 </div>
+{% if e_orientador or acompanhamentos %}
+<div class="card">
+  <div class="card-cab"><h2>Acompanhamento de visita</h2>{% if e_orientador %}<a class="btn sm" href="{% url 'acompanhamento_novo' estagio.pk %}">{% icone "mais" %} Novo</a>{% endif %}</div>
+  <p class="muted" style="font-size:.85rem;margin-top:0">A avaliação prática e atitudinal que o orientador faz em cada visita, a mesma do SICE.</p>
+  <ul class="lista compacta">{% for a in acompanhamentos %}<li><a class="cresce" href="{{ a.get_absolute_url }}"><strong>{{ a.data|date:"d/m/Y" }}</strong></a>
+    {% if e_orientador %}{% if a.lancado_sice_em %}<span class="selo pasta-conferido">no SICE</span>{% else %}<a class="btn sm" href="{% url 'acompanhamento_sice' a.pk %}">Copiar p/ SICE</a>{% endif %}{% endif %}</li>
+  {% empty %}<li class="vazio">Nenhum acompanhamento registrado.</li>{% endfor %}</ul>
+</div>
+{% endif %}
 
 {% elif aba == "escalas" %}
 <div class="grade grade-lado">

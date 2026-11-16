@@ -11,6 +11,8 @@ ESCALA = [(str(v), f"{v} — {r}") for v, r in reversed(Feedback.NOTAS)]  # 1 �
 TEXTO_NOTA = dict(ESCALA)
 
 
+TIPOS_MENSAIS = ("AUTO", "ORIENTADOR")  # as que o estagiário responde todo mês
+
 SIGLAS_MES = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"]
 NOMES_MES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro",
              "novembro", "dezembro"]
@@ -57,15 +59,20 @@ def quadro(estagio, hoje=None):
     feitas = {(a.mes, a.tipo): a for a in estagio.avaliacoes.all()}
     linhas_, faltam = [], 0
     for m in meses:
-        tipos = {t: feitas.get((m, t)) for t in PerguntaAvaliacao.Tipo.values}
+        tipos = {t: feitas.get((m, t)) for t in TIPOS_MENSAIS}
         if any(not (a and a.concluida_em) for a in tipos.values()):
             faltam += 1
         linhas_.append((m, tipos))
     return linhas_, faltam
 
 
-def perguntas(tipo):
-    return list(PerguntaAvaliacao.objects.filter(avaliacao=tipo, ativa=True))
+def perguntas(tipo, curso=None):
+    qs = PerguntaAvaliacao.objects.filter(avaliacao=tipo, ativa=True)
+    if tipo == PerguntaAvaliacao.Tipo.PRATICA:
+        from django.db.models import Q
+
+        qs = qs.filter(Q(curso=curso) | Q(curso__isnull=True))
+    return list(qs)
 
 
 class RespostasForm(forms.Form):
@@ -115,10 +122,14 @@ def linhas(avaliacao, lista=None):
     return resultado
 
 
+MIN_ANONIMATO = 3  # o orientador só vê as respostas juntas quando vêm de pelo menos 3 estagiários
+
+
 def pode_ler(usuario, avaliacao):
-    """Autoavaliação: a escola do estágio. Avaliação do orientador: coordenação/administração (e o orientador, se
-    a configuração permitir). O próprio estagiário sempre."""
-    from .models import Configuracao
+    """Leitura individual (com o nome de quem respondeu).
+
+    Autoavaliação: a escola do estágio. Avaliação do orientador: só a coordenação e a administração, e NUNCA o
+    próprio orientador avaliado (ele recebe as respostas juntas, sem nomes, em “Avaliações sobre mim”)."""
     from .views.base import eh_orientador_do
 
     e = avaliacao.estagio
@@ -126,9 +137,39 @@ def pode_ler(usuario, avaliacao):
         return True
     if avaliacao.tipo == PerguntaAvaliacao.Tipo.AUTO:
         return eh_orientador_do(usuario, e)
-    if usuario.is_superuser or usuario.coordena(e.curso_id):
-        return True
-    return e.orientador_id == usuario.pk and Configuracao.atual().orientador_le_avaliacao
+    if e.orientador_id == usuario.pk:
+        return False
+    return usuario.is_superuser or usuario.coordena(e.curso_id)
+
+
+def resumo_anonimo(orientador, mes=None):
+    """Respostas das avaliações sobre o orientador, juntas e sem nomes: contagem por opção em cada item e os
+    comentários embaralhados. Vazio se vierem de menos de MIN_ANONIMATO estagiários (daria para saber quem foi)."""
+    import random
+
+    from .models import Avaliacao
+
+    qs = Avaliacao.objects.filter(tipo=PerguntaAvaliacao.Tipo.ORIENTADOR, estagio__orientador=orientador,
+                                  concluida_em__isnull=False)
+    if mes:
+        qs = qs.filter(mes=mes)
+    avs = list(qs)
+    pessoas = len({a.estagio_id for a in avs})
+    if pessoas < MIN_ANONIMATO:
+        return {"liberado": False, "pessoas": pessoas, "respostas": len(avs)}
+    itens, comentarios = [], []
+    for p in perguntas(PerguntaAvaliacao.Tipo.ORIENTADOR):
+        valores = [a.respostas.get(str(p.pk), "") for a in avs if a.respostas.get(str(p.pk))]
+        if p.resposta == PerguntaAvaliacao.Resposta.TEXTO:
+            comentarios += valores
+            continue
+        opcoes = p.lista_opcoes or sorted(set(valores))
+        total = len(valores)
+        itens.append({"pergunta": p, "total": total, "opcoes": [
+            {"opcao": o, "n": valores.count(o), "pct": round(valores.count(o) * 100 / total) if total else 0}
+            for o in opcoes]})
+    random.shuffle(comentarios)
+    return {"liberado": True, "pessoas": pessoas, "respostas": len(avs), "itens": itens, "comentarios": comentarios}
 
 
 def disparar_lembrete(agora=None):

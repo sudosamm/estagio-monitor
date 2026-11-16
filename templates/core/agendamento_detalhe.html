@@ -19,6 +19,12 @@
       </dl>
       {% if ag.detalhes %}<hr><h3>Detalhes</h3><p class="quebra">{{ ag.detalhes }}</p>{% endif %}
       {% if ag.relato %}<hr><h3>Relato</h3><p class="quebra">{{ ag.relato }}</p>{% endif %}
+      {% if e_orientador and ag.tipo == "VISITA" and ag.status != "CANCELADO" %}
+      <hr><h3>Acompanhamento de visita (SICE)</h3>
+      <p class="muted" style="font-size:.85rem;margin-top:0">A avaliação prática e atitudinal de cada estagiário, como no SICE: preencha aqui (dá para fazer no celular, durante a visita) e depois copie.</p>
+      <ul class="lista compacta">{% for e, a in estagios_visita %}<li><span class="cresce">{{ e.estagiario }}{% if a.lancado_sice_em %} <span class="selo pasta-conferido">no SICE</span>{% elif a %} <span class="selo pasta-enviado">falta lançar no SICE</span>{% endif %}</span>
+        {% if a %}<a class="btn sec sm" href="{% url 'acompanhamento_editar' e.pk a.pk %}">Editar</a> <a class="btn sm" href="{% url 'acompanhamento_sice' a.pk %}">Copiar p/ SICE</a>{% else %}<a class="btn sm" href="{% url 'acompanhamento_novo' e.pk %}?visita={{ ag.pk }}">Preencher</a>{% endif %}</li>{% endfor %}</ul>
+      {% endif %}
       {% if ag.status != "CANCELADO" and ag.status != "REALIZADO" %}{% if ag.solicitante == user or e_orientador %}
       <hr><form method="post" action="{% url 'cancelar_agendamento' ag.pk %}" data-confirmar="Cancelar este agendamento?">{% csrf_token %}<button class="btn perigo" type="submit">Cancelar</button></form>
       {% endif %}{% endif %}

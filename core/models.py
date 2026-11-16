@@ -1058,6 +1058,8 @@ class PerguntaAvaliacao(models.Model):
     class Tipo(models.TextChoices):
         AUTO = "AUTO", "Autoavaliação"
         ORIENTADOR = "ORIENTADOR", "Avaliação do orientador"
+        PRATICA = "PRATICA", "Acompanhamento de visita: avaliação prática"
+        ATITUDINAL = "ATITUDINAL", "Acompanhamento de visita: avaliação atitudinal"
 
     class Resposta(models.TextChoices):
         NOTA = "NOTA", "Escala de 1 a 5"
@@ -1068,6 +1070,8 @@ class PerguntaAvaliacao(models.Model):
     enunciado = models.CharField("Pergunta", max_length=300, help_text="Copie o texto exatamente como está no SICE.")
     ajuda = models.CharField("Dica para o estagiário", max_length=300, blank=True)
     resposta = models.CharField("Tipo de resposta", max_length=8, choices=Resposta.choices, default=Resposta.NOTA)
+    curso = models.ForeignKey(Curso, null=True, blank=True, on_delete=models.CASCADE,
+                              help_text="Só para a avaliação prática (as atividades mudam por curso). Vazio = todos.")
     opcoes = models.TextField("Opções", blank=True, help_text="Uma por linha (só para “Escolher uma opção”).")
     limite = models.PositiveIntegerField("Limite de caracteres", null=True, blank=True,
                                          help_text="Para texto livre: o mesmo limite do campo no SICE, se houver.")
@@ -1157,6 +1161,33 @@ class AnexoSugestao(models.Model):
 
     def __str__(self):
         return self.nome_original
+
+
+class AcompanhamentoVisita(models.Model):
+    """“Acompanhamento de Visita” do SICE: o orientador avalia o estagiário na visita (prática e atitudinal)."""
+
+    estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="acompanhamentos")
+    agendamento = models.ForeignKey(Agendamento, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="acompanhamentos")
+    data = models.DateField("Data da visita")
+    respostas = models.JSONField(default=dict)
+    observacoes = models.TextField("Observações", blank=True)
+    intervencoes = models.TextField("Intervenções", blank=True)
+    autor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+    lancado_sice_em = models.DateTimeField("Lançado no SICE em", null=True, blank=True)
+
+    class Meta:
+        ordering = ["-data", "-criado_em"]
+        verbose_name = "acompanhamento de visita"
+        verbose_name_plural = "acompanhamentos de visita"
+
+    def __str__(self):
+        return f"Acompanhamento de {self.estagio.estagiario} em {self.data:%d/%m/%Y}"
+
+    def get_absolute_url(self):
+        return reverse("acompanhamento_ver", args=[self.pk])
 
 
 class Encerramento(models.Model):
@@ -1330,10 +1361,6 @@ class Configuracao(models.Model):
         "Avaliações a partir de", null=True, blank=True,
         help_text="Primeiro mês cobrado. Vazio = desde o início de cada estágio (como no SICE).")
     lembrete_avaliacoes_em = models.DateTimeField(null=True, blank=True, editable=False)
-    orientador_le_avaliacao = models.BooleanField(
-        "O orientador pode ler a avaliação que o estagiário faz dele", default=False,
-        help_text="Desligado: o orientador vê só se foi feita; o conteúdo fica para a coordenação e o administrador.",
-    )
     sice_url = models.URLField("Endereço do SICE para o estagiário", blank=True,
                                help_text="Aparece como botão “Abrir o SICE” na tela de copiar as respostas.")
     email_sugestoes = models.EmailField(
