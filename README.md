@@ -214,12 +214,12 @@ Na visita, o orientador preenche o **Acompanhamento de Visita** do SICE pelo sis
 
 Cada um desses textos tem até 300 caracteres, com contador, como no SICE.
 
-Os botões *Marcar todos* preenchem cada parte de uma vez (“Realizou Sem Auxílio” e “Sempre (100%)”), e aí é só ajustar as exceções. Depois, a tela **Lançar no SICE** mostra:
+Os botões *Marcar todos* preenchem cada parte de uma vez (“Realizou Sem Auxílio” e “Sempre (100%)”), e aí é só ajustar as exceções. Em listas longas, a prática tem **busca** (ex.: “banco de dados”), o contador de atividades incluídas e o filtro *Só as incluídas*; o *Marcar todos* da prática vale só para as atividades que aparecem na busca. Depois, a tela **Lançar no SICE** mostra:
 - o cabeçalho na ordem do formulário do SICE (ano, escola, curso, turma, aluno, concedente, setor, data da visita, orientador);
 - na prática, **só as atividades marcadas**, para incluir no SICE com *Atividade Sugerida*;
 - o atitudinal completo;
 - os textos de cada parte com *Copiar*, e o botão *Já lancei no SICE*. O estagiário vê o acompanhamento na aba *Visitas*, como no SICE.
-- **Atividades práticas:** mudam por curso. Os cursos de Informática recebem sozinhos as 13 atividades do SICE (inclusive cursos criados depois). Para outros cursos, use **Colar várias atividades práticas** em *Avaliações (SICE) → Perguntas*: escolha o curso e cole a lista do SICE, uma por linha. Repetidas são ignoradas, e dá para substituir a lista atual.
+- **Atividades práticas:** mudam por curso. Recebem sozinhos a lista do SICE (inclusive cursos criados depois): **Desenvolvimento de Sistemas**, com as 162 atividades do *Atividade Sugerida*, e **Informática**, com 13. Para os demais (Administração, Finanças, Redes de Computadores, Comércio…), use **Colar várias atividades práticas** em *Avaliações (SICE) → Perguntas*: escolha o curso e cole a lista do SICE, uma por linha. Repetidas são ignoradas, e dá para substituir a lista atual.
 - **Opções de resposta:** iguais às do SICE.
   - Prática: *Observou*, *Realizou Com Auxílio* ou *Realizou Sem Auxílio*. Não existe “não realizou”: a atividade que não entra na visita fica **Em branco** e não aparece na tela de lançar.
   - Atitudinal: *Sempre (100%)*, *Frequentemente (70-90%)*, *Algumas Vezes (40-60%)*, *Raramente (10-30%)* ou *Nunca (0%)*. Pode ficar **Em branco**, como a borracha “Limpar” do SICE.
@@ -466,7 +466,7 @@ core/feedback.py    Feedback mensal do supervisor: meses abertos, pendências e 
 core/encerramento.py Encerramento do ano (com desfazer) e anonimização (LGPD)
 core/qrcheckin.py   Check-in por QR code: código assinado que troca a cada 20 s
 core/avaliacoes.py  Avaliações do estagiário e o texto para copiar no SICE
-core/sice.py        Listas do SICE (atividades práticas de Informática)
+core/sice.py        Listas do SICE (atividades práticas por curso)
 core/novidades.py   “O que há de novo”: versões e itens por tipo de usuário
 core/sugestoes.py   Envio das sugestões e erros por e-mail, com anexos
 templates/          HTML (visual inspirado no portal ce.gov.br)

@@ -14,7 +14,7 @@ ROTULOS = {"estagiario": "Estagiários", "supervisor": "Supervisores", "orientad
 
 @dataclass(frozen=True)
 class Versao:
-    id: str  # AAAA.MM.DD — dá a ordem
+    id: str  # AAAA.MM.DD (ou AAAA.MM.DD.N, se sair mais de uma no mesmo dia) — dá a ordem
     titulo: str
     itens: tuple  # ((publico, texto), …)
 
@@ -24,6 +24,12 @@ def _p(*publico):
 
 
 VERSOES = (
+    Versao("2026.11.16.1", "Acompanhamento de visita: Desenvolvimento de Sistemas", (
+        (("orientador", "coordenador"), "Desenvolvimento de Sistemas: as 162 atividades do “Atividade Sugerida” do SICE "
+                                        "já estão cadastradas, com o mesmo texto."),
+        (("orientador",), "Acompanhamento de visita: busca nas atividades práticas, contador de incluídas e “Só as "
+                          "incluídas”; o “Marcar todos” vale só para as que aparecem na busca."),
+    )),
     Versao("2026.11.16", "Novidades de novembro", (
         (_p("todos"), "Tema escuro “Noite no sertão”: no menu da sua foto, escolha Auto (segue o celular), Claro ou Escuro."),
         (_p("todos"), "Notificações no celular: ative em Meus dados e receba os avisos mesmo com o app fechado."),

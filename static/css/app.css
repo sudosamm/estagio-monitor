@@ -673,3 +673,9 @@ form[data-sugestao] .campo:has(input[name="site"]) { position: absolute; left: -
 .comentario-anonimo { margin: 0 0 .6rem; padding: .6rem .8rem; border-left: 3px solid var(--cinza-300); background: var(--cinza-100); border-radius: 0 8px 8px 0; }
 .secao-visita { border-top: 1px solid var(--cinza-200); padding-top: .8rem; margin-top: .8rem; }
 .tabela-sice td:last-child { white-space: nowrap; }
+
+/* Acompanhamento de visita: busca nas atividades práticas (listas longas do SICE) */
+.busca-atividades { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; margin: .4rem 0; position: sticky; top: 0; z-index: 2; background: var(--superficie); padding: .4rem 0; }
+.busca-atividades input[type="search"] { flex: 1 1 260px; min-width: 0; }
+.contagem-incluidas { font-size: .85rem; margin: .2rem 0 .6rem; }
+fieldset.pergunta-av[hidden] { display: none; }

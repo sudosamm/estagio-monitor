@@ -2669,6 +2669,39 @@ class AcompanhamentoVisitaTests(Base):
         self.assertEqual(set(praticas.values_list("opcoes", "obrigatoria")),
                          {("Observou\nRealizou Com Auxílio\nRealizou Sem Auxílio", False)})
 
+    def test_atividades_de_desenvolvimento_de_sistemas(self):
+        import importlib
+
+        from django.apps import apps as registro
+
+        from .models import PerguntaAvaliacao
+        from .sice import PRATICA_DESENVOLVIMENTO_SISTEMAS
+
+        ds = Curso.objects.create(nome="Técnico em Desenvolvimento de Sistemas", carga_horaria=300)
+        qs = PerguntaAvaliacao.objects.filter(avaliacao="PRATICA", curso=ds).order_by("ordem")
+        self.assertEqual(qs.count(), 162)  # lista do “Atividade Sugerida” do SICE
+        self.assertEqual(qs.first().enunciado, "Aplicar modelo MVC como padrão de desenvolvimento de software")
+        self.assertEqual(set(qs.values_list("obrigatoria", flat=True)), {False})
+        # a migração, num banco que já tinha parte da lista colada à mão, só completa o que falta
+        qs.exclude(enunciado__in=PRATICA_DESENVOLVIMENTO_SISTEMAS[:2]).delete()
+        qs.filter(enunciado=PRATICA_DESENVOLVIMENTO_SISTEMAS[0]).update(enunciado=PRATICA_DESENVOLVIMENTO_SISTEMAS[0].upper())
+        PerguntaAvaliacao.objects.create(avaliacao="PRATICA", curso=ds, enunciado="ATIVIDADE PRÓPRIA", ordem=3)
+        mig = importlib.import_module("core.migrations.0036_pratica_desenvolvimento_sistemas")
+        mig.criar(registro, None)
+        self.assertEqual(qs.count(), 163)
+        textos = [t.lower() for t in qs.values_list("enunciado", flat=True)]  # o iexact do SQLite ignora acentos
+        self.assertEqual(textos.count(PRATICA_DESENVOLVIMENTO_SISTEMAS[0].lower()), 1)
+        self.assertTrue(qs.filter(enunciado="ATIVIDADE PRÓPRIA").exists())
+        mig.criar(registro, None)  # rodar de novo não duplica
+        self.assertEqual(qs.count(), 163)
+        # o formulário da visita traz a busca quando a lista é longa
+        self.est.curso = ds
+        self.est.save()
+        self.entrar(self.ori)
+        r = self.client.get(reverse("acompanhamento_novo", args=[self.est.pk]))
+        self.assertContains(r, "data-buscar-atividade")
+        self.assertContains(r, "de 163 atividades incluídas")
+
     def test_orientador_preenche_na_visita_e_estagiario_ve(self):
         from .models import AcompanhamentoVisita
 

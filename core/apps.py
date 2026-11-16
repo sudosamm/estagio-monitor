@@ -11,7 +11,7 @@ class CoreConfig(AppConfig):
         from .models import Curso
 
         def curso_criado(sender, instance, created, raw=False, **kw):
-            """Curso de Informática novo já recebe as atividades práticas do SICE (editáveis em Perguntas)."""
+            """Curso novo com lista conhecida (Informática, Desenvolvimento de Sistemas) já recebe as atividades práticas do SICE (editáveis em Perguntas)."""
             if created and not raw:
                 from .sice import atividades_padrao
 
