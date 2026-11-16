@@ -2354,6 +2354,8 @@ class TemaTests(Base):
 
 
 class AvaliacoesSICETests(Base):
+    MES = "2026-11"
+
     def _liberar(self, **kw):
         c = Configuracao.atual()
         c.avaliacoes_abertas = True
@@ -2366,34 +2368,52 @@ class AvaliacoesSICETests(Base):
 
         dados = {}
         for p in PerguntaAvaliacao.objects.filter(avaliacao=tipo, ativa=True):
-            dados[f"p{p.pk}"] = "4" if p.resposta == "NOTA" else f"Resposta para {p.enunciado}"
+            dados[f"p{p.pk}"] = p.lista_opcoes[0] if p.resposta == "ESCOLHA" else f"Resposta para {p.enunciado}"
         return dados
+
+    def test_perguntas_iguais_ao_sice(self):
+        from .models import PerguntaAvaliacao
+
+        auto = list(PerguntaAvaliacao.objects.filter(avaliacao="AUTO").values_list("enunciado", "limite"))
+        self.assertEqual(auto[0], ("O que aprendi", 1000))
+        self.assertEqual(auto[-1][0], "Contribuição para melhorar a empresa")
+        orient = list(PerguntaAvaliacao.objects.filter(avaliacao="ORIENTADOR").values_list("enunciado", flat=True))
+        self.assertEqual((orient[0], orient[11], orient[12]),
+                         ("Realizou orientações antes do início do estágio", "Mediação", "Observações/Sugestões"))
 
     def test_fechada_ate_liberar(self):
         self.entrar(self.aluno)
-        r = self.client.get(reverse("responder_avaliacao", args=["auto"]), follow=True)
+        r = self.client.get(reverse("responder_avaliacao", args=["auto", self.MES]), follow=True)
         self.assertContains(r, "ainda não foram liberadas")
+
+    def test_mes_fora_do_estagio(self):
+        self._liberar()
+        self.entrar(self.aluno)
+        self.assertEqual(self.client.get(reverse("responder_avaliacao", args=["auto", "2026-09"])).status_code, 404)
 
     def test_rascunho_concluir_e_copiar(self):
         from .models import Avaliacao
 
         self._liberar(sice_url="https://sice.exemplo.ce.gov.br/")
         self.entrar(self.aluno)
-        self.assertContains(self.client.get(self.est.get_absolute_url()), "Avaliações do estágio liberadas")
-        dados = self._respostas("AUTO")
+        self.assertContains(self.client.get(self.est.get_absolute_url()), "falta 1 mês")
+        self.assertContains(self.client.get(reverse("minhas_avaliacoes")), "Novembro/2026")
+        url = reverse("responder_avaliacao", args=["orientador", self.MES])
+        dados = self._respostas("ORIENTADOR")
         primeira = next(iter(dados))
-        r = self.client.post(reverse("responder_avaliacao", args=["auto"]), {primeira: dados[primeira], "acao": "concluir"})
+        r = self.client.post(url, {primeira: dados[primeira], "acao": "concluir"})
         self.assertContains(r, "Responda esta pergunta para concluir")
-        self.client.post(reverse("responder_avaliacao", args=["auto"]), {primeira: dados[primeira], "acao": "salvar"})
+        self.client.post(url, {primeira: dados[primeira], "acao": "salvar"})
         av = Avaliacao.objects.get()
-        self.assertIsNone(av.concluida_em)
-        r = self.client.post(reverse("responder_avaliacao", args=["auto"]), {**dados, "acao": "concluir"}, follow=True)
+        self.assertEqual((av.mes, av.concluida_em), (date(2026, 11, 1), None))
+        r = self.client.post(url, {**dados, "acao": "concluir"}, follow=True)
         self.assertContains(r, "copiar as respostas para o SICE")
-        self.assertContains(r, "Marque: <strong>4 — Muito bom</strong>", html=False)
-        self.assertContains(r, "Resposta para Principais atividades")
+        self.assertContains(r, "<strong>NOV</strong>", html=False)
+        self.assertContains(r, "PAULA ORIENTADORA")  # campo “Orientador” do SICE
+        self.assertContains(r, "Selecione: <strong>Sempre</strong>", html=False)
         self.assertContains(r, "https://sice.exemplo.ce.gov.br/")
-        self.assertTrue(Notificacao.objects.filter(usuario=self.ori, texto__contains="concluiu a autoavaliação").exists())
-        self.client.post(reverse("copiar_avaliacao", args=["auto"]), {"acao": "feito"})
+        self.assertTrue(Notificacao.objects.filter(usuario=self.ori, texto__contains="de novembro de 2026").exists())
+        self.client.post(reverse("copiar_avaliacao", args=["orientador", self.MES]), {"acao": "feito"})
         av.refresh_from_db()
         self.assertIsNotNone(av.copiada_sice_em)
 
@@ -2401,12 +2421,14 @@ class AvaliacoesSICETests(Base):
         from .models import Avaliacao
 
         self._liberar()
-        av = Avaliacao.objects.create(estagio=self.est, tipo="ORIENTADOR", respostas={}, concluida_em=timezone.now())
-        auto = Avaliacao.objects.create(estagio=self.est, tipo="AUTO", respostas={}, concluida_em=timezone.now())
+        av = Avaliacao.objects.create(estagio=self.est, tipo="ORIENTADOR", respostas={}, concluida_em=timezone.now(),
+                                      mes=date(2026, 11, 1))
+        auto = Avaliacao.objects.create(estagio=self.est, tipo="AUTO", respostas={}, concluida_em=timezone.now(),
+                                        mes=date(2026, 11, 1))
         self.entrar(self.ori)
         self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[av.pk])).status_code, 403)
         self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[auto.pk])).status_code, 200)
-        self.assertContains(self.client.get(reverse("avaliacoes_escola")), "concluída")
+        self.assertContains(self.client.get(reverse("avaliacoes_escola"), {"mes": self.MES}), "concluída")
         self._liberar(orientador_le_avaliacao=True)
         self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[av.pk])).status_code, 200)
         self.entrar(self.sup)
@@ -2426,10 +2448,32 @@ class AvaliacoesSICETests(Base):
                                                           "obrigatoria": "on", "ativa": "on"})
         self.assertTrue(PerguntaAvaliacao.objects.filter(enunciado="Turno do estágio").exists())
         self.client.post(reverse("avisar_avaliacoes"))
-        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="Faltam as suas avaliações").exists())
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="novembro de 2026").exists())
         self.entrar(self.aluno)
-        self.assertContains(self.client.get(reverse("responder_avaliacao", args=["auto"])), "Tarde")
+        self.assertContains(self.client.get(reverse("responder_avaliacao", args=["auto", self.MES])), "Tarde")
 
+    def test_lembrete_mensal_do_dia_20(self):
+        from datetime import datetime
+
+        from .avaliacoes import disparar_lembrete
+
+        self._liberar()
+        tz = timezone.get_current_timezone()
+        self.assertEqual(disparar_lembrete(datetime(2026, 11, 19, 9, tzinfo=tz)), 0)
+        self.assertEqual(disparar_lembrete(datetime(2026, 11, 20, 9, tzinfo=tz)), 1)
+        self.assertEqual(disparar_lembrete(datetime(2026, 11, 24, 9, tzinfo=tz)), 0)
+
+    def test_frequencia_mes_a_mes_como_no_sice(self):
+        from .services import frequencia_mensal
+
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 2), situacao=Registro.Situacao.PRESENTE, horas=4,
+                                confirmacao=Registro.Confirmacao.CONFIRMADA)
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 3), situacao=Registro.Situacao.PRESENTE, horas=4,
+                                confirmacao=Registro.Confirmacao.CONFIRMADA)
+        linhas = frequencia_mensal(self.est)
+        self.assertEqual([(l["dias"], l["horas"], l["acumulado"], l["pct"]) for l in linhas], [(2, 8, 8, 8.0)])
+        self.entrar(self.aluno)
+        self.assertContains(self.client.get(self.est.get_absolute_url() + "?aba=registros"), "Frequência Detalhada")
 
 class NovidadesTests(Base):
     def _velho(self, u):

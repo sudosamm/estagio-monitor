@@ -112,8 +112,9 @@ def estagio_detalhe(request, pk):
         from .frequencia import resumo_impressoes
 
         if ctx["e_estagiario"] and Configuracao.atual().avaliacoes_abertas:
-            feitas = set(estagio.avaliacoes.filter(copiada_sice_em__isnull=False).values_list("tipo", flat=True))
-            ctx["avaliacoes_faltam"] = 2 - len(feitas)
+            from ..avaliacoes import quadro
+
+            ctx["avaliacoes_faltam"] = quadro(estagio)[1]
         quem = "ESTAGIARIO" if ctx["e_estagiario"] else "SUPERVISOR" if ctx["e_supervisor"] else None
         ctx["pasta_falta"] = [i for i in pasta_do_estagio(estagio) if i.codigo in ("atrasado", "recusado", "pendente")
                               and (quem is None or i.tipo.quem_envia == quem)]
@@ -135,6 +136,9 @@ def estagio_detalhe(request, pk):
             ).order_by("data_hora")[:3],
         )
     elif aba == "registros":
+        from ..services import frequencia_mensal
+
+        ctx["frequencia_mensal"] = frequencia_mensal(estagio)
         ctx["registros"] = estagio.registros.select_related("confirmado_por").annotate(
             n_alteracoes=Count("historico"))[:200]
         ctx["historico"] = estagio.historico_registros.select_related("usuario")[:40]

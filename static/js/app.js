@@ -304,3 +304,11 @@ document.querySelectorAll("[data-tema-form]").forEach((form) => {
     fetch(form.action, { method: "POST", body: dados, credentials: "same-origin", headers: { "X-Requested-With": "fetch" } }).catch(() => {});
   });
 })();
+// contador de caracteres como no SICE (“1000 caracteres restantes”)
+document.querySelectorAll("textarea[maxlength]").forEach((t) => {
+  const aviso = t.parentElement && t.parentElement.querySelector("[data-restantes]");
+  if (!aviso) return;
+  const atualizar = () => { aviso.textContent = `${t.maxLength - t.value.length} caracteres restantes`; };
+  t.addEventListener("input", atualizar);
+  atualizar();
+});

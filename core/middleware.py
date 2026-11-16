@@ -45,8 +45,11 @@ class ResumoSemanalMiddleware:
                 from .acompanhamento import disparar_resumo_se_preciso
                 from .feedback import disparar_lembrete
 
+                from .avaliacoes import disparar_lembrete as lembrete_avaliacoes
+
                 disparar_resumo_se_preciso()
                 disparar_lembrete()
+                lembrete_avaliacoes()
             except Exception:  # noqa: BLE001 — nunca atrapalhar a página
                 import logging
 

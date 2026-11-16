@@ -795,3 +795,21 @@ def conferir_localizacao(estagio, post, acao="marcar presença"):
                          f"Só é possível {acao} no local do estágio. Se estiver lá, ative o GPS, "
                          "espere alguns segundos e tente de novo, ou peça ao supervisor para lançar o dia.")
     return geo, None
+
+
+def frequencia_mensal(estagio):
+    """Como a “Frequência Detalhada” do SICE: por mês, dias e horas validados e a carga acumulada (com %)."""
+    from django.db.models import Count
+    from django.db.models.functions import TruncMonth
+
+    total = Decimal(estagio.carga_horaria_total)
+    acumulado = Decimal(estagio.horas_anteriores or 0)
+    meses = (estagio.registros.filter(situacao=Registro.Situacao.PRESENTE, confirmacao=Registro.Confirmacao.CONFIRMADA)
+             .annotate(m=TruncMonth("data")).values("m").annotate(dias=Count("pk"), horas=Sum("horas")).order_by("m"))
+    linhas = []
+    for item in meses:
+        acumulado += item["horas"] or 0
+        m = item["m"].date() if hasattr(item["m"], "date") else item["m"]
+        linhas.append({"mes": m, "dias": item["dias"], "horas": item["horas"] or Decimal(0), "acumulado": acumulado,
+                       "pct": float(min(acumulado / total * 100, 100)) if total else 0})
+    return linhas

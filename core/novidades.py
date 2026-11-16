@@ -29,8 +29,10 @@ VERSOES = (
         (_p("todos"), "Notificações no celular: ative em Meus dados e receba os avisos mesmo com o app fechado."),
         (_p("todos"), "Sugestões e erros: uma página para mandar ideias, problemas e prints direto para a equipe do sistema."),
         (_p("todos"), "O que há de novo: este aviso, que mostra só o que mudou para você. Veja o histórico em Novidades."),
-        (_p("estagiario"), "Avaliações para o SICE: responda a autoavaliação e a avaliação do orientador aqui e copie as "
-                           "respostas prontas para o SICE."),
+        (_p("estagiario"), "Avaliações mensais do SICE: responda a autoavaliação e a avaliação do orientador de cada mês "
+                           "aqui e copie as respostas prontas para o SICE."),
+        (_p("estagiario"), "Mês a mês: na aba Registros, a sua carga horária no mesmo formato da “Frequência Detalhada” "
+                           "do SICE."),
         (_p("estagiario"), "Check-in por QR code: escaneie o QR do supervisor e a presença já sai confirmada."),
         (_p("estagiario"), "Atestados: envie a foto do atestado ou comprovante; aceito, o dia não conta como falta."),
         (_p("estagiario"), "Pasta do estágio: veja quais documentos faltam (TCE, relatório…) e envie pelo sistema."),
@@ -50,7 +52,7 @@ VERSOES = (
                                                        "celular (Agenda → No meu calendário)."),
         (GESTAO, "Menu reorganizado em seções: Acompanhamento, Comunicação e Cadastros, com o número de pendências."),
         (GESTAO, "Indicadores: frequência semana a semana, situação, e quadros por turma e por concedente."),
-        (GESTAO, "Avaliações (SICE): acompanhe quem já respondeu e ajuste as perguntas para ficarem iguais ao SICE."),
+        (GESTAO, "Avaliações (SICE): veja, mês a mês, quem já respondeu a autoavaliação e a avaliação do orientador."),
         (GESTAO, "Feedback dos supervisores: médias mês a mês e quem ainda não respondeu."),
         (GESTAO, "Pasta de documentos: quadro do que falta, conferência e “entregue em papel” em lote."),
         (GESTAO, "Resumo semanal por e-mail, exportação em PDF e planilha, e declaração de estágio para imprimir."),

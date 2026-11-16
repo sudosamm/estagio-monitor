@@ -2,20 +2,22 @@
 {% load ui %}
 {% block titulo %}Avaliações{% endblock %}
 {% block conteudo %}
-<div class="titulo-pagina"><div><h1>Avaliações do estágio</h1><p>Responda aqui com calma (dá para salvar e continuar depois). No fim, o sistema mostra as respostas prontas para você copiar no SICE.</p></div></div>
-{% if not config.avaliacoes_abertas %}<div class="caixa-info">As avaliações ainda não foram liberadas pela escola. Você recebe um aviso quando abrirem.</div>{% endif %}
-{% if config.avaliacoes_prazo %}<div class="caixa-alerta">Prazo: até <strong>{{ config.avaliacoes_prazo|date:"d/m/Y" }}</strong>.</div>{% endif %}
-<div class="grade grade-2">
-  {% for i in itens %}
-  <div class="card{% if i.av.copiada_sice_em %}{% elif i.av.concluida_em %} destaque{% endif %}">
-    <div class="card-cab"><h2>{{ i.rotulo }}</h2>
-      {% if i.av.copiada_sice_em %}<span class="selo pasta-conferido">copiada para o SICE</span>{% elif i.av.concluida_em %}<span class="selo pasta-enviado">concluída · falta colar no SICE</span>{% elif i.av %}<span class="selo pasta-pendente">rascunho</span>{% else %}<span class="selo pasta-pendente">não iniciada</span>{% endif %}</div>
-    <p class="muted" style="font-size:.88rem">{{ i.n }} pergunta{{ i.n|pluralize }}.{% if i.tipo == "ORIENTADOR" %} Sua avaliação sobre a orientação que recebeu da escola: seja sincero(a), ela ajuda a melhorar o acompanhamento.{% else %} Como você avalia o seu próprio desempenho no estágio.{% endif %}</p>
-    <div class="acoes">
-      {% if config.avaliacoes_abertas or i.av %}<a class="btn {% if i.av.concluida_em %}sec{% endif %}" href="{% url 'responder_avaliacao' i.tipo|lower %}">{% if i.av.concluida_em %}Ver ou editar respostas{% elif i.av %}Continuar{% else %}Começar{% endif %}</a>{% endif %}
-      {% if i.av.concluida_em %}<a class="btn" href="{% url 'copiar_avaliacao' i.tipo|lower %}">{% icone "arquivo" %} Copiar para o SICE</a>{% endif %}
-    </div>
-  </div>
-  {% endfor %}
-</div>
+<div class="titulo-pagina"><div><h1>Avaliações do estágio</h1><p>No SICE, a autoavaliação e a avaliação do orientador são <strong>mensais</strong>. Responda aqui com calma (dá para salvar e continuar depois) e o sistema mostra tudo pronto para copiar lá.</p></div></div>
+{% if not config.avaliacoes_abertas %}<div class="caixa-info">As avaliações ainda não foram liberadas pela escola. Você recebe um aviso quando abrirem.</div>
+{% elif faltam %}<div class="caixa-alerta">{% if faltam == 1 %}Falta 1 mês{% else %}Faltam {{ faltam }} meses{% endif %} com avaliação por concluir. O SICE mostra o mesmo aviso: “Você ainda não fez a Auto Avaliação de …”.</div>{% endif %}
+<div class="card"><div class="tabela-wrap"><table class="tabela avaliacoes-meses">
+  <thead><tr><th>Mês</th>{% for t, rotulo in tipos.items %}<th>{{ rotulo }}</th>{% endfor %}</tr></thead>
+  <tbody>{% for m, avs in linhas %}<tr{% if m == mes_atual %} class="mes-atual"{% endif %}>
+    <td><strong>{{ m|date:"F/Y"|capfirst }}</strong>{% if m == mes_atual %}<small class="muted" style="display:block">mês atual</small>{% endif %}</td>
+    {% for t, av in avs.items %}<td data-rotulo="{% if t == 'AUTO' %}Autoavaliação{% else %}Avaliação do orientador{% endif %}">
+      {% if av.copiada_sice_em %}<span class="selo pasta-conferido">no SICE</span>
+      {% elif av.concluida_em %}<span class="selo pasta-enviado">falta colar no SICE</span>
+      {% elif av %}<span class="selo pasta-pendente">rascunho</span>
+      {% else %}<span class="muted">não feita</span>{% endif %}
+      <div class="acoes-celula">
+        {% if config.avaliacoes_abertas or av %}<a class="btn sm {% if av.concluida_em %}sec{% endif %}" href="{% url 'responder_avaliacao' t|lower m|date:'Y-m' %}">{% if av.concluida_em %}Editar{% elif av %}Continuar{% else %}Responder{% endif %}</a>{% endif %}
+        {% if av.concluida_em %}<a class="btn sm" href="{% url 'copiar_avaliacao' t|lower m|date:'Y-m' %}">Copiar p/ SICE</a>{% endif %}
+      </div></td>{% endfor %}
+  </tr>{% empty %}<tr><td colspan="3" class="vazio">Nenhum mês de estágio ainda.</td></tr>{% endfor %}</tbody>
+</table></div></div>
 {% endblock %}

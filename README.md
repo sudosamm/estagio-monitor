@@ -187,15 +187,19 @@ Clique em *Salvar PDF / imprimir* e escolha **Salvar como PDF** (funciona també
 A **planilha (.xlsx)**, também disponível pelo botão *Baixar planilha* do relatório, traz quatro abas: *Resumo*, *Estagiários* (uma linha por estágio, com horas, faltas, dias sem registro, visitas, previsão, situação e pontos de atenção), *Horas por mês* (horas validadas em cada mês) e *Visitas e conversas* (com o relato). Serve para prestar contas à escola, à CREDE ou à SEDUC sem redigitar. O CPF não vai para a planilha.
 
 ### Avaliações para o SICE
-O estagiário responde pelo sistema a **autoavaliação** e a **avaliação do orientador** (menu *Avaliações*). Dá para salvar um rascunho e continuar depois. Ao concluir, a tela **Copiar para o SICE** mostra cada resposta na ordem do SICE:
-- textos com o botão *Copiar*;
-- nas perguntas de marcar, “Marque: 4 — Muito bom”;
+No SICE, a **autoavaliação** e a **avaliação do orientador** são **mensais** (mês de referência e ano). O estagiário responde as duas pelo sistema (menu *Avaliações*, um mês por linha). Dá para salvar um rascunho e continuar depois.
+
+Ao concluir, a tela **Copiar para o SICE** mostra:
+- os campos de cima como devem ser escolhidos lá: *Mês de Referência* (ex.: NOV), *Ano* e, na avaliação do orientador, o *Orientador*;
+- cada resposta na ordem do SICE, os textos com o botão *Copiar* e os itens de lista como “Selecione: …”;
 - o botão *Abrir o SICE*, se o endereço estiver configurado.
 
 No fim, ele toca em *Já colei tudo no SICE*.
-- **Perguntas:** em *Acompanhamento → Avaliações (SICE) → Perguntas* (orientador). Elas vêm com um modelo sugerido. Ajuste o texto, a ordem e o tipo de resposta (escala de 1 a 5, escolher uma opção ou texto livre, com limite de caracteres) para ficarem **iguais ao formulário do SICE**.
-- **Liberar:** em **Configurações** há *Liberar as avaliações*, o prazo e o endereço do SICE. Liberadas, o estagiário vê um aviso na tela inicial.
-- **Acompanhar:** o quadro mostra, por estagiário, *não iniciada*, *rascunho*, *concluída* ou *no SICE*, e tem um botão para lembrar quem ainda não terminou.
+- **Perguntas:** já vêm iguais às telas do SICE. A autoavaliação tem 8 campos de texto obrigatórios, de até 1000 caracteres, com o contador “caracteres restantes”. A avaliação do orientador tem 12 itens de lista e *Observações/Sugestões*. Os textos e a ordem podem ser ajustados em *Avaliações (SICE) → Perguntas*. **Confira as opções da lista “Selecione” da avaliação do orientador**: as telas não as mostravam, então elas vieram como Sempre / Quase sempre / Às vezes / Raramente / Nunca.
+- **Liberar:** em **Configurações** há *Liberar as avaliações*, *Avaliações a partir de* (o primeiro mês cobrado; vazio = desde o início de cada estágio) e o endereço do SICE.
+- **Lembretes:** o estagiário vê na tela inicial quantos meses faltam. A partir do dia 20, quem não concluiu as do mês recebe um aviso (sino, celular e e-mail), como o aviso que o próprio SICE mostra.
+- **Acompanhar:** o quadro mostra, mês a mês, por estagiário, *não feita*, *rascunho*, *concluída* ou *no SICE*, e quantos meses anteriores ainda estão pendentes. Tem também um botão para lembrar quem ainda não terminou.
+- **Mês a mês:** na aba *Registros* do estágio há a mesma tabela da *Frequência Detalhada* do SICE (dias, horas, CH cumprida / CH total e %), para conferir.
 - **Privacidade:** a autoavaliação é lida pela escola. A avaliação que o estagiário faz do orientador fica com a coordenação e a administração, e o orientador só vê se foi feita (há uma opção em Configurações para liberar a leitura).
 
 ### O que há de novo

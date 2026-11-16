@@ -1088,21 +1088,28 @@ class PerguntaAvaliacao(models.Model):
         return [o.strip() for o in self.opcoes.splitlines() if o.strip()]
 
 
+def primeiro_dia_do_mes():
+    hoje = timezone.localdate()
+    return date(hoje.year, hoje.month, 1)
+
+
 class Avaliacao(models.Model):
-    """Respostas do estagiário a uma avaliação, para copiar no SICE."""
+    """Respostas do estagiário a uma avaliação de um mês, para copiar no SICE (lá elas também são mensais)."""
 
     estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="avaliacoes")
     tipo = models.CharField(max_length=10, choices=PerguntaAvaliacao.Tipo.choices)
+    mes = models.DateField("Mês de referência", default=primeiro_dia_do_mes)
     respostas = models.JSONField(default=dict, help_text="{id da pergunta: resposta}")
     concluida_em = models.DateTimeField(null=True, blank=True)
     copiada_sice_em = models.DateTimeField("Copiada para o SICE em", null=True, blank=True)
     atualizada_em = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["estagio", "tipo"], name="avaliacao_unica_por_tipo")]
+        ordering = ["-mes"]
+        constraints = [models.UniqueConstraint(fields=["estagio", "tipo", "mes"], name="avaliacao_unica_por_mes")]
 
     def __str__(self):
-        return f"{self.get_tipo_display()} de {self.estagio.estagiario}"
+        return f"{self.get_tipo_display()} de {self.estagio.estagiario} ({self.mes:%m/%Y})"
 
 
 def caminho_sugestao(instance, filename):
@@ -1319,7 +1326,10 @@ class Configuracao(models.Model):
         "Liberar as avaliações para os estagiários", default=False,
         help_text="Autoavaliação e avaliação do orientador, com o texto pronto para copiar no SICE.",
     )
-    avaliacoes_prazo = models.DateField("Prazo das avaliações", null=True, blank=True)
+    avaliacoes_prazo = models.DateField(
+        "Avaliações a partir de", null=True, blank=True,
+        help_text="Primeiro mês cobrado. Vazio = desde o início de cada estágio (como no SICE).")
+    lembrete_avaliacoes_em = models.DateTimeField(null=True, blank=True, editable=False)
     orientador_le_avaliacao = models.BooleanField(
         "O orientador pode ler a avaliação que o estagiário faz dele", default=False,
         help_text="Desligado: o orientador vê só se foi feita; o conteúdo fica para a coordenação e o administrador.",
