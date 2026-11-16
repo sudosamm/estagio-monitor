@@ -2647,18 +2647,27 @@ class AcompanhamentoVisitaTests(Base):
     def _respostas(self):
         from .avaliacoes import perguntas
 
-        dados = {"v-data": "2026-11-10", "v-observacoes": "nada a declarar", "v-intervencoes": ""}
-        for tipo in ("PRATICA", "ATITUDINAL"):
-            for p in perguntas(tipo, self.curso.pk):
-                dados[f"r-p{p.pk}"] = p.lista_opcoes[0]
+        dados = {"v-data": "2026-11-10", "v-observacoes": "nada a declarar", "v-intervencoes": "",
+                 "v-observacoes_atitudinal": "bom comportamento", "v-intervencoes_atitudinal": "conversa sobre prazos"}
+        for p in perguntas("PRATICA", self.curso.pk)[1:]:  # a primeira atividade fica em branco
+            dados[f"r-p{p.pk}"] = "Realizou Sem Auxílio"
+        for p in perguntas("ATITUDINAL"):
+            dados[f"r-p{p.pk}"] = p.lista_opcoes[0]
         return dados
 
     def test_perguntas_do_sice(self):
         from .models import PerguntaAvaliacao
 
-        self.assertEqual(PerguntaAvaliacao.objects.filter(avaliacao="ATITUDINAL").count(), 23)
+        atitudinais = PerguntaAvaliacao.objects.filter(avaliacao="ATITUDINAL")
+        self.assertEqual(atitudinais.count(), 23)
+        self.assertEqual(set(atitudinais.values_list("opcoes", "obrigatoria")), {
+            ("Sempre (100%)\nFrequentemente (70-90%)\nAlgumas Vezes (40-60%)\nRaramente (10-30%)\nNunca (0%)", False)})
+        self.assertTrue(atitudinais.filter(enunciado="APRESENTA EQUILIBRIO EMOCIAL").exists())  # texto do SICE
         # o curso “Informática” do teste recebeu as 13 atividades práticas do relatório do SICE
-        self.assertEqual(PerguntaAvaliacao.objects.filter(avaliacao="PRATICA", curso=self.curso).count(), 13)
+        praticas = PerguntaAvaliacao.objects.filter(avaliacao="PRATICA", curso=self.curso)
+        self.assertEqual(praticas.count(), 13)
+        self.assertEqual(set(praticas.values_list("opcoes", "obrigatoria")),
+                         {("Observou\nRealizou Com Auxílio\nRealizou Sem Auxílio", False)})
 
     def test_orientador_preenche_na_visita_e_estagiario_ve(self):
         from .models import AcompanhamentoVisita
@@ -2669,13 +2678,16 @@ class AcompanhamentoVisitaTests(Base):
         self.entrar(self.ori)
         self.assertContains(self.client.get(ag.get_absolute_url()), "Acompanhamento de visita (SICE)")
         url = reverse("acompanhamento_novo", args=[self.est.pk]) + f"?visita={ag.pk}"
-        r = self.client.post(url, {"v-data": "2026-11-10"})
-        self.assertContains(r, "Faltam respostas")
+        r = self.client.post(url, {"v-data": "2026-11-10", "v-observacoes": "ok"})
+        self.assertContains(r, "Faltam respostas")  # as Observações da parte atitudinal são obrigatórias
         r = self.client.post(url, self._respostas(), follow=True)
         ac = AcompanhamentoVisita.objects.get()
         self.assertEqual((ac.agendamento, ac.data), (ag, date(2026, 11, 10)))
-        self.assertContains(r, "REALIZAR A INSTALAÇÃO DOS DRIVERS")
-        self.assertContains(r, "Realizou Sem Auxílio")
+        self.assertNotContains(r, "REALIZAR A INSTALAÇÃO DOS DRIVERS")  # ficou em branco: não entra no SICE
+        self.assertContains(r, "inclua só estas 12 atividades")
+        self.assertContains(r, "<strong>Realizou Sem Auxílio</strong>", html=False)
+        self.assertContains(r, "conversa sobre prazos")
+        self.assertContains(r, "Data da Visita")
         self.assertContains(r, "Sempre (100%)")
         self.assertContains(r, "MARIA DA SILVA SOUZA")
         self.client.post(reverse("acompanhamento_sice", args=[ac.pk]), {"acao": "feito"})
@@ -2687,3 +2699,17 @@ class AcompanhamentoVisitaTests(Base):
         self.assertEqual(self.client.get(reverse("acompanhamento_sice", args=[ac.pk])).status_code, 403)
         self.entrar(self.sup)
         self.assertEqual(self.client.get(reverse("acompanhamento_ver", args=[ac.pk])).status_code, 403)
+
+    def test_colar_varias_atividades(self):
+        from .models import PerguntaAvaliacao
+
+        enf = Curso.objects.create(nome="Enfermagem", carga_horaria=100)
+        self.entrar(self.ori)
+        self.client.post(reverse("perguntas_avaliacao"), {
+            "acao": "colar", "c-curso": enf.pk,
+            "c-atividades": "AFERIR PRESSÃO ARTERIAL\n\n  aferir pressão arterial \nREALIZAR CURATIVO SIMPLES"})
+        qs = PerguntaAvaliacao.objects.filter(avaliacao="PRATICA", curso=enf).order_by("ordem")
+        self.assertEqual(list(qs.values_list("enunciado", flat=True)), ["AFERIR PRESSÃO ARTERIAL", "REALIZAR CURATIVO SIMPLES"])
+        self.client.post(reverse("perguntas_avaliacao"), {"acao": "colar", "c-curso": enf.pk, "c-substituir": "on",
+                                                          "c-atividades": "ADMINISTRAR MEDICAMENTOS"})
+        self.assertEqual(list(qs.filter(ativa=True).values_list("enunciado", flat=True)), ["ADMINISTRAR MEDICAMENTOS"])

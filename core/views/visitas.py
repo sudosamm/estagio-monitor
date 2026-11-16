@@ -15,10 +15,22 @@ from .base import eh_orientador_do, pegar_estagio
 PRATICA, ATITUDINAL = PerguntaAvaliacao.Tipo.PRATICA, PerguntaAvaliacao.Tipo.ATITUDINAL
 
 
+LIMITE_TEXTO = 300  # como no SICE
+
+
+def _texto(rotulo, obrigatorio=False):
+    return forms.CharField(label=rotulo, required=obrigatorio, max_length=LIMITE_TEXTO,
+                           widget=forms.Textarea(attrs={"rows": 3, "maxlength": LIMITE_TEXTO}))
+
+
 class DadosVisitaForm(Formulario):
     data = forms.DateField(label="Data da visita", widget=DataInput())
-    observacoes = forms.CharField(label="Observações", required=False, widget=forms.Textarea(attrs={"rows": 3}))
-    intervencoes = forms.CharField(label="Intervenções", required=False, widget=forms.Textarea(attrs={"rows": 3}))
+    observacoes = _texto("Observações", obrigatorio=True)
+    intervencoes = _texto("Intervenções")
+    observacoes_atitudinal = _texto("Observações", obrigatorio=True)
+    intervencoes_atitudinal = _texto("Intervenções")
+
+    CAMPOS = ("observacoes", "intervencoes", "observacoes_atitudinal", "intervencoes_atitudinal")
 
 
 def _secoes(estagio):
@@ -43,7 +55,7 @@ def acompanhamento_form(request, estagio_pk, pk=None):
     post = request.POST if request.method == "POST" else None
     inicial = {"data": ac.data if ac else (timezone.localtime(ag.data_hora).date() if ag and ag.data_hora
                                            else timezone.localdate()),
-               "observacoes": ac.observacoes if ac else "", "intervencoes": ac.intervencoes if ac else ""}
+               **{c: getattr(ac, c) if ac else "" for c in DadosVisitaForm.CAMPOS}}
     dados = DadosVisitaForm(post, initial=inicial, prefix="v")
     respostas = RespostasForm(post, initial={f"p{k}": v for k, v in (ac.respostas if ac else {}).items()},
                               perguntas=todas, prefix="r")
@@ -51,8 +63,8 @@ def acompanhamento_form(request, estagio_pk, pk=None):
         novo = ac is None
         ac = ac or AcompanhamentoVisita(estagio=estagio, agendamento=ag, autor=request.user)
         ac.data = dados.cleaned_data["data"]
-        ac.observacoes = dados.cleaned_data["observacoes"].strip()
-        ac.intervencoes = dados.cleaned_data["intervencoes"].strip()
+        for c in DadosVisitaForm.CAMPOS:
+            setattr(ac, c, dados.cleaned_data[c].strip())
         ac.respostas = respostas.respostas()
         ac.save()
         if novo:
@@ -61,9 +73,11 @@ def acompanhamento_form(request, estagio_pk, pk=None):
         messages.success(request, "Acompanhamento salvo. Agora é só lançar no SICE.")
         return redirect("acompanhamento_sice", pk=ac.pk)
     campos = {c.field.pergunta.pk: c for c in respostas}
-    blocos = [(titulo, coluna, [campos[p.pk] for p in ps], chave) for titulo, coluna, ps, chave in secoes]
+    textos = {"pratica": (dados["observacoes"], dados["intervencoes"]),
+              "atitudinal": (dados["observacoes_atitudinal"], dados["intervencoes_atitudinal"])}
+    blocos = [(titulo, coluna, [campos[p.pk] for p in ps], chave, textos[chave]) for titulo, coluna, ps, chave in secoes]
     return render(request, "core/acompanhamento_form.html", {
-        "e": estagio, "ac": ac, "dados": dados, "blocos": blocos, "erros": bool(respostas.errors),
+        "e": estagio, "ac": ac, "dados": dados, "blocos": blocos, "erros": bool(respostas.errors or dados.errors),
         "sem_pratica": not secoes[0][2],
     })
 
@@ -81,10 +95,21 @@ def _pegar(request, pk):
 def _contexto(ac):
     e = ac.estagio
     cfg = Configuracao.atual()
-    cabecalho = [("Escola", cfg.nome_escola or "—"), ("Curso", e.curso.nome.upper()),
-                 ("Aluno", e.estagiario.nome_completo.upper()), ("Concedente", (e.local.nome if e.local else "—").upper()),
-                 ("Orientador", e.orientador.nome_completo.upper()), ("Data", f"{ac.data:%d/%m/%Y}")]
-    secoes = [(titulo, coluna, linhas(ac, ps)) for titulo, coluna, ps, _ in _secoes(e)]
+    cabecalho = [("Ano", str(ac.data.year)), ("Escola", cfg.nome_escola or "—"), ("Curso", e.curso.nome.upper()),
+                 ("Turma", (e.turma.nome or e.turma.curso.nome) if e.turma else "—"),
+                 ("Aluno", e.estagiario.nome_completo.upper()), ("Concedente", (e.local.nome if e.local else "—").upper())]
+    if e.setor:
+        cabecalho.append(("Setor", e.setor.upper()))
+    cabecalho += [("Data da Visita", f"{ac.data:%d/%m/%Y}"), ("Orientador", e.orientador.nome_completo.upper())]
+    textos = {"pratica": (ac.observacoes, ac.intervencoes), "atitudinal": (ac.observacoes_atitudinal,
+                                                                          ac.intervencoes_atitudinal)}
+    secoes = []
+    for titulo, coluna, ps, chave in _secoes(e):
+        lin = linhas(ac, ps)
+        if chave == "pratica":  # no SICE só entram as atividades incluídas com “Atividade Sugerida”
+            lin = [(p, r) for p, r in lin if r]
+        secoes.append({"titulo": titulo, "coluna": coluna, "linhas": lin, "chave": chave, "obs": textos[chave][0],
+                       "interv": textos[chave][1]})
     return {"ac": ac, "e": e, "cabecalho": cabecalho, "secoes": secoes, "config": cfg}
 
 

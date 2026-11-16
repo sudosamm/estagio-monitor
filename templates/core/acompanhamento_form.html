@@ -9,25 +9,29 @@
   <form method="post" novalidate>{% csrf_token %}
     {% if erros %}<div class="aviso error">Faltam respostas: confira os itens marcados.</div>{% endif %}
     {% with campo=dados.data %}{% include "core/_campo.html" %}{% endwith %}
-    {% for titulo, coluna, campos, chave in blocos %}{% if campos %}
+    {% for titulo, coluna, campos, chave, textos in blocos %}
     <div class="secao-visita" data-secao="{{ chave }}">
-      <div class="card-cab"><h2>{{ titulo }}</h2><button class="btn sec sm" type="button" data-marcar-primeira="{{ chave }}" data-sem-trava="1">Marcar todos: {% with p=campos.0.field.pergunta %}{{ p.lista_opcoes.0 }}{% endwith %}</button></div>
-      <p class="muted" style="font-size:.82rem;margin-top:0">{{ coluna }}: comece marcando todos com a primeira opção e ajuste só as exceções.</p>
+      {% with opcoes=campos.0.field.pergunta.lista_opcoes %}{% if "Realizou Sem Auxílio" in opcoes %}{% firstof "Realizou Sem Auxílio" as padrao %}{% else %}{% firstof opcoes.0 as padrao %}{% endif %}
+      <div class="card-cab"><h2>{{ titulo }}</h2><button class="btn sec sm" type="button" data-marcar-todos-opcao="{{ padrao }}" data-secao-alvo="{{ chave }}" data-sem-trava="1">Marcar todos: {{ padrao }}</button></div>{% endwith %}
+      <p class="muted" style="font-size:.82rem;margin-top:0">{{ coluna }}: marque todos de uma vez e ajuste só as exceções. {% if chave == "pratica" %}Deixe “Em branco” a atividade que não entra nesta visita: no SICE você inclui só as marcadas (Atividade Sugerida).{% else %}“Em branco” é a borracha do SICE.{% endif %}</p>
       {% for campo in campos %}
       <fieldset class="criterio pergunta-av"><legend>{{ campo.label }}</legend>
-        <div class="escala-notas">{% for r in campo %}<label>{{ r.tag }}<span>{{ r.choice_label }}</span></label>{% endfor %}</div>
+        <div class="escala-notas">{% for r in campo %}<label class="{% if not r.data.value %}nao-obs{% endif %}">{{ r.tag }}<span>{{ r.choice_label }}</span></label>{% endfor %}</div>
         {% for erro in campo.errors %}<small class="erro-campo">{{ erro }}</small>{% endfor %}
-      </fieldset>{% endfor %}
+      </fieldset>{% empty %}<p class="caixa-info">Nenhum item cadastrado para este curso.</p>{% endfor %}
+      <div class="form-linha">{% for campo in textos %}<div>{% include "core/_campo.html" %}<small class="muted" data-restantes>300 caracteres restantes</small></div>{% endfor %}</div>
     </div>
-    {% endif %}{% endfor %}
-    <div class="form-linha">{% with campo=dados.observacoes %}{% include "core/_campo.html" %}{% endwith %}{% with campo=dados.intervencoes %}{% include "core/_campo.html" %}{% endwith %}</div>
+    {% endfor %}
     <button class="btn" type="submit">{% icone "check" %} Salvar acompanhamento</button>
   </form>
 </div>
 <script>
-document.querySelectorAll("[data-marcar-primeira]").forEach((b) => b.addEventListener("click", () => {
-  const secao = document.querySelector(`[data-secao="${b.dataset.marcarPrimeira}"]`);
-  secao.querySelectorAll("fieldset").forEach((f) => { const r = f.querySelector('input[type="radio"]'); if (r) r.checked = true; });
+document.querySelectorAll("[data-marcar-todos-opcao]").forEach((b) => b.addEventListener("click", () => {
+  const secao = document.querySelector(`[data-secao="${b.dataset.secaoAlvo}"]`);
+  secao.querySelectorAll("fieldset").forEach((f) => {
+    const r = [...f.querySelectorAll('input[type="radio"]')].find((i) => i.value === b.dataset.marcarTodosOpcao);
+    if (r) r.checked = true;
+  });
 }));
 </script>
 {% endblock %}

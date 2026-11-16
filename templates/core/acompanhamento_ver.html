@@ -6,6 +6,5 @@
   <h1>Acompanhamento de visita</h1><p>Registrado por {{ ac.autor|default:e.orientador }} em {{ ac.criado_em|date:"d/m/Y" }}.</p></div></div>
 <div class="card" style="max-width:900px">
   {% include "core/_acompanhamento_corpo.html" %}
-  <div class="form-linha mt-1"><div><h3>Observações</h3><p class="quebra">{{ ac.observacoes|default:"—" }}</p></div><div><h3>Intervenções</h3><p class="quebra">{{ ac.intervencoes|default:"—" }}</p></div></div>
 </div>
 {% endblock %}

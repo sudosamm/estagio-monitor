@@ -306,7 +306,8 @@ document.querySelectorAll("[data-tema-form]").forEach((form) => {
 })();
 // contador de caracteres como no SICE (“1000 caracteres restantes”)
 document.querySelectorAll("textarea[maxlength]").forEach((t) => {
-  const aviso = t.parentElement && t.parentElement.querySelector("[data-restantes]");
+  const aviso = (t.parentElement && t.parentElement.querySelector("[data-restantes]"))
+    || (t.closest(".campo") && t.closest(".campo").parentElement.querySelector("[data-restantes]"));
   if (!aviso) return;
   const atualizar = () => { aviso.textContent = `${t.maxLength - t.value.length} caracteres restantes`; };
   t.addEventListener("input", atualizar);

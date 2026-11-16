@@ -13,7 +13,7 @@
       <legend>{{ forloop.counter }}. {{ campo.label }}{% if campo.field.pergunta.obrigatoria %} <span class="muted">*</span>{% endif %}</legend>
       {% if campo.help_text %}<small class="muted" style="display:block;margin:-.2rem 0 .4rem">{{ campo.help_text }}</small>{% endif %}
       {% if campo.field.pergunta.resposta == "TEXTO" %}{{ campo }}{% if campo.field.pergunta.limite %}<small class="muted" data-restantes>{{ campo.field.pergunta.limite }} caracteres restantes</small>{% endif %}
-      {% else %}<div class="escala-notas">{% for r in campo %}<label>{{ r.tag }}<span>{{ r.choice_label }}</span></label>{% endfor %}</div>{% endif %}
+      {% else %}<div class="escala-notas">{% for r in campo %}<label class="{% if not r.data.value %}nao-obs{% endif %}">{{ r.tag }}<span>{{ r.choice_label }}</span></label>{% endfor %}</div>{% endif %}
       {% for erro in campo.errors %}<small class="erro-campo">{{ erro }}</small>{% endfor %}
     </fieldset>
     {% endfor %}

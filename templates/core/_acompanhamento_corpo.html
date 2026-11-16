@@ -1,6 +1,12 @@
+{# Precisa de: cabecalho, secoes; opcional: copiar (botões de copiar nos textos) #}
 <div class="cabecalho-sice">{% for rotulo, valor in cabecalho %}<div><small class="muted">{{ rotulo }}</small><strong>{{ valor }}</strong></div>{% endfor %}</div>
-{% for titulo, coluna, linhas in secoes %}{% if linhas %}
-<h3 class="mt-1">{{ titulo }}</h3>
-<div class="tabela-wrap"><table class="tabela tabela-sice"><thead><tr><th>{{ coluna }}</th><th>Resposta</th></tr></thead>
-  <tbody>{% for p, r in linhas %}<tr><td>{{ p.enunciado }}</td><td><strong>{{ r|default:"—" }}</strong></td></tr>{% endfor %}</tbody></table></div>
-{% endif %}{% endfor %}
+{% for s in secoes %}
+<h3 class="mt-1">{{ s.titulo }}</h3>
+{% if s.chave == "pratica" %}<p class="muted" style="font-size:.85rem;margin-top:0">{% if s.linhas %}No SICE, use <strong>Atividade Sugerida</strong> e inclua só estas {{ s.linhas|length }} atividade{{ s.linhas|length|pluralize }}.{% else %}Nenhuma atividade prática marcada nesta visita.{% endif %}</p>{% endif %}
+{% if s.linhas %}<div class="tabela-wrap"><table class="tabela tabela-sice"><thead><tr><th>{{ s.coluna }}</th><th>Situação</th></tr></thead>
+  <tbody>{% for p, r in s.linhas %}<tr><td>{{ p.enunciado }}</td><td>{% if r %}<strong>{{ r }}</strong>{% else %}<span class="muted">em branco (borracha)</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+<div class="form-linha mt-1">
+  <div class="campo"><label>Observações</label>{% if copiar %}<textarea readonly rows="3" id="obs-{{ s.chave }}">{{ s.obs }}</textarea>{% if s.obs %}<button class="btn sec sm mt-1" type="button" data-copiar="#obs-{{ s.chave }}" data-sem-trava="1">Copiar</button>{% endif %}{% else %}<p class="quebra">{{ s.obs|default:"—" }}</p>{% endif %}</div>
+  <div class="campo"><label>Intervenções</label>{% if copiar %}<textarea readonly rows="3" id="int-{{ s.chave }}">{{ s.interv }}</textarea>{% if s.interv %}<button class="btn sec sm mt-1" type="button" data-copiar="#int-{{ s.chave }}" data-sem-trava="1">Copiar</button>{% endif %}{% else %}<p class="quebra">{{ s.interv|default:"—" }}</p>{% endif %}</div>
+</div>
+{% endfor %}

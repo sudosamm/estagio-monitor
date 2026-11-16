@@ -209,13 +209,20 @@ No fim, ele toca em *Já colei tudo no SICE*.
 ### Acompanhamento de visita
 Na visita, o orientador preenche o **Acompanhamento de Visita** do SICE pelo sistema (até no celular). O formulário abre pela visita na Agenda (*Preencher*, um por estagiário) ou pela aba *Visitas* do estágio. Ele tem:
 - a data;
-- a **Avaliação Prática** (as atividades do curso);
-- a **Avaliação Atitudinal** (os 23 critérios do SICE);
-- **Observações** e **Intervenções**.
+- a **Avaliação Prática** (as atividades do curso), com *Observações* (obrigatória) e *Intervenções*;
+- a **Avaliação Atitudinal** (os 23 critérios do SICE, com os mesmos textos), com as suas próprias *Observações* e *Intervenções*.
 
-Os botões *Marcar todos* preenchem cada parte com a primeira opção (“Realizou Sem Auxílio”, “Sempre (100%)”), e aí é só ajustar as exceções. Depois, a tela **Lançar no SICE** mostra o cabeçalho (escola, curso, aluno, concedente, orientador, data) e todas as respostas na ordem do relatório do SICE, com *Copiar* nos textos e *Já lancei no SICE*. O estagiário vê o acompanhamento na aba *Visitas*, como no SICE.
-- **Atividades práticas:** mudam por curso. Os cursos de Informática recebem sozinhos as 13 atividades do SICE (inclusive cursos criados depois). Para outros cursos, cadastre em *Avaliações (SICE) → Perguntas*, tipo “avaliação prática”, escolhendo o curso.
-- **Opções de resposta:** o relatório só mostrava “Realizou Sem Auxílio” e “Sempre (100%)”. As demais vieram como Realizou Com Auxílio / Não Realizou e Quase Sempre (75%) / Às Vezes (50%) / Raramente (25%) / Nunca (0%). Confira no SICE e ajuste em *Perguntas*, se for preciso.
+Cada um desses textos tem até 300 caracteres, com contador, como no SICE.
+
+Os botões *Marcar todos* preenchem cada parte de uma vez (“Realizou Sem Auxílio” e “Sempre (100%)”), e aí é só ajustar as exceções. Depois, a tela **Lançar no SICE** mostra:
+- o cabeçalho na ordem do formulário do SICE (ano, escola, curso, turma, aluno, concedente, setor, data da visita, orientador);
+- na prática, **só as atividades marcadas**, para incluir no SICE com *Atividade Sugerida*;
+- o atitudinal completo;
+- os textos de cada parte com *Copiar*, e o botão *Já lancei no SICE*. O estagiário vê o acompanhamento na aba *Visitas*, como no SICE.
+- **Atividades práticas:** mudam por curso. Os cursos de Informática recebem sozinhos as 13 atividades do SICE (inclusive cursos criados depois). Para outros cursos, use **Colar várias atividades práticas** em *Avaliações (SICE) → Perguntas*: escolha o curso e cole a lista do SICE, uma por linha. Repetidas são ignoradas, e dá para substituir a lista atual.
+- **Opções de resposta:** iguais às do SICE.
+  - Prática: *Observou*, *Realizou Com Auxílio* ou *Realizou Sem Auxílio*. Não existe “não realizou”: a atividade que não entra na visita fica **Em branco** e não aparece na tela de lançar.
+  - Atitudinal: *Sempre (100%)*, *Frequentemente (70-90%)*, *Algumas Vezes (40-60%)*, *Raramente (10-30%)* ou *Nunca (0%)*. Pode ficar **Em branco**, como a borracha “Limpar” do SICE.
 
 ### O que há de novo
 Depois de cada atualização, cada pessoa vê um aviso só com o que mudou **para o tipo de conta dela**: o estagiário vê o que é de estagiário, o supervisor o que é de supervisor, e o administrador vê tudo, com a indicação de para quem vale cada item.

@@ -966,6 +966,26 @@ class SugestaoForm(Formulario):
         return arquivos
 
 
+class ColarAtividadesForm(Formulario):
+    curso = forms.ModelChoiceField(queryset=Curso.objects.all(), label="Curso")
+    atividades = forms.CharField(
+        label="Atividades (uma por linha)", widget=forms.Textarea(attrs={"rows": 8, "placeholder":
+                                                                         "REALIZAR A INSTALAÇÃO DOS DRIVERS\n"
+                                                                         "REALIZAR MONTAGEM DE COMPUTADORES"}),
+        help_text="Cole a lista do SICE, na mesma ordem. Linhas repetidas ou vazias são ignoradas.")
+    substituir = forms.BooleanField(label="Tirar de uso as atividades atuais deste curso", required=False,
+                                    help_text="As respostas já dadas continuam guardadas.")
+
+    def linhas(self):
+        vistas, resultado = set(), []
+        for linha in self.cleaned_data["atividades"].splitlines():
+            texto = " ".join(linha.split()).strip(" -•;")
+            if texto and texto.lower() not in vistas:
+                vistas.add(texto.lower())
+                resultado.append(texto[:300])
+        return resultado
+
+
 class PerguntaAvaliacaoForm(FormularioModelo):
     class Meta:
         model = PerguntaAvaliacao

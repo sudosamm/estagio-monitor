@@ -10,6 +10,9 @@
     {% empty %}<li class="vazio">Nenhuma pergunta.</li>{% endfor %}</ol></div>{% endfor %}</div>
   <div class="card destaque"><h3>{% if editando %}Editar pergunta{% else %}Nova pergunta{% endif %}</h3>
     <form method="post">{% csrf_token %}{% include "core/_form.html" %}<div class="acoes"><button class="btn" type="submit">Salvar</button>{% if editando %}<a class="btn sec" href="{% url 'perguntas_avaliacao' %}">Cancelar</a>{% endif %}</div></form>
-    <p class="muted" style="font-size:.8rem">Para tirar uma pergunta, desmarque “Em uso”: respostas já dadas continuam guardadas.</p></div>
+    <p class="muted" style="font-size:.8rem">Para tirar uma pergunta, desmarque “Em uso”: respostas já dadas continuam guardadas.</p>
+    <hr><h3>Colar várias atividades práticas</h3>
+    <p class="muted" style="font-size:.85rem;margin-top:0">Para o Acompanhamento de Visita de um curso: cole a lista de atividades do SICE (uma por linha). Entram com as opções Observou / Realizou Com Auxílio / Realizou Sem Auxílio, e podem ficar em branco.</p>
+    <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="colar">{% with form=colar %}{% include "core/_form.html" %}{% endwith %}<button class="btn sec" type="submit">Incluir atividades</button></form></div>
 </div>
 {% endblock %}

@@ -86,8 +86,10 @@ class RespostasForm(forms.Form):
             if p.resposta == PerguntaAvaliacao.Resposta.NOTA:
                 campo = forms.ChoiceField(choices=ESCALA, widget=forms.RadioSelect, required=False)
             elif p.resposta == PerguntaAvaliacao.Resposta.ESCOLHA:
-                campo = forms.ChoiceField(choices=[(o, o) for o in p.lista_opcoes], widget=forms.RadioSelect,
-                                          required=False)
+                opcoes = [(o, o) for o in p.lista_opcoes]
+                if not p.obrigatoria:  # como no SICE, dá para deixar sem resposta
+                    opcoes.append(("", "Em branco"))
+                campo = forms.ChoiceField(choices=opcoes, widget=forms.RadioSelect, required=False)
             else:
                 attrs = {"rows": 4}
                 if p.limite:

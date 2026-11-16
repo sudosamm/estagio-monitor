@@ -191,6 +191,27 @@ def ver_avaliacao(request, pk):
 
 @permissao("avaliacoes")
 def perguntas_avaliacao(request, pk=None):
+    from ..forms import ColarAtividadesForm
+    from ..sice import OPCOES_PRATICA
+
+    colar = ColarAtividadesForm(request.POST if request.POST.get("acao") == "colar" else None, prefix="c")
+    if request.POST.get("acao") == "colar":
+        if colar.is_valid():
+            curso, linhas_ = colar.cleaned_data["curso"], colar.linhas()
+            atuais = PerguntaAvaliacao.objects.filter(avaliacao=PerguntaAvaliacao.Tipo.PRATICA, curso=curso)
+            if colar.cleaned_data["substituir"]:
+                atuais.update(ativa=False)
+            existentes = {t.lower() for t in atuais.filter(ativa=True).values_list("enunciado", flat=True)}
+            inicio = (atuais.order_by("-ordem").values_list("ordem", flat=True).first() or 0) + 1
+            novas = [t for t in linhas_ if t.lower() not in existentes]
+            PerguntaAvaliacao.objects.bulk_create([
+                PerguntaAvaliacao(avaliacao=PerguntaAvaliacao.Tipo.PRATICA, curso=curso, enunciado=t, resposta="ESCOLHA",
+                                  opcoes=OPCOES_PRATICA, obrigatoria=False, ordem=inicio + i)
+                for i, t in enumerate(novas)])
+            messages.success(request, f"{len(novas)} atividade(s) incluída(s) em {curso}."
+                             + (f" {len(linhas_) - len(novas)} já existiam." if len(novas) < len(linhas_) else ""))
+            return redirect("perguntas_avaliacao")
+        request.method = "GET"  # mostra o erro sem tentar salvar o outro formulário
     editando = get_object_or_404(PerguntaAvaliacao, pk=pk) if pk else None
     form = PerguntaAvaliacaoForm(request.POST or None, instance=editando,
                                  initial={"avaliacao": request.GET.get("tipo", "AUTO")} if not editando else None)
@@ -199,7 +220,8 @@ def perguntas_avaliacao(request, pk=None):
         messages.success(request, "Pergunta salva.")
         return redirect("perguntas_avaliacao")
     grupos = [(r, PerguntaAvaliacao.objects.filter(avaliacao=t).select_related("curso")) for t, r in TODOS_TIPOS.items()]
-    return render(request, "core/perguntas_avaliacao.html", {"form": form, "editando": editando, "grupos": grupos})
+    return render(request, "core/perguntas_avaliacao.html", {"form": form, "editando": editando, "grupos": grupos,
+                                                             "colar": colar})
 
 
 def estagiarios_pendentes(estagios, mes):

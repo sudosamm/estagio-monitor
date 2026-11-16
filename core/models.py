@@ -1171,8 +1171,11 @@ class AcompanhamentoVisita(models.Model):
                                     related_name="acompanhamentos")
     data = models.DateField("Data da visita")
     respostas = models.JSONField(default=dict)
-    observacoes = models.TextField("Observações", blank=True)
-    intervencoes = models.TextField("Intervenções", blank=True)
+    # no SICE cada parte (prática e atitudinal) tem as suas Observações (obrigatória) e Intervenções, 300 caracteres
+    observacoes = models.TextField("Observações da avaliação prática", blank=True)
+    intervencoes = models.TextField("Intervenções da avaliação prática", blank=True)
+    observacoes_atitudinal = models.TextField("Observações da avaliação atitudinal", blank=True)
+    intervencoes_atitudinal = models.TextField("Intervenções da avaliação atitudinal", blank=True)
     autor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)

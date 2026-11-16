@@ -17,7 +17,8 @@ PRATICA_INFORMATICA = [
     "EMITIR LAUDOS TÉCNICOS DE COMPUTADORES",
     "INSTALAR SOFTWARES ESSENCIAIS",
 ]
-OPCOES_PRATICA = "Realizou Sem Auxílio\nRealizou Com Auxílio\nNão Realizou"
+# No SICE a resposta pode ficar em branco (não há “não realizou”)
+OPCOES_PRATICA = "Observou\nRealizou Com Auxílio\nRealizou Sem Auxílio"
 
 
 def _chave(texto):
@@ -34,6 +35,6 @@ def atividades_padrao(curso):
         return 0
     PerguntaAvaliacao.objects.bulk_create([
         PerguntaAvaliacao(avaliacao=PerguntaAvaliacao.Tipo.PRATICA, curso=curso, enunciado=t, resposta="ESCOLHA",
-                          opcoes=OPCOES_PRATICA, obrigatoria=True, ordem=i)
+                          opcoes=OPCOES_PRATICA, obrigatoria=False, ordem=i)
         for i, t in enumerate(PRATICA_INFORMATICA, 1)])
     return len(PRATICA_INFORMATICA)
