@@ -57,6 +57,8 @@
             <div class="info"><strong>{{ user.nome_completo }}</strong><small>{{ user.username }} · {{ user.get_papel_display }}</small></div>
             <a href="{% url 'perfil' %}">Meus dados</a>
             <a href="{% url 'trocar_senha' %}">Alterar senha</a>
+            <a href="{% url 'novidades' %}">O que há de novo</a>
+            <a href="{% url 'sugestoes' %}">Sugestões e erros</a>
             <button type="button" data-instalar hidden>Instalar no celular</button>
             {% if TEMA_LIBERADO %}<form method="post" action="{% url 'trocar_tema' %}" class="escolha-tema" data-tema-form>{% csrf_token %}
               <span>Tema</span>
@@ -94,6 +96,7 @@
         <a href="{% url 'inicio' %}" class="{% if n in 'inicio,estagio_detalhe,estagio_dia' %}ativo{% endif %}">Meu estágio</a>
         {% for e in user.estagios.all %}{% if e.ativo %}<a href="{% url 'minhas_folhas' e.pk %}" class="{% if n == 'minhas_folhas' %}ativo{% endif %}">Folha de frequência</a>{% endif %}{% endfor %}
         <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Visitas e conversas</a>
+        {% if CONFIG.avaliacoes_abertas %}<a href="{% url 'minhas_avaliacoes' %}" class="{% if n in 'minhas_avaliacoes,responder_avaliacao,copiar_avaliacao' %}ativo{% endif %}">Avaliações</a>{% endif %}
       {% endif %}
     </div>
   </nav>
@@ -110,10 +113,28 @@
   <footer class="rodape">
     <div class="container">
       <span>{{ NOME_SISTEMA }} — ferramenta de apoio ao acompanhamento de estágio</span>
-      <span>Os registros oficiais continuam no SICE</span>
+      <span><a href="{% url 'novidades' %}">Novidades</a> · <a href="{% url 'sugestoes' %}">Sugestões e erros</a> · Os registros oficiais continuam no SICE</span>
     </div>
   </footer>
 {% endblock %}
+{% if NOVIDADES %}
+<dialog class="novidades-popup" id="novidades-popup" aria-labelledby="novidades-titulo">
+  <form method="post" action="{% url 'novidades_visto' %}" data-novidades>{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <div class="novidades-cab"><span class="novidades-selo">Novidade</span><h2 id="novidades-titulo">O que há de novo</h2>
+      <button class="novidades-fechar" name="acao" value="fechar" type="submit" aria-label="Fechar" data-sem-trava="1">×</button></div>
+    <div class="novidades-corpo">{% for v in NOVIDADES %}
+      <h3>{{ v.titulo }} <small class="muted">· {{ v.id }}</small></h3>
+      <ul>{% for i in v.itens %}<li>{{ i.texto }}{% for p in i.publico %} <span class="etiqueta">{{ p }}</span>{% endfor %}</li>{% endfor %}</ul>
+    {% endfor %}</div>
+    <div class="novidades-rodape">
+      <a href="{% url 'novidades' %}">Ver todo o histórico</a>
+      <span class="cresce"></span>
+      <button class="btn sec" name="acao" value="nunca" type="submit" data-sem-trava="1">Não mostrar novamente</button>
+      <button class="btn" name="acao" value="sempre" type="submit" data-sem-trava="1">Ver a cada atualização</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
 <script src="{% static 'js/app.js' %}" defer></script>
 </body>
 </html>

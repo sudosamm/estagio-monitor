@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
-from core.views import agenda, atestados, avisos, captacao, comum, encerramento, estagio, feedback, frequencia, importacao, orientador, pasta, pwa, qrcheckin, relatorios, supervisor
+from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, encerramento, estagio, feedback, frequencia, importacao, novidades, orientador, pasta, pwa, qrcheckin, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
@@ -12,6 +12,10 @@ urlpatterns = [
     path("senha/", comum.trocar_senha, name="trocar_senha"),
     path("perfil/", comum.perfil, name="perfil"),
     path("tema/", comum.trocar_tema, name="trocar_tema"),
+    path("novidades/", novidades.novidades, name="novidades"),
+    path("novidades/visto/", novidades.novidades_visto, name="novidades_visto"),
+    path("sugestoes/", novidades.sugestoes, name="sugestoes"),
+    path("sugestoes/anexos/<int:pk>/", novidades.anexo_sugestao, name="anexo_sugestao"),
     path("notificacoes/", comum.notificacoes, name="notificacoes"),
     path("notificacoes/lidas/", comum.notificacoes_marcar_lidas, name="notificacoes_lidas"),
     path("notificacoes/<int:pk>/", comum.notificacao_abrir, name="notificacao_abrir"),
@@ -36,6 +40,14 @@ urlpatterns = [
     path("estagios/<int:pk>/atestado/", atestados.enviar_atestado, name="enviar_atestado"),
     path("estagios/<int:pk>/feedback/", feedback.dar_feedback, name="dar_feedback"),
     path("feedback/", feedback.feedback_geral, name="feedback_geral"),
+    path("avaliacoes/", avaliacoes.minhas_avaliacoes, name="minhas_avaliacoes"),
+    path("avaliacoes/escola/", avaliacoes.avaliacoes_escola, name="avaliacoes_escola"),
+    path("avaliacoes/escola/avisar/", avaliacoes.avisar_avaliacoes, name="avisar_avaliacoes"),
+    path("avaliacoes/perguntas/", avaliacoes.perguntas_avaliacao, name="perguntas_avaliacao"),
+    path("avaliacoes/perguntas/<int:pk>/", avaliacoes.perguntas_avaliacao, name="pergunta_avaliacao_editar"),
+    path("avaliacoes/ver/<int:pk>/", avaliacoes.ver_avaliacao, name="ver_avaliacao"),
+    path("avaliacoes/<str:tipo>/", avaliacoes.responder_avaliacao, name="responder_avaliacao"),
+    path("avaliacoes/<str:tipo>/sice/", avaliacoes.copiar_avaliacao, name="copiar_avaliacao"),
     path("atestados/", atestados.atestados, name="atestados"),
     path("atestados/<int:pk>/", atestados.atestado_detalhe, name="atestado_detalhe"),
     path("atestados/<int:pk>/arquivo/", atestados.atestado_arquivo, name="atestado_arquivo"),

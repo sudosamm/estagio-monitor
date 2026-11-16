@@ -28,6 +28,7 @@ services:
       RESUMO_AUTOMATICO: ${RESUMO_AUTOMATICO:-1}
       VAPID_CONTATO: ${VAPID_CONTATO:-}
       PUSH_ATIVO: ${PUSH_ATIVO:-1}
+      SUGESTOES_EMAIL: ${SUGESTOES_EMAIL:-}
       DEBUG: ${DEBUG:-0}
     volumes:
       - estagio-dados:/data

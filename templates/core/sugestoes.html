@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Sugestões e erros{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Sugestões e erros</h1><p>Achou um problema, tem uma ideia ou ficou com dúvida? Mande aqui: a mensagem vai direto para a equipe responsável pelo sistema.</p></div></div>
+{% if enviado %}
+<div class="card destaque" style="max-width:640px">
+  <h2>{% icone "check" %} Mensagem enviada. Obrigado!</h2>
+  <p>A equipe vai ler{% if user.is_authenticated and user.email %} e, se precisar, responder em {{ user.email }}{% endif %}.</p>
+  <div class="acoes"><a class="btn" href="{% url 'inicio' %}">Voltar ao sistema</a><a class="btn sec" href="{% url 'sugestoes' %}">Mandar outra</a></div>
+</div>
+{% else %}
+<div class="grade grade-lado">
+  <div class="card destaque">
+    <form method="post" enctype="multipart/form-data" novalidate data-sugestao>{% csrf_token %}
+      <input type="hidden" name="pagina" value="{{ pagina }}">
+      {% include "core/_form.html" %}
+      <button class="btn" type="submit">{% icone "mensagem" %} Enviar</button>
+    </form>
+  </div>
+  <div>
+    <div class="card"><h3>Dicas para relatar um erro</h3>
+      <ul class="lista-novidades" style="font-size:.9rem">
+        <li>Diga em qual tela estava e o que tentou fazer.</li>
+        <li>Conte o que esperava e o que aconteceu de verdade.</li>
+        <li>Um print da tela ajuda muito: no celular, aperte ligar + baixar volume juntos.</li>
+      </ul></div>
+    <div class="card"><h3>{% icone "chave" %} Privacidade</h3>
+      <p style="font-size:.88rem">Mandamos junto o nome da sua conta, a página onde você estava e o navegador, para ajudar a achar o problema. Não envie senhas nem documentos de outras pessoas.</p>
+      {% if user.is_superuser and not tem_destino %}<p class="caixa-alerta" style="font-size:.85rem">Nenhum e-mail de destino configurado: as mensagens ficam só em Administração → Sugestões e erros. Defina em <a href="{% url 'configuracoes' %}">Configurações</a>.</p>{% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

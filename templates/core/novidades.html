@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}O que há de novo{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>O que há de novo</h1><p>{% if admin %}Todas as mudanças do sistema, com a indicação de para quem cada uma vale.{% else %}As mudanças que valem para você, da mais recente para a mais antiga.{% endif %}</p></div>
+  <a class="btn sec" href="{% url 'sugestoes' %}">{% icone "mensagem" %} Mandar sugestão ou erro</a></div>
+<div class="grade grade-lado">
+  <div>{% for v in versoes %}
+    <div class="card{% if forloop.first %} destaque{% endif %}">
+      <div class="card-cab"><h2>{{ v.titulo }}</h2><span class="muted">{{ v.id }}{% if vistas_antes and v.id > vistas_antes %} · <span class="selo pasta-enviado">novo para você</span>{% endif %}</span></div>
+      <ul class="lista-novidades">{% for i in v.itens %}<li>{{ i.texto }}{% if i.publico %}<span class="publico">{% for p in i.publico %}<span class="etiqueta">{{ p }}</span>{% endfor %}</span>{% endif %}</li>{% endfor %}</ul>
+    </div>
+  {% empty %}<div class="card"><p class="vazio">Nenhuma novidade ainda.</p></div>{% endfor %}</div>
+  <div class="card"><h3>Aviso de novidades</h3>
+    <form method="post">{% csrf_token %}
+      <label class="check"><input type="radio" name="popup" value="sim"{% if user.novidades_popup %} checked{% endif %}> <span>Mostrar o aviso a cada atualização</span></label>
+      <label class="check"><input type="radio" name="popup" value="nao"{% if not user.novidades_popup %} checked{% endif %}> <span>Não mostrar (eu olho aqui quando quiser)</span></label>
+      <button class="btn sm mt-1" type="submit">Salvar</button></form>
+    <p class="muted" style="font-size:.82rem">Esta página fica sempre no menu da sua foto e no rodapé.</p></div>
+</div>
+{% endblock %}

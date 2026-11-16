@@ -186,6 +186,36 @@ Clique em *Salvar PDF / imprimir* e escolha **Salvar como PDF** (funciona també
 
 A **planilha (.xlsx)**, também disponível pelo botão *Baixar planilha* do relatório, traz quatro abas: *Resumo*, *Estagiários* (uma linha por estágio, com horas, faltas, dias sem registro, visitas, previsão, situação e pontos de atenção), *Horas por mês* (horas validadas em cada mês) e *Visitas e conversas* (com o relato). Serve para prestar contas à escola, à CREDE ou à SEDUC sem redigitar. O CPF não vai para a planilha.
 
+### Avaliações para o SICE
+O estagiário responde pelo sistema a **autoavaliação** e a **avaliação do orientador** (menu *Avaliações*). Dá para salvar um rascunho e continuar depois. Ao concluir, a tela **Copiar para o SICE** mostra cada resposta na ordem do SICE:
+- textos com o botão *Copiar*;
+- nas perguntas de marcar, “Marque: 4 — Muito bom”;
+- o botão *Abrir o SICE*, se o endereço estiver configurado.
+
+No fim, ele toca em *Já colei tudo no SICE*.
+- **Perguntas:** em *Acompanhamento → Avaliações (SICE) → Perguntas* (orientador). Elas vêm com um modelo sugerido. Ajuste o texto, a ordem e o tipo de resposta (escala de 1 a 5, escolher uma opção ou texto livre, com limite de caracteres) para ficarem **iguais ao formulário do SICE**.
+- **Liberar:** em **Configurações** há *Liberar as avaliações*, o prazo e o endereço do SICE. Liberadas, o estagiário vê um aviso na tela inicial.
+- **Acompanhar:** o quadro mostra, por estagiário, *não iniciada*, *rascunho*, *concluída* ou *no SICE*, e tem um botão para lembrar quem ainda não terminou.
+- **Privacidade:** a autoavaliação é lida pela escola. A avaliação que o estagiário faz do orientador fica com a coordenação e a administração, e o orientador só vê se foi feita (há uma opção em Configurações para liberar a leitura).
+
+### O que há de novo
+Depois de cada atualização, cada pessoa vê um aviso só com o que mudou **para o tipo de conta dela**: o estagiário vê o que é de estagiário, o supervisor o que é de supervisor, e o administrador vê tudo, com a indicação de para quem vale cada item.
+- No aviso: **Ver a cada atualização** (padrão) ou **Não mostrar novamente**. A escolha também fica em *Meus dados* e na página **Novidades** (menu da foto e rodapé), que guarda o histórico completo.
+- Contas novas começam em dia, sem receber o histórico inteiro.
+- **Para publicar uma atualização:** acrescente uma versão no topo de `VERSOES` em `core/novidades.py`, com a data (`AAAA.MM.DD`), um título e os itens. Cada item diz para quem vale: `"todos"`, `"estagiario"`, `"supervisor"`, `"orientador"` ou `"coordenador"`.
+
+### Sugestões e erros
+A página **Sugestões e erros** (menu da foto, rodapé e tela de login) aceita mensagens de qualquer pessoa, inclusive de quem não consegue entrar:
+- tipo (erro, sugestão, dúvida, elogio, outro);
+- nome;
+- e-mail para resposta (opcional);
+- mensagem;
+- até 5 anexos (prints, fotos, PDF, documentos, planilhas, vídeos ou ZIP; 20 MB no total).
+
+Tudo vai **por e-mail**, com os anexos e mais a conta, a página onde a pessoa estava e o navegador. Responder o e-mail responde a quem enviou. O destino é o campo *E-mail que recebe as sugestões e os erros* em **Configurações**; vazio, vale a variável `SUGESTOES_EMAIL` e, por último, o e-mail dos administradores.
+- Também fica guardado em **Administração → Sugestões e erros**, com os anexos para baixar e a marcação *resolvida*. Os administradores recebem um aviso no sino.
+- Há uma proteção contra robôs (campo escondido) e um limite de 5 mensagens por hora por pessoa.
+
 ### Feedback do supervisor
 Uma vez por mês, o supervisor conta à escola como está cada estagiário, pelo card **Feedback do mês** no painel dele. Leva uns 2 minutos por pessoa.
 - **Notas de 1 a 5** (insuficiente, regular, bom, muito bom, excelente) em seis critérios: assiduidade e pontualidade, responsabilidade, iniciativa, relacionamento com a equipe, qualidade do trabalho e aprendizado. O que ele não conseguiu observar fica como “Não observei”.
@@ -311,6 +341,7 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Conferir documentos da pasta, marcar entregue em papel | ✔ | ✔ (cursos que coordena) |
 | Definir os documentos exigidos na pasta | ✔ | — |
 | Encerrar o ano letivo e anonimizar dados antigos | ✔ | — |
+| Acompanhar as avaliações para o SICE / editar as perguntas | ✔ / ✔ | ✔ / — |
 | Enviar avisos para a turma | ✔ | ✔ (cursos que coordena) |
 | Ver o feedback dos supervisores (inclusive o comentário reservado) | ✔ | ✔ (cursos que coordena) |
 | Agendar visitas | ✔ | — |
@@ -408,11 +439,13 @@ core/indicadores.py Indicadores por turma, por concedente e semana a semana
 core/feedback.py    Feedback mensal do supervisor: meses abertos, pendências e lembrete
 core/encerramento.py Encerramento do ano (com desfazer) e anonimização (LGPD)
 core/qrcheckin.py   Check-in por QR code: código assinado que troca a cada 20 s
+core/avaliacoes.py  Avaliações do estagiário e o texto para copiar no SICE
+core/novidades.py   “O que há de novo”: versões e itens por tipo de usuário
+core/sugestoes.py   Envio das sugestões e erros por e-mail, com anexos
 templates/          HTML (visual inspirado no portal ce.gov.br)
 static/             CSS e JS próprios, sem frameworks
 ```
 
 ## Ideias para as próximas versões
 - Integração com o SICE por API oficial da SEDUC (dados dos estagiários, avaliações e certificado)
-- Autoavaliação do estagiário e avaliação do orientador, com texto pronto para copiar no SICE
 - WhatsApp automático pela API oficial do WhatsApp Business

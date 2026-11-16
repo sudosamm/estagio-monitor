@@ -105,3 +105,38 @@ class ComunicadoAdmin(admin.ModelAdmin):
 class InscricaoPushAdmin(admin.ModelAdmin):
     list_display = ["usuario", "navegador", "criado_em", "ultimo_envio"]
     readonly_fields = ["usuario", "endpoint", "p256dh", "auth", "navegador", "criado_em", "ultimo_envio"]
+
+
+class AnexoSugestaoInline(admin.TabularInline):
+    model = models.AnexoSugestao
+    extra = 0
+    fields = ["baixar", "tamanho"]
+    readonly_fields = ["baixar", "tamanho"]
+    can_delete = False
+
+    @admin.display(description="Arquivo")
+    def baixar(self, obj):
+        from django.urls import reverse
+        from django.utils.html import format_html
+
+        return format_html('<a href="{}">{}</a>', reverse("anexo_sugestao", args=[obj.pk]), obj.nome_original)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(models.Sugestao)
+class SugestaoAdmin(admin.ModelAdmin):
+    list_display = ["criado_em", "tipo", "nome", "usuario", "enviada_em", "resolvida"]
+    list_filter = ["tipo", "resolvida"]
+    list_editable = ["resolvida"]
+    search_fields = ["nome", "email", "mensagem"]
+    readonly_fields = ["tipo", "nome", "email", "mensagem", "usuario", "pagina", "navegador", "ip", "criado_em",
+                       "enviada_em"]
+    inlines = [AnexoSugestaoInline]
+
+
+@admin.register(models.PerguntaAvaliacao)
+class PerguntaAvaliacaoAdmin(admin.ModelAdmin):
+    list_display = ["avaliacao", "ordem", "enunciado", "resposta", "obrigatoria", "ativa"]
+    list_filter = ["avaliacao", "ativa"]

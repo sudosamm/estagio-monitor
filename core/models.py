@@ -36,11 +36,19 @@ PERMISSOES = {
     "arquivos": "Publicar arquivos gerais",
     "folhas": "Emitir e enviar folhas de frequência; decidir se os estagiários emitem a própria",
     "encerramento": "Encerrar o ano letivo e anonimizar dados antigos (LGPD)",
+    "avaliacoes": "Editar as perguntas das avaliações (autoavaliação e avaliação do orientador)",
 }
 PERMISSOES_POR_PAPEL = {
     "ORIENTADOR": set(PERMISSOES),
     "COORDENADOR": {"painel", "estagiarios", "contas", "cadastros", "candidaturas", "frequencias"},
 }
+
+
+def _versao_atual():
+    """Contas novas começam em dia com as novidades (não recebem o histórico inteiro de uma vez)."""
+    from .novidades import ultima_versao
+
+    return ultima_versao()
 
 
 class Usuario(AbstractUser):
@@ -91,6 +99,9 @@ class Usuario(AbstractUser):
         ESCURO = "ESCURO", "Escuro"
 
     tema = models.CharField("Tema", max_length=6, choices=Tema.choices, default=Tema.AUTO)
+    novidades_vistas = models.CharField(max_length=20, blank=True, default=_versao_atual, editable=False,
+                                        help_text="Última versão do “O que há de novo” que a pessoa viu")
+    novidades_popup = models.BooleanField("Mostrar “O que há de novo” a cada atualização", default=True)
     anonimizado_em = models.DateTimeField(null=True, blank=True, editable=False,
                                           help_text="Dados pessoais apagados (LGPD) nesta data")
     criado_por = models.ForeignKey(
@@ -1041,6 +1052,106 @@ class Notificacao(models.Model):
         ordering = ["-criado_em"]
 
 
+class PerguntaAvaliacao(models.Model):
+    """Pergunta de uma avaliação que o estagiário preenche (na mesma ordem e com o mesmo texto do SICE)."""
+
+    class Tipo(models.TextChoices):
+        AUTO = "AUTO", "Autoavaliação"
+        ORIENTADOR = "ORIENTADOR", "Avaliação do orientador"
+
+    class Resposta(models.TextChoices):
+        NOTA = "NOTA", "Escala de 1 a 5"
+        ESCOLHA = "ESCOLHA", "Escolher uma opção"
+        TEXTO = "TEXTO", "Texto livre"
+
+    avaliacao = models.CharField("Avaliação", max_length=10, choices=Tipo.choices)
+    enunciado = models.CharField("Pergunta", max_length=300, help_text="Copie o texto exatamente como está no SICE.")
+    ajuda = models.CharField("Dica para o estagiário", max_length=300, blank=True)
+    resposta = models.CharField("Tipo de resposta", max_length=8, choices=Resposta.choices, default=Resposta.NOTA)
+    opcoes = models.TextField("Opções", blank=True, help_text="Uma por linha (só para “Escolher uma opção”).")
+    limite = models.PositiveIntegerField("Limite de caracteres", null=True, blank=True,
+                                         help_text="Para texto livre: o mesmo limite do campo no SICE, se houver.")
+    obrigatoria = models.BooleanField("Obrigatória", default=True)
+    ordem = models.PositiveSmallIntegerField(default=0)
+    ativa = models.BooleanField("Em uso", default=True)
+
+    class Meta:
+        ordering = ["avaliacao", "ordem", "pk"]
+        verbose_name = "pergunta de avaliação"
+        verbose_name_plural = "perguntas de avaliação"
+
+    def __str__(self):
+        return self.enunciado
+
+    @property
+    def lista_opcoes(self):
+        return [o.strip() for o in self.opcoes.splitlines() if o.strip()]
+
+
+class Avaliacao(models.Model):
+    """Respostas do estagiário a uma avaliação, para copiar no SICE."""
+
+    estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="avaliacoes")
+    tipo = models.CharField(max_length=10, choices=PerguntaAvaliacao.Tipo.choices)
+    respostas = models.JSONField(default=dict, help_text="{id da pergunta: resposta}")
+    concluida_em = models.DateTimeField(null=True, blank=True)
+    copiada_sice_em = models.DateTimeField("Copiada para o SICE em", null=True, blank=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["estagio", "tipo"], name="avaliacao_unica_por_tipo")]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} de {self.estagio.estagiario}"
+
+
+def caminho_sugestao(instance, filename):
+    ext = filename.rsplit(".", 1)[-1].lower()[:8] if "." in filename else "bin"
+    return f"sugestoes/{timezone.localdate():%Y/%m}/{get_random_string(16)}.{ext}"
+
+
+class Sugestao(models.Model):
+    """Sugestão, erro ou dúvida enviada pela página “Sugestões e erros” (vai por e-mail e fica guardada aqui)."""
+
+    class Tipo(models.TextChoices):
+        ERRO = "ERRO", "Erro ou problema"
+        SUGESTAO = "SUGESTAO", "Sugestão de melhoria"
+        DUVIDA = "DUVIDA", "Dúvida"
+        ELOGIO = "ELOGIO", "Elogio"
+        OUTRO = "OUTRO", "Outro assunto"
+
+    tipo = models.CharField(max_length=10, choices=Tipo.choices, default=Tipo.SUGESTAO)
+    nome = models.CharField(max_length=150)
+    email = models.EmailField("E-mail para resposta", blank=True)
+    mensagem = models.TextField()
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                related_name="sugestoes")
+    pagina = models.CharField("Página onde estava", max_length=300, blank=True)
+    navegador = models.CharField(max_length=300, blank=True)
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    enviada_em = models.DateTimeField("E-mail enviado em", null=True, blank=True)
+    resolvida = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "sugestão ou erro"
+        verbose_name_plural = "sugestões e erros"
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} de {self.nome} ({self.criado_em:%d/%m/%Y})"
+
+
+class AnexoSugestao(models.Model):
+    sugestao = models.ForeignKey(Sugestao, on_delete=models.CASCADE, related_name="anexos")
+    arquivo = models.FileField(upload_to=caminho_sugestao)
+    nome_original = models.CharField(max_length=255)
+    tamanho = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return self.nome_original
+
+
 class Encerramento(models.Model):
     """Registro de um encerramento de ano letivo, com o necessário para desfazê-lo."""
 
@@ -1204,6 +1315,22 @@ class Configuracao(models.Model):
                   "atenção dos seus estagiários. Quem não quiser pode desligar em Meus dados.",
     )
     resumo_enviado_em = models.DateTimeField(null=True, blank=True, editable=False)
+    avaliacoes_abertas = models.BooleanField(
+        "Liberar as avaliações para os estagiários", default=False,
+        help_text="Autoavaliação e avaliação do orientador, com o texto pronto para copiar no SICE.",
+    )
+    avaliacoes_prazo = models.DateField("Prazo das avaliações", null=True, blank=True)
+    orientador_le_avaliacao = models.BooleanField(
+        "O orientador pode ler a avaliação que o estagiário faz dele", default=False,
+        help_text="Desligado: o orientador vê só se foi feita; o conteúdo fica para a coordenação e o administrador.",
+    )
+    sice_url = models.URLField("Endereço do SICE para o estagiário", blank=True,
+                               help_text="Aparece como botão “Abrir o SICE” na tela de copiar as respostas.")
+    email_sugestoes = models.EmailField(
+        "E-mail que recebe as sugestões e os erros", blank=True,
+        help_text="Tudo o que for enviado em “Sugestões e erros” chega aqui, com os anexos. Vazio = variável "
+                  "SUGESTOES_EMAIL do servidor ou, se não houver, o e-mail dos administradores.",
+    )
     tema_escuro = models.BooleanField(
         "Permitir o tema escuro", default=True,
         help_text="Cada pessoa escolhe no menu dela: automático (segue o celular), claro ou escuro. Desligado: o "

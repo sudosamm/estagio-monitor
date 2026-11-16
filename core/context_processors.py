@@ -16,6 +16,8 @@ def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0):
                                  {"agendamentos", "novo_agendamento", "agendamento_detalhe", "assinar_agenda"}, url_atual),
         _item("Frequências", "frequencias", {"frequencias"}, url_atual),
         _item("Feedback dos supervisores", "feedback_geral", {"feedback_geral"}, url_atual),
+        _item("Avaliações (SICE)", "avaliacoes_escola", {"avaliacoes_escola", "ver_avaliacao", "perguntas_avaliacao",
+                                                         "pergunta_avaliacao_editar"}, url_atual),
         _item("Atestados", "atestados", {"atestados", "atestado_detalhe", "enviar_atestado"}, url_atual, atestados),
         _item("Pasta de documentos", "pasta_geral", {"pasta_geral", "tipos_documento", "tipo_documento_editar"},
               url_atual),
@@ -79,6 +81,10 @@ def globais(request):
         from .models import Configuracao
 
         ctx["notificacoes_nao_lidas"] = user.notificacoes.filter(lida=False).count()
+        if not user.deve_trocar_senha and request.resolver_match and request.resolver_match.url_name != "novidades":
+            from .novidades import pendentes
+
+            ctx["NOVIDADES"] = pendentes(user)
         ctx["CONFIG"] = Configuracao.atual()
         ctx["EMAIL_ATIVO"] = settings.EMAIL_ATIVO
         if user.pode("painel"):

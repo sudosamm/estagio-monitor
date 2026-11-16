@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Perguntas das avaliações{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><div class="migalha"><a href="{% url 'avaliacoes_escola' %}">← Avaliações</a></div><h1>Perguntas das avaliações</h1>
+  <p>Deixe igual ao formulário do SICE: mesmo texto, mesma ordem e o mesmo tipo de resposta. Assim o estagiário só copia e cola.</p></div></div>
+<div class="grade grade-lado">
+  <div>{% for rotulo, itens in grupos %}<div class="card"><h2>{{ rotulo }}</h2>
+    <ol class="lista-sice">{% for p in itens %}<li class="{% if not p.ativa %}muted{% endif %}"><div class="cresce"><strong>{{ p.enunciado }}</strong><small style="display:block" class="muted">{{ p.get_resposta_display }}{% if not p.obrigatoria %} · opcional{% endif %}{% if p.limite %} · até {{ p.limite }} caracteres{% endif %}{% if not p.ativa %} · fora de uso{% endif %}</small></div><a class="btn sec sm" href="{% url 'pergunta_avaliacao_editar' p.pk %}">Editar</a></li>
+    {% empty %}<li class="vazio">Nenhuma pergunta.</li>{% endfor %}</ol></div>{% endfor %}</div>
+  <div class="card destaque"><h3>{% if editando %}Editar pergunta{% else %}Nova pergunta{% endif %}</h3>
+    <form method="post">{% csrf_token %}{% include "core/_form.html" %}<div class="acoes"><button class="btn" type="submit">Salvar</button>{% if editando %}<a class="btn sec" href="{% url 'perguntas_avaliacao' %}">Cancelar</a>{% endif %}</div></form>
+    <p class="muted" style="font-size:.8rem">Para tirar uma pergunta, desmarque “Em uso”: respostas já dadas continuam guardadas.</p></div>
+</div>
+{% endblock %}

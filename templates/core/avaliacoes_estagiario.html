@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Avaliações{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Avaliações do estágio</h1><p>Responda aqui com calma (dá para salvar e continuar depois). No fim, o sistema mostra as respostas prontas para você copiar no SICE.</p></div></div>
+{% if not config.avaliacoes_abertas %}<div class="caixa-info">As avaliações ainda não foram liberadas pela escola. Você recebe um aviso quando abrirem.</div>{% endif %}
+{% if config.avaliacoes_prazo %}<div class="caixa-alerta">Prazo: até <strong>{{ config.avaliacoes_prazo|date:"d/m/Y" }}</strong>.</div>{% endif %}
+<div class="grade grade-2">
+  {% for i in itens %}
+  <div class="card{% if i.av.copiada_sice_em %}{% elif i.av.concluida_em %} destaque{% endif %}">
+    <div class="card-cab"><h2>{{ i.rotulo }}</h2>
+      {% if i.av.copiada_sice_em %}<span class="selo pasta-conferido">copiada para o SICE</span>{% elif i.av.concluida_em %}<span class="selo pasta-enviado">concluída · falta colar no SICE</span>{% elif i.av %}<span class="selo pasta-pendente">rascunho</span>{% else %}<span class="selo pasta-pendente">não iniciada</span>{% endif %}</div>
+    <p class="muted" style="font-size:.88rem">{{ i.n }} pergunta{{ i.n|pluralize }}.{% if i.tipo == "ORIENTADOR" %} Sua avaliação sobre a orientação que recebeu da escola: seja sincero(a), ela ajuda a melhorar o acompanhamento.{% else %} Como você avalia o seu próprio desempenho no estágio.{% endif %}</p>
+    <div class="acoes">
+      {% if config.avaliacoes_abertas or i.av %}<a class="btn {% if i.av.concluida_em %}sec{% endif %}" href="{% url 'responder_avaliacao' i.tipo|lower %}">{% if i.av.concluida_em %}Ver ou editar respostas{% elif i.av %}Continuar{% else %}Começar{% endif %}</a>{% endif %}
+      {% if i.av.concluida_em %}<a class="btn" href="{% url 'copiar_avaliacao' i.tipo|lower %}">{% icone "arquivo" %} Copiar para o SICE</a>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -9,7 +9,7 @@ from django.utils.crypto import get_random_string
 
 from .models import (
     DIAS_SEMANA, Agendamento, Candidatura, Configuracao, Curso, DiaSemEstagio, Documento, Estagio, FolhaEnviada,
-    Feedback, Justificativa, LocalEstagio, Mensagem, Registro, TipoDocumento, Turma, Usuario, horas_dos_horarios,
+    Feedback, Justificativa, LocalEstagio, Mensagem, PerguntaAvaliacao, Sugestao, Registro, TipoDocumento, Turma, Usuario, horas_dos_horarios,
 )
 from .validators import limpar_cep, limpar_cnpj_ou_cpf, limpar_cpf
 
@@ -355,7 +355,8 @@ class PerfilForm(FormularioModelo):
 
     class Meta:
         model = Usuario
-        fields = ["foto", "email", "telefone", "cpf", "cargo", "avisos_email", "resumo_semanal", "apresentacao",
+        fields = ["foto", "email", "telefone", "cpf", "cargo", "avisos_email", "resumo_semanal", "novidades_popup",
+                  "apresentacao",
                   "habilidades", "curriculo", "perfil_visivel"]
         labels = {"foto": "Foto de perfil", "telefone": "Telefone / WhatsApp", "cargo": "Cargo/Função"}
         widgets = {"foto": forms.ClearableFileInput(attrs={"accept": "image/*"}),
@@ -432,9 +433,9 @@ class ConfiguracaoForm(FormularioModelo):
     class Meta:
         model = Configuracao
         fields = ["nome_escola", "municipio_escola", "ano_referencia", "cabecalho_folha", "logo_folha",
-                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "tema_escuro", "retencao_anos", "feedback_mensal", "atestados_supervisor", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
+                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "email_sugestoes", "avaliacoes_abertas", "avaliacoes_prazo", "orientador_le_avaliacao", "sice_url", "tema_escuro", "retencao_anos", "feedback_mensal", "atestados_supervisor", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
                   "curriculos_habilitados", "banco_talentos_habilitado"]
-        widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(),
+        widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(), "avaliacoes_prazo": DataInput(),
                    "texto_captacao": forms.Textarea(attrs={"rows": 3})}
 
     def clean_logo_folha(self):
@@ -908,6 +909,76 @@ class ComunicadoForm(Formulario):
             self.fields["curso"].queryset = Curso.objects.filter(pk__in=usuario.cursos_ids())
         self.fields["turma"].queryset = turmas
         self.fields["turma"].label_from_instance = lambda t: t.rotulo
+
+
+class VariosArquivosInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class VariosArquivosField(forms.FileField):
+    def __init__(self, *a, **kw):
+        kw.setdefault("widget", VariosArquivosInput())
+        super().__init__(*a, **kw)
+
+    def clean(self, data, initial=None):
+        um = super().clean
+        if isinstance(data, (list, tuple)):
+            return [um(d, initial) for d in data if d]
+        return [um(data, initial)] if data else []
+
+
+EXTENSOES_SUGESTAO = {"png", "jpg", "jpeg", "gif", "webp", "heic", "pdf", "txt", "csv", "doc", "docx", "odt", "xls",
+                      "xlsx", "ods", "mp4", "mov", "webm", "zip"}
+
+
+class SugestaoForm(Formulario):
+    tipo = forms.ChoiceField(label="Sobre o quê", choices=Sugestao.Tipo.choices, initial=Sugestao.Tipo.SUGESTAO)
+    nome = forms.CharField(label="Seu nome", max_length=150)
+    email = forms.EmailField(label="E-mail para resposta (opcional)", required=False)
+    mensagem = forms.CharField(label="Mensagem", max_length=5000, widget=forms.Textarea(attrs={
+        "rows": 6, "placeholder": "Conte com detalhes. Se for um erro: o que você fez, o que esperava e o que aconteceu."}))
+    anexos = VariosArquivosField(
+        label="Anexos (opcional)", required=False,
+        widget=VariosArquivosInput(attrs={"accept": "image/*,application/pdf,.pdf,.doc,.docx,.odt,.xls,.xlsx,.ods,"
+                                                    ".csv,.txt,.zip,video/*"}),
+        help_text="Prints da tela, fotos, PDFs ou planilhas.",
+    )
+    site = forms.CharField(required=False, widget=forms.TextInput(attrs={"tabindex": "-1", "autocomplete": "off"}),
+                           label="Deixe em branco")  # armadilha para robôs (fica escondida)
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.fields["anexos"].help_text += (f" Até {settings.SUGESTOES_MAX_ARQUIVOS} arquivos, "
+                                            f"{settings.SUGESTOES_MAX_MB} MB no total.")
+
+    def clean_anexos(self):
+        arquivos = self.cleaned_data.get("anexos") or []
+        if len(arquivos) > settings.SUGESTOES_MAX_ARQUIVOS:
+            raise forms.ValidationError(f"Envie no máximo {settings.SUGESTOES_MAX_ARQUIVOS} arquivos.")
+        if sum(a.size for a in arquivos) > settings.SUGESTOES_MAX_MB * 1024 * 1024:
+            raise forms.ValidationError(f"Os anexos passam de {settings.SUGESTOES_MAX_MB} MB. Envie menos arquivos "
+                                        "ou imagens menores.")
+        for a in arquivos:
+            ext = a.name.rsplit(".", 1)[-1].lower() if "." in a.name else ""
+            if ext not in EXTENSOES_SUGESTAO:
+                raise forms.ValidationError(f"“{a.name}”: tipo de arquivo não aceito. Use imagem, PDF, documento, "
+                                            "planilha, vídeo ou ZIP.")
+        return arquivos
+
+
+class PerguntaAvaliacaoForm(FormularioModelo):
+    class Meta:
+        model = PerguntaAvaliacao
+        fields = ["avaliacao", "enunciado", "ajuda", "resposta", "opcoes", "limite", "obrigatoria", "ordem", "ativa"]
+        widgets = {"opcoes": forms.Textarea(attrs={"rows": 3})}
+        labels = {"ordem": "Ordem (a mesma do SICE)"}
+
+    def clean(self):
+        d = super().clean()
+        if d.get("resposta") == PerguntaAvaliacao.Resposta.ESCOLHA and len([o for o in (d.get("opcoes") or "").splitlines()
+                                                                            if o.strip()]) < 2:
+            self.add_error("opcoes", "Informe pelo menos duas opções, uma por linha.")
+        return d
 
 
 class TipoDocumentoForm(FormularioModelo):

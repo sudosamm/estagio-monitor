@@ -25,7 +25,7 @@
       <div class="campo"><label for="id_password">Senha</label><input type="password" name="password" id="id_password" autocomplete="current-password" required></div>
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn grande bloco" type="submit">Entrar</button>
-      <p class="muted mt-1" style="font-size:.85rem">Esqueceu a senha? Peça ao seu orientador para redefini-la.</p>
+      <p class="muted mt-1" style="font-size:.85rem">Esqueceu a senha? Peça ao seu orientador para redefini-la. Outro problema? <a href="{% url 'sugestoes' %}?tipo=ERRO">Avise a equipe</a>.</p>
       {% if CAPTACAO_ABERTA %}<div class="caixa-info mt-1">Sua empresa ou órgão quer receber estagiários? <a href="{% url 'candidatura_publica' %}"><strong>Cadastre-se como concedente</strong></a>.</div>{% endif %}
     </form>
   </section>

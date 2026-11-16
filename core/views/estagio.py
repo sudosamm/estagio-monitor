@@ -111,6 +111,9 @@ def estagio_detalhe(request, pk):
         from ..pasta import pasta_do_estagio
         from .frequencia import resumo_impressoes
 
+        if ctx["e_estagiario"] and Configuracao.atual().avaliacoes_abertas:
+            feitas = set(estagio.avaliacoes.filter(copiada_sice_em__isnull=False).values_list("tipo", flat=True))
+            ctx["avaliacoes_faltam"] = 2 - len(feitas)
         quem = "ESTAGIARIO" if ctx["e_estagiario"] else "SUPERVISOR" if ctx["e_supervisor"] else None
         ctx["pasta_falta"] = [i for i in pasta_do_estagio(estagio) if i.codigo in ("atrasado", "recusado", "pendente")
                               and (quem is None or i.tipo.quem_envia == quem)]

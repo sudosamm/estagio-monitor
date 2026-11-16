@@ -42,6 +42,7 @@
 </nav>
 
 {% if aba == "visao" %}
+{% if avaliacoes_faltam %}<a class="faixa-aviso" href="{% url 'minhas_avaliacoes' %}">{% icone "estrela" %}<span><strong>Avaliações do estágio liberadas:</strong> {% if avaliacoes_faltam == 2 %}faltam as duas{% else %}falta uma{% endif %} (autoavaliação e avaliação do orientador){% if CONFIG.avaliacoes_prazo %}, até {{ CONFIG.avaliacoes_prazo|date:"d/m" }}{% endif %}.</span><span class="btn sm">Responder</span></a>{% endif %}
 {% if pasta_falta %}<a class="faixa-aviso" href="?aba=arquivos#pasta">{% icone "arquivo" %}<span><strong>Pasta do estágio:</strong> {% if e_estagiario or e_supervisor %}você precisa enviar{% else %}faltam{% endif %} {% for i in pasta_falta %}{{ i.tipo.nome }}{% if i.codigo == "atrasado" %} (atrasado){% elif i.codigo == "recusado" %} (recusado){% elif i.prazo %} (até {{ i.prazo|date:"d/m" }}){% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}.</span><span class="btn sm">Enviar</span></a>{% endif %}
 <div class="grade grade-lado">
   <div>

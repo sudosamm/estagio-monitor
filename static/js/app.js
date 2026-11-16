@@ -283,3 +283,24 @@ document.querySelectorAll("[data-tema-form]").forEach((form) => {
     } catch (e) { form.submit(); }
   });
 });
+// “O que há de novo”: abre sozinho e fecha sem recarregar a página
+(() => {
+  const dialogo = document.getElementById("novidades-popup");
+  if (!dialogo || typeof dialogo.showModal !== "function") return;
+  setTimeout(() => dialogo.showModal(), 400);
+  const form = dialogo.querySelector("form");
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const dados = new FormData(form);
+    dados.set("acao", ev.submitter ? ev.submitter.value : "fechar");
+    dialogo.close();
+    try {
+      await fetch(form.action, { method: "POST", body: dados, credentials: "same-origin", headers: { "X-Requested-With": "fetch" } });
+    } catch (e) { /* tenta de novo no próximo acesso */ }
+  });
+  dialogo.addEventListener("cancel", () => {  // Esc conta como “fechar”
+    const dados = new FormData(form);
+    dados.set("acao", "fechar");
+    fetch(form.action, { method: "POST", body: dados, credentials: "same-origin", headers: { "X-Requested-With": "fetch" } }).catch(() => {});
+  });
+})();

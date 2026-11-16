@@ -2351,3 +2351,214 @@ class TemaTests(Base):
 
     def test_visitante_segue_o_aparelho(self):
         self.assertContains(self.client.get(reverse("login")), 'data-preferencia="auto"')
+
+
+class AvaliacoesSICETests(Base):
+    def _liberar(self, **kw):
+        c = Configuracao.atual()
+        c.avaliacoes_abertas = True
+        for k, v in kw.items():
+            setattr(c, k, v)
+        c.save()
+
+    def _respostas(self, tipo):
+        from .models import PerguntaAvaliacao
+
+        dados = {}
+        for p in PerguntaAvaliacao.objects.filter(avaliacao=tipo, ativa=True):
+            dados[f"p{p.pk}"] = "4" if p.resposta == "NOTA" else f"Resposta para {p.enunciado}"
+        return dados
+
+    def test_fechada_ate_liberar(self):
+        self.entrar(self.aluno)
+        r = self.client.get(reverse("responder_avaliacao", args=["auto"]), follow=True)
+        self.assertContains(r, "ainda não foram liberadas")
+
+    def test_rascunho_concluir_e_copiar(self):
+        from .models import Avaliacao
+
+        self._liberar(sice_url="https://sice.exemplo.ce.gov.br/")
+        self.entrar(self.aluno)
+        self.assertContains(self.client.get(self.est.get_absolute_url()), "Avaliações do estágio liberadas")
+        dados = self._respostas("AUTO")
+        primeira = next(iter(dados))
+        r = self.client.post(reverse("responder_avaliacao", args=["auto"]), {primeira: dados[primeira], "acao": "concluir"})
+        self.assertContains(r, "Responda esta pergunta para concluir")
+        self.client.post(reverse("responder_avaliacao", args=["auto"]), {primeira: dados[primeira], "acao": "salvar"})
+        av = Avaliacao.objects.get()
+        self.assertIsNone(av.concluida_em)
+        r = self.client.post(reverse("responder_avaliacao", args=["auto"]), {**dados, "acao": "concluir"}, follow=True)
+        self.assertContains(r, "copiar as respostas para o SICE")
+        self.assertContains(r, "Marque: <strong>4 — Muito bom</strong>", html=False)
+        self.assertContains(r, "Resposta para Principais atividades")
+        self.assertContains(r, "https://sice.exemplo.ce.gov.br/")
+        self.assertTrue(Notificacao.objects.filter(usuario=self.ori, texto__contains="concluiu a autoavaliação").exists())
+        self.client.post(reverse("copiar_avaliacao", args=["auto"]), {"acao": "feito"})
+        av.refresh_from_db()
+        self.assertIsNotNone(av.copiada_sice_em)
+
+    def test_quem_le_a_avaliacao_do_orientador(self):
+        from .models import Avaliacao
+
+        self._liberar()
+        av = Avaliacao.objects.create(estagio=self.est, tipo="ORIENTADOR", respostas={}, concluida_em=timezone.now())
+        auto = Avaliacao.objects.create(estagio=self.est, tipo="AUTO", respostas={}, concluida_em=timezone.now())
+        self.entrar(self.ori)
+        self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[av.pk])).status_code, 403)
+        self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[auto.pk])).status_code, 200)
+        self.assertContains(self.client.get(reverse("avaliacoes_escola")), "concluída")
+        self._liberar(orientador_le_avaliacao=True)
+        self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[av.pk])).status_code, 200)
+        self.entrar(self.sup)
+        self.assertEqual(self.client.get(reverse("ver_avaliacao", args=[auto.pk])).status_code, 403)
+
+    def test_perguntas_editaveis_e_lembrete(self):
+        from .models import PerguntaAvaliacao
+
+        self._liberar()
+        self.entrar(self.ori)
+        r = self.client.post(reverse("perguntas_avaliacao"), {"avaliacao": "AUTO", "enunciado": "Turno do estágio",
+                                                              "resposta": "ESCOLHA", "opcoes": "Manhã", "ordem": 9,
+                                                              "obrigatoria": "on", "ativa": "on"})
+        self.assertContains(r, "pelo menos duas opções")
+        self.client.post(reverse("perguntas_avaliacao"), {"avaliacao": "AUTO", "enunciado": "Turno do estágio",
+                                                          "resposta": "ESCOLHA", "opcoes": "Manhã\nTarde", "ordem": 9,
+                                                          "obrigatoria": "on", "ativa": "on"})
+        self.assertTrue(PerguntaAvaliacao.objects.filter(enunciado="Turno do estágio").exists())
+        self.client.post(reverse("avisar_avaliacoes"))
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="Faltam as suas avaliações").exists())
+        self.entrar(self.aluno)
+        self.assertContains(self.client.get(reverse("responder_avaliacao", args=["auto"])), "Tarde")
+
+
+class NovidadesTests(Base):
+    def _velho(self, u):
+        u.novidades_vistas = "2000.01.01"
+        u.save()
+        return u
+
+    def test_cada_papel_ve_so_o_seu(self):
+        from . import novidades
+
+        aluno = [i["texto"] for v in novidades.para(self.aluno) for i in v["itens"]]
+        sup = [i["texto"] for v in novidades.para(self.sup) for i in v["itens"]]
+        self.assertTrue(any("Avaliações para o SICE" in t for t in aluno))
+        self.assertFalse(any("QR code de presença: mostre" in t for t in aluno))
+        self.assertTrue(any("QR code de presença: mostre" in t for t in sup))
+        self.assertFalse(any("Encerramento do ano" in t for t in sup))
+        self.ori.is_superuser = True
+        self.ori.save()
+        tudo = [i for v in novidades.para(self.ori) for i in v["itens"]]
+        self.assertEqual(len(tudo), sum(len(v.itens) for v in novidades.VERSOES))  # admin vê tudo
+        self.assertTrue(any(i["publico"] == ["Supervisores"] for i in tudo))  # com a indicação do público
+
+    def test_popup_aparece_e_ver_a_cada_atualizacao(self):
+        self._velho(self.aluno)
+        self.entrar(self.aluno)
+        r = self.client.get(self.est.get_absolute_url())
+        self.assertContains(r, "O que há de novo")
+        self.assertContains(r, "Avaliações para o SICE")
+        self.client.post(reverse("novidades_visto"), {"acao": "sempre"}, HTTP_X_REQUESTED_WITH="fetch")
+        self.aluno.refresh_from_db()
+        from .novidades import ultima_versao
+
+        self.assertEqual((self.aluno.novidades_vistas, self.aluno.novidades_popup), (ultima_versao(), True))
+        self.assertNotContains(self.client.get(self.est.get_absolute_url()), 'id="novidades-popup"')
+
+    def test_nao_mostrar_novamente(self):
+        from unittest import mock as m
+
+        from . import novidades
+
+        self._velho(self.aluno)
+        self.entrar(self.aluno)
+        self.client.post(reverse("novidades_visto"), {"acao": "nunca"})
+        self.aluno.refresh_from_db()
+        self.assertFalse(self.aluno.novidades_popup)
+        nova = novidades.Versao("2099.01.01", "Futuro", ((novidades.TODOS, "Algo novo"),))
+        with m.patch.object(novidades, "VERSOES", (nova,) + novidades.VERSOES):
+            self.assertNotContains(self.client.get(self.est.get_absolute_url()), 'id="novidades-popup"')
+            r = self.client.get(reverse("novidades"))
+            self.assertContains(r, "Algo novo")  # a página continua mostrando tudo
+
+    def test_conta_nova_comeca_em_dia(self):
+        novo = _ativo(criar_usuario("Nina Nova", Usuario.Papel.ESTAGIARIO))
+        from .novidades import ultima_versao
+
+        self.assertEqual(novo.novidades_vistas, ultima_versao())
+
+
+@override_settings(EMAIL_ATIVO=True, MEDIA_ROOT=settings.BASE_DIR / "data" / "teste-anexos")
+class SugestoesTests(Base):
+    def setUp(self):
+        super().setUp()
+        import shutil
+
+        self.addCleanup(shutil.rmtree, settings.BASE_DIR / "data" / "teste-anexos", ignore_errors=True)
+        c = Configuracao.atual()
+        c.email_sugestoes = "equipe@exemplo.br"
+        c.save()
+
+    def test_envia_por_email_com_anexos(self):
+        from django.core import mail
+
+        from .models import Sugestao
+
+        self.aluno.email = "maria@exemplo.br"
+        self.aluno.save()
+        self.entrar(self.aluno)
+        r = self.client.get(reverse("sugestoes"), HTTP_REFERER="http://testserver/estagios/1/")
+        self.assertContains(r, 'value="Maria da Silva Souza"')
+        foto = SimpleUploadedFile("print.png", b"\x89PNG fake", content_type="image/png")
+        pdf = SimpleUploadedFile("erro.pdf", b"%PDF-1.4", content_type="application/pdf")
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(reverse("sugestoes"), {"tipo": "ERRO", "nome": "Maria", "email": "maria@exemplo.br",
+                                                        "mensagem": "O botão de presença não funciona.",
+                                                        "pagina": "/estagios/1/", "anexos": [foto, pdf]}, follow=True)
+        self.assertContains(r, "Mensagem enviada")
+        s = Sugestao.objects.get()
+        self.assertEqual((s.usuario, s.anexos.count()), (self.aluno, 2))
+        self.assertEqual(len(mail.outbox), 1)
+        m = mail.outbox[0]
+        self.assertEqual((m.to, m.reply_to), (["equipe@exemplo.br"], ["maria@exemplo.br"]))
+        self.assertIn("Erro ou problema", m.subject)
+        self.assertIn("/estagios/1/", m.body)
+        self.assertEqual(sorted(a[0] for a in m.attachments), ["erro.pdf", "print.png"])
+        s.refresh_from_db()
+        self.assertIsNotNone(s.enviada_em)
+
+    def test_visitante_sem_login_e_robo(self):
+        from django.core import mail
+
+        from .models import Sugestao
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse("sugestoes"), {"tipo": "ERRO", "nome": "Visitante", "mensagem": "Não consigo entrar."})
+            self.client.post(reverse("sugestoes"), {"tipo": "ERRO", "nome": "Robô", "mensagem": "spam", "site": "x"})
+        self.assertEqual(list(Sugestao.objects.values_list("nome", flat=True)), ["Visitante"])
+        self.assertIn("visitante", mail.outbox[0].body)
+
+    def test_arquivo_proibido_e_limite(self):
+        from .models import Sugestao
+
+        self.entrar(self.aluno)
+        r = self.client.post(reverse("sugestoes"), {"tipo": "OUTRO", "nome": "M", "mensagem": "x",
+                                                    "anexos": [SimpleUploadedFile("virus.exe", b"MZ")]})
+        self.assertContains(r, "tipo de arquivo não aceito")
+        for _ in range(5):
+            self.client.post(reverse("sugestoes"), {"tipo": "OUTRO", "nome": "M", "mensagem": "x"})
+        r = self.client.post(reverse("sugestoes"), {"tipo": "OUTRO", "nome": "M", "mensagem": "x"})
+        self.assertContains(r, "várias mensagens na última hora")
+        self.assertEqual(Sugestao.objects.count(), 5)
+
+    def test_anexo_so_para_admin(self):
+        from .models import AnexoSugestao, Sugestao
+
+        s = Sugestao.objects.create(nome="X", mensagem="Y")
+        a = AnexoSugestao.objects.create(sugestao=s, arquivo=SimpleUploadedFile("a.pdf", b"%PDF"), nome_original="a.pdf")
+        self.entrar(self.aluno)
+        self.assertEqual(self.client.get(reverse("anexo_sugestao", args=[a.pk])).status_code, 403)
+        self.ori.is_superuser = True
+        self.ori.save()
+        self.entrar(self.ori)
+        self.assertEqual(self.client.get(reverse("anexo_sugestao", args=[a.pk])).status_code, 200)
