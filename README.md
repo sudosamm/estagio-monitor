@@ -39,6 +39,8 @@ O sistema pode ser **instalado como app** (PWA): ícone na tela inicial, abre em
 - Usuário gerado como `primeiro.ultimo` sem acentos (ex.: *Maria da Silva Souza* → `maria.souza`). Se já existir, recebe um número (`maria.souza2`).
 - Todas as contas nascem com a `SENHA_PADRAO` e a pessoa **é obrigada a criar a própria senha** no primeiro acesso.
 - O orientador pode voltar a senha de alguém para a padrão (em *Contas → Editar*).
+- **Proteção do login:** depois de 5 senhas erradas para o mesmo usuário (no mesmo aparelho/rede), o login espera 15 minutos. Também há limite por usuário (20) e por rede (40) na mesma janela, inclusive no `/admin/`. Entrou certo, a contagem zera.
+- **Senha nova:** pelo menos 8 caracteres, não pode ser só números, uma senha comum (ex.: `password`) nem a senha inicial.
 - **Desativar/reativar** (em *Contas*): a pessoa deixa de entrar, mas o histórico fica guardado.
   - **Estagiário:** o estágio ativo é encerrado junto. Ao reativar, dá para reabrir o último estágio.
   - **Supervisor com estagiários ativos:** é preciso escolher um substituto da mesma concedente para cada um.
@@ -438,6 +440,12 @@ Para criar outros orientadores depois: entre como administrador → *Contas* →
 ```bash
 python manage.py criar_orientador "Nome Completo"
 ```
+
+### Segurança no servidor
+- `SECRET_KEY` é obrigatória fora do modo de desenvolvimento: sem ela o sistema não sobe.
+- **HTTPS obrigatório:** no Cloudflare, ligue *SSL/TLS → Edge Certificates → Always Use HTTPS*. Ou, no sistema, `FORCAR_HTTPS=1`, que redireciona `http://` para `https://` e envia HSTS (1 ano). Ligue só depois de confirmar que o site abre por `https://`. O `/saude/` do healthcheck continua liberado em http.
+- **Porta do container:** com o Cloudflare Tunnel, ninguém precisa acessar a `PORTA` direto pela internet. Deixe-a fechada no firewall da VPS (ou publique como `127.0.0.1:${PORTA}:8000`), senão dá para pular o Cloudflare e falsificar o IP de origem que os limites de tentativas usam.
+- Arquivos enviados pelos usuários nunca são públicos. Só PDF e fotos abrem no navegador; o resto baixa, e todos vão com CSP *sandbox*, sem rodar script.
 
 ### Backup
 Tudo fica em `/data` (`db.sqlite3` e a pasta `anexos/`). Copiar esse volume já é um backup completo.

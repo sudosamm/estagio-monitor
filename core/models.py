@@ -1669,3 +1669,15 @@ class FolhaEnviada(models.Model):
     def extensao(self):
         nome = self.nome_original or self.arquivo.name
         return nome.rsplit(".", 1)[-1].upper() if "." in nome else "ARQ"
+
+
+class TentativaLogin(models.Model):
+    """Senha errada no login (para limitar tentativas). Registros com mais de um dia são apagados sozinhos."""
+
+    username = models.CharField(max_length=150, db_index=True)
+    ip = models.GenericIPAddressField(null=True, blank=True, db_index=True)
+    criado_em = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        verbose_name = "tentativa de login com erro"
+        verbose_name_plural = "tentativas de login com erro"

@@ -5,11 +5,10 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core.exceptions import PermissionDenied
+from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-
-from django.db.models import Q
 
 from ..forms import PerfilForm
 from ..models import Configuracao, Documento, Estagio, Notificacao, Usuario
@@ -57,22 +56,47 @@ def perfil(request):
     return render(request, "core/perfil.html", {"form": form, "config": config})
 
 
+# Abrem no navegador só PDF e fotos comuns. SVG, HTML e o resto baixam, e qualquer arquivo enviado por usuário
+# vai com CSP “sandbox”: mesmo que alguém mande um arquivo com script, ele não roda com a sessão de quem abriu.
+TIPOS_INLINE = {"application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp"}
+
+
+def resposta_arquivo(f, nome, tipo, inline=True):
+    inline = inline and tipo in TIPOS_INLINE
+    resposta = FileResponse(f, as_attachment=not inline, filename=nome,
+                            content_type=tipo if inline else "application/octet-stream")
+    if tipo != "application/pdf":  # o leitor de PDF do Chrome não abre em documento “sandbox”
+        resposta["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
+    return resposta
+
+
 def _servir(arquivo, nome, inline=True):
     try:
         f = arquivo.open("rb")
     except FileNotFoundError as exc:
         raise Http404 from exc
     tipo = mimetypes.guess_type(arquivo.name)[0] or "application/octet-stream"
-    resposta = FileResponse(f, as_attachment=not inline, filename=nome, content_type=tipo)
+    resposta = resposta_arquivo(f, nome, tipo, inline)
     resposta["Cache-Control"] = "private, max-age=86400"
     return resposta
 
 
+def pode_ver_foto(user, alvo):
+    """Dono, gestores, fotos de gestores, quem divide um estágio com a pessoa e quem pode ver o perfil profissional."""
+    if user.pk == alvo.pk or user.is_gestor or alvo.is_gestor:
+        return True
+    juntos = (Estagio.objects.filter(Q(estagiario=alvo) | Q(supervisor=alvo))
+              .filter(Q(estagiario=user) | Q(supervisor=user) | Q(orientador=user)))
+    if juntos.exists():
+        return True
+    return alvo.papel == Usuario.Papel.ESTAGIARIO and pode_ver_perfil_profissional(user, alvo)
+
+
 @login_required
 def foto_usuario(request, pk):
-    """Fotos de perfil só para quem está logado (nunca públicas)."""
+    """Fotos de perfil: nunca públicas, e só para quem tem motivo de ver (não dá para listar a escola toda)."""
     alvo = get_object_or_404(Usuario, pk=pk)
-    if not alvo.foto:
+    if not alvo.foto or not pode_ver_foto(request.user, alvo):
         raise Http404
     return _servir(alvo.foto, f"{alvo.username}.jpg")
 
@@ -188,8 +212,7 @@ def baixar_documento(request, pk):
         raise Http404("Arquivo não encontrado") from exc
     nome = doc.nome_original or doc.arquivo.name.rsplit("/", 1)[-1]
     tipo = mimetypes.guess_type(nome)[0] or "application/octet-stream"
-    inline = tipo.startswith("image/") or tipo == "application/pdf"
-    return FileResponse(arquivo, as_attachment=not inline, filename=nome, content_type=tipo)
+    return resposta_arquivo(arquivo, nome, tipo)
 
 
 @login_required

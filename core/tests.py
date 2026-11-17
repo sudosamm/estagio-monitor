@@ -2746,3 +2746,84 @@ class AcompanhamentoVisitaTests(Base):
         self.client.post(reverse("perguntas_avaliacao"), {"acao": "colar", "c-curso": enf.pk, "c-substituir": "on",
                                                           "c-atividades": "ADMINISTRAR MEDICAMENTOS"})
         self.assertEqual(list(qs.filter(ativa=True).values_list("enunciado", flat=True)), ["ADMINISTRAR MEDICAMENTOS"])
+
+
+class SegurancaTests(Base):
+    def _login(self, senha, usuario="maria.souza", ip="10.0.0.1"):
+        return self.client.post(reverse("login"), {"username": usuario, "password": senha}, REMOTE_ADDR=ip)
+
+    def test_limite_de_tentativas_de_login(self):
+        from .models import TentativaLogin
+
+        self.aluno.set_password("Senha#Certa9")
+        self.aluno.save()
+        for i in range(5):
+            self.assertContains(self._login(f"errada{i}"), "Usuário ou senha incorretos.")
+        r = self._login("Senha#Certa9")  # bloqueado: nem a senha certa entra agora
+        self.assertContains(r, "Muitas tentativas")
+        self.assertNotIn("_auth_user_id", self.client.session)
+        Usuario.objects.filter(pk=self.aluno.pk).update(is_staff=True)  # vale para o /admin/ também
+        r = self.client.post(reverse("admin:login"), {"username": "maria.souza", "password": "Senha#Certa9"},
+                             REMOTE_ADDR="10.0.0.1")
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        # de outro IP a pessoa ainda entra (o atacante não trava a conta de ninguém com poucas tentativas)
+        self.assertEqual(self._login("Senha#Certa9", ip="10.0.0.2").status_code, 302)
+        self.assertFalse(TentativaLogin.objects.filter(username="maria.souza").exists())  # entrou: zera
+
+    def test_limite_por_ip_para_varios_usuarios(self):
+        from .seguranca import LIMITE_IP
+
+        for i in range(LIMITE_IP):
+            self._login("x", usuario=f"chute{i}")
+        self.aluno.set_password("Senha#Certa9")
+        self.aluno.save()
+        self.assertContains(self._login("Senha#Certa9"), "Muitas tentativas")
+
+    def test_senha_nova_nao_pode_ser_fraca_nem_a_padrao(self):
+        novo = criar_usuario("Novo Aluno", Usuario.Papel.ESTAGIARIO)
+        self.entrar(novo)
+        for fraca in ("senha-teste-1", "12345678", "password", "abc12"):
+            r = self.client.post(reverse("trocar_senha"), {"old_password": "senha-teste-1", "new_password1": fraca,
+                                                           "new_password2": fraca})
+            self.assertEqual(r.status_code, 200, fraca)
+        novo.refresh_from_db()
+        self.assertTrue(novo.deve_trocar_senha)
+
+    def test_arquivo_com_script_nao_entra_nem_abre_no_navegador(self):
+        svg = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+        self.entrar(self.aluno)
+        self.client.post(reverse("enviar_documento", args=[self.est.pk]),
+                         {"titulo": "X", "categoria": "FREQUENCIA", "arquivo": SimpleUploadedFile("x.svg", svg)})
+        self.assertFalse(Documento.objects.exists())
+        # um SVG que já estava salvo (enviado antes da correção) baixa, não abre como página
+        doc = Documento.objects.create(titulo="Antigo", estagio=self.est, orientador=self.ori, enviado_por=self.aluno,
+                                       arquivo=SimpleUploadedFile("y.svg", svg), nome_original="y.svg")
+        self.entrar(self.ori)
+        r = self.client.get(reverse("baixar_documento", args=[doc.pk]))
+        self.assertIn("attachment", r["Content-Disposition"])
+        self.assertEqual(r["Content-Type"], "application/octet-stream")
+        self.assertIn("sandbox", r["Content-Security-Policy"])
+        doc.arquivo.delete(save=False)
+
+    def test_foto_so_para_quem_tem_motivo(self):
+        from django.core.files.base import ContentFile
+
+        outro = _ativo(criar_usuario("Joana Alvo Lima", Usuario.Papel.ESTAGIARIO))
+        outro.foto.save("j.jpg", ContentFile(b"\xff\xd8\xff"))
+        self.entrar(self.aluno)  # colega de outro estágio: não vê
+        self.assertEqual(self.client.get(reverse("foto_usuario", args=[outro.pk])).status_code, 404)
+        self.entrar(self.ori)  # gestão vê
+        self.assertEqual(self.client.get(reverse("foto_usuario", args=[outro.pk])).status_code, 200)
+        self.aluno.foto.save("m.jpg", ContentFile(b"\xff\xd8\xff"))
+        self.entrar(self.sup)  # o supervisor do estágio vê a do estagiário
+        self.assertEqual(self.client.get(reverse("foto_usuario", args=[self.aluno.pk])).status_code, 200)
+        outro.foto.delete(save=False)
+        self.aluno.foto.delete(save=False)
+
+    def test_ajuda_do_campo_nao_vira_html(self):
+        self.local.nome = '<img src=x onerror="alert(1)">'
+        self.local.save()
+        self.entrar(self.ori)
+        r = self.client.get(reverse("trocar_supervisor", args=[self.est.pk]))
+        self.assertNotContains(r, '<img src=x onerror="alert(1)">', html=False)

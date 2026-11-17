@@ -30,6 +30,7 @@ services:
       PUSH_ATIVO: ${PUSH_ATIVO:-1}
       SUGESTOES_EMAIL: ${SUGESTOES_EMAIL:-}
       DEBUG: ${DEBUG:-0}
+      FORCAR_HTTPS: ${FORCAR_HTTPS:-0}
     volumes:
       - estagio-dados:/data
 

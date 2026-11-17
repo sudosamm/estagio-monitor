@@ -19,6 +19,10 @@ def env_list(name, default=""):
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-inseguro-troque-em-producao")
 DEBUG = env_bool("DEBUG", False)
+if not DEBUG and SECRET_KEY == "dev-inseguro-troque-em-producao" and "test" not in sys.argv:
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured("Defina SECRET_KEY (uma chave longa e aleatória) nas variáveis de ambiente.")
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
 # O healthcheck do container acessa http://127.0.0.1:8000/saude/
 for _h in ("localhost", "127.0.0.1"):
@@ -34,6 +38,11 @@ CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 14  # 14 dias
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
+# HTTPS obrigatório (FORCAR_HTTPS=1): redireciona http→https e manda HSTS. Ligue depois de confirmar que o site abre
+# por https; o healthcheck interno (/saude/) continua em http.
+SECURE_SSL_REDIRECT = env_bool("FORCAR_HTTPS", False)
+SECURE_REDIRECT_EXEMPT = [r"^saude/$"]
+SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365 if SECURE_SSL_REDIRECT else 0
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -95,9 +104,14 @@ DATABASES = {
 
 AUTH_USER_MODEL = "core.Usuario"
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 6}},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 8}},
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": "core.seguranca.SenhaDiferenteDaPadrao"},
 ]
+# Limite de tentativas de login (core/seguranca.py), também no /admin/
+AUTHENTICATION_BACKENDS = ["core.seguranca.BackendComLimite"]
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "inicio"
 LOGOUT_REDIRECT_URL = "login"

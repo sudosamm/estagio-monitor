@@ -3,11 +3,12 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
+from core.seguranca import LoginForm
 from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, encerramento, estagio, feedback, frequencia, importacao, novidades, visitas, orientador, pasta, pwa, qrcheckin, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
-    path("entrar/", auth_views.LoginView.as_view(redirect_authenticated_user=True), name="login"),
+    path("entrar/", auth_views.LoginView.as_view(redirect_authenticated_user=True, authentication_form=LoginForm), name="login"),
     path("sair/", auth_views.LogoutView.as_view(), name="logout"),
     path("senha/", comum.trocar_senha, name="trocar_senha"),
     path("perfil/", comum.perfil, name="perfil"),

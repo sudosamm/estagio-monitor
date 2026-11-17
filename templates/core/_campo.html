@@ -11,7 +11,7 @@
     {% if campo.label %}<label for="{{ campo.id_for_label }}">{{ campo.label }}</label>{% endif %}
     {{ campo }}
   {% endif %}
-  {% if campo.help_text %}<div class="ajuda">{{ campo.help_text|safe }}</div>{% endif %}
+  {% if campo.help_text %}<div class="ajuda">{{ campo.help_text }}</div>{% endif %}
   {% for e in campo.errors %}<div class="erro">{{ e }}</div>{% endfor %}
 </div>
 {% endwith %}

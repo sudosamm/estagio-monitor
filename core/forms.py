@@ -840,16 +840,27 @@ class MensagemForm(FormularioModelo):
         labels = {"texto": ""}
 
 
+EXTENSOES_DOCUMENTO = {"pdf", "png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "doc", "docx", "odt", "rtf", "txt",
+                       "xls", "xlsx", "ods", "csv", "ppt", "pptx", "odp", "zip"}
+
+
+def conferir_documento(arq):
+    """Tamanho e tipo dos arquivos da pasta/documentos (nada de .html, .svg, .exe…)."""
+    if arq and arq.size > settings.TAMANHO_MAX_ANEXO_MB * 1024 * 1024:
+        raise forms.ValidationError(f"O arquivo deve ter no máximo {settings.TAMANHO_MAX_ANEXO_MB} MB.")
+    ext = (arq.name.rsplit(".", 1)[-1] if arq and "." in arq.name else "").lower()
+    if arq and ext not in EXTENSOES_DOCUMENTO:
+        raise forms.ValidationError("Tipo de arquivo não aceito. Envie PDF, foto (JPG/PNG) ou documento do Office/LibreOffice.")
+    return arq
+
+
 class DocumentoForm(FormularioModelo):
     class Meta:
         model = Documento
         fields = ["titulo", "categoria", "arquivo", "descricao"]
 
     def clean_arquivo(self):
-        arq = self.cleaned_data["arquivo"]
-        if arq and arq.size > settings.TAMANHO_MAX_ANEXO_MB * 1024 * 1024:
-            raise forms.ValidationError(f"O arquivo deve ter no máximo {settings.TAMANHO_MAX_ANEXO_MB} MB.")
-        return arq
+        return conferir_documento(self.cleaned_data["arquivo"])
 
 
 class EntregaForm(Formulario):
@@ -857,10 +868,7 @@ class EntregaForm(Formulario):
     observacao = forms.CharField(label="Observação (opcional)", required=False, max_length=300)
 
     def clean_arquivo(self):
-        arq = self.cleaned_data["arquivo"]
-        if arq.size > settings.TAMANHO_MAX_ANEXO_MB * 1024 * 1024:
-            raise forms.ValidationError(f"O arquivo deve ter no máximo {settings.TAMANHO_MAX_ANEXO_MB} MB.")
-        return arq
+        return conferir_documento(self.cleaned_data["arquivo"])
 
 
 class FeedbackForm(FormularioModelo):

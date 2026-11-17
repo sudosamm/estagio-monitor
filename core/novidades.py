@@ -24,6 +24,13 @@ def _p(*publico):
 
 
 VERSOES = (
+    Versao("2026.11.17", "Mais segurança no login", (
+        (_p("todos"), "Depois de 5 senhas erradas seguidas, o login espera 15 minutos. Esqueceu a senha? Peça ao "
+                      "orientador para redefinir."),
+        (_p("todos"), "Senha nova: pelo menos 8 caracteres, não pode ser só números nem a senha inicial."),
+        (GESTAO, "Arquivos enviados: só PDF, fotos e documentos do Office/LibreOffice; a foto de cada pessoa só aparece "
+                 "para quem divide o estágio com ela e para a gestão."),
+    )),
     Versao("2026.11.16.1", "Acompanhamento de visita: Desenvolvimento de Sistemas", (
         (("orientador", "coordenador"), "Desenvolvimento de Sistemas: as 162 atividades do “Atividade Sugerida” do SICE "
                                         "já estão cadastradas, com o mesmo texto."),
