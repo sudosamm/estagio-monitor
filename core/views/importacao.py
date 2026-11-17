@@ -69,7 +69,8 @@ def importar_csv(request):
         messages.success(request, f"Importação concluída: {len(resultado.linhas_ok)} estágio(s), "
                                   f"{len(resultado.concedentes_novas)} concedente(s) e "
                                   f"{len(resultado.supervisores_novos)} supervisor(es) novos"
-                                  + (f"; {len(resultado.completados)} cadastro(s) completado(s)." if resultado.completados else "."))
+                                  + (f"; {len(resultado.completados)} cadastro(s) completado(s)" if resultado.completados else "")
+                                  + (f"; {resultado.presencas} presença(s) já cumprida(s) lançada(s)." if resultado.presencas else "."))
         from .orientador import folha_primeiro_acesso
 
         pendentes = [u for _, u, _ in resultado.completados if u.deve_trocar_senha]

@@ -2958,3 +2958,41 @@ class PrimeiroAcessoTests(Base):
     def test_legenda_mostra_feriado_listrado(self):
         self.entrar(self.aluno)
         self.assertContains(self.client.get(self.est.get_absolute_url()), 'class="chave-sem-estagio"')
+
+
+class PresencasNaImportacaoTests(Base):
+    def test_dias_ja_cumpridos_entram_como_presenca_confirmada(self):
+        from .models import DiaSemEstagio, Registro
+
+        self.ori.is_superuser = True
+        self.ori.save()
+        DiaSemEstagio.objects.create(data=date(2026, 11, 2), descricao="Finados", orientador=self.ori,
+                                     abrangencia=DiaSemEstagio.Abrangencia.TODOS)
+        self.entrar(self.ori)
+        csv_ = ("estagiario_nome;curso;curso_carga_horaria;data_inicio;horas_anteriores;presencas_desde;dias;"
+                "concedente_nome;supervisor_nome\n"
+                "Lara Nunes Viana;Técnico em Finanças;250;24/08/2026;96;02/11/2026;seg,ter,qua;Empresa X;Sérgio Supervisor\n")
+        dados = {"etapa": "previa", "arquivo": SimpleUploadedFile("f.csv", csv_.encode(), "text/csv"),
+                 "orientador": self.ori.pk, "dias": ["0", "1", "2", "3", "4"], "horas_por_dia": "5",
+                 "acompanhamento_desde": "2026-11-11", "carga_cursos_novos": "300"}
+        r = self.client.post(reverse("importar_csv"), dados)
+        # hoje (mock) é qua 11/11: 02/11 é feriado; ter 03, qua 04, seg 09, ter 10 = 4 dias até ontem
+        self.assertEqual(r.context["resultado"].presencas, 4)
+        self.client.post(reverse("importar_csv"), {"etapa": "confirmar"})
+        est = Estagio.objects.get(estagiario__nome_completo="Lara Nunes Viana")
+        self.assertEqual(est.curso.carga_horaria, 250)
+        self.assertEqual(est.acompanhamento_desde, date(2026, 11, 2))
+        regs = est.registros.order_by("data")
+        self.assertEqual([r.data.day for r in regs], [3, 4, 9, 10])
+        self.assertTrue(all(r.confirmacao == Registro.Confirmacao.CONFIRMADA and r.horas == 5 for r in regs))
+        self.assertEqual(resumo_horas(est)["cumpridas"], 96 + 20)
+
+    def test_presencas_desde_nao_pode_ser_futuro_nem_antes_do_inicio(self):
+        from .importacao import Opcoes, importar
+
+        base = {"estagiario_nome": "Rui Prado Lima", "curso": "Informática", "concedente_nome": "Empresa X",
+                "supervisor_nome": "Sérgio Supervisor", "data_inicio": "02/11/2026"}
+        for desde in ("11/11/2026", "01/11/2026"):
+            r = importar([(2, {**base, "presencas_desde": desde})], Opcoes(orientador=self.ori, dias=[0], horas_por_dia=Decimal(4)),
+                         self.ori)
+            self.assertIn("presencas_desde", r.erros[0][1])

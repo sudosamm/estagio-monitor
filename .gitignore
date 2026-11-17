@@ -10,3 +10,5 @@ importacao/
 /*.pdf
 # termos de compromisso (dados pessoais dos estagiários)
 TCEs/
+# relatórios de frequência do SICE (dados pessoais)
+Relatorio-estagio/

@@ -23,6 +23,7 @@
   {% else %}
     <form method="post" class="card destaque">{% csrf_token %}<input type="hidden" name="etapa" value="confirmar">
       <p class="mb-0">Tudo certo. Confira o resumo abaixo e confirme. As contas novas não têm senha: cada pessoa cria a sua em “Primeiro acesso”.</p>
+      {% if resultado.presencas %}<p class="mb-0 mt-1"><strong>{{ resultado.presencas }}</strong> dia{{ resultado.presencas|pluralize }} já cumprido{{ resultado.presencas|pluralize }} (coluna presencas_desde) entra{{ resultado.presencas|pluralize:"m" }} como presença confirmada, pela escala de cada um.</p>{% endif %}
       <div class="acoes mt-1"><button class="btn grande" type="submit">{% icone "check" %} Confirmar importação</button><a class="btn sec" href="{% url 'importar_csv' %}">Cancelar</a></div>
     </form>
   {% endif %}

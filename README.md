@@ -181,6 +181,8 @@ Também dá para enviar um CSV com **uma linha por estagiário**: dados do estag
 - **Estágio já em andamento:** “Acompanhar no sistema a partir de” evita que os dias anteriores apareçam como sem registro. As horas já feitas vão na coluna `horas_anteriores`.
 - **Reenvio:** reenviar o mesmo arquivo não duplica, porque estagiários com o mesmo CPF e estágio ativo não ganham outro estágio. Se a linha trouxer algo que faltava no cadastro (data de nascimento, telefone, e-mail, matrícula), isso é completado: a prévia mostra quem será completado.
 - **Data de nascimento** (`estagiario_nascimento`, dd/mm/aaaa): é o que o estagiário usa no primeiro acesso, junto com o nome completo.
+- **Dias já cumpridos e ainda não lançados no SICE** (`presencas_desde`, dd/mm/aaaa): os dias da escala dessa data até ontem, fora feriados e recessos cadastrados, entram como presença confirmada (com a observação “Lançado na importação”). O sistema passa a acompanhar o estágio a partir dessa data. A prévia mostra quantos dias serão lançados. Use junto com `horas_anteriores` = horas cumpridas no relatório do SICE.
+- **Carga horária do curso** (`curso_carga_horaria`): usada só quando o curso é criado pela importação (ex.: 250 para Administração e Finanças, 300 para Redes).
 
 O arquivo gerado a partir dos TCEs fica em `importacao/`, pasta que não vai para o Git porque tem dados pessoais. A planilha preenchida também tem dados pessoais: guarde-a em local seguro.
 

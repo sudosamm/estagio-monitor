@@ -31,7 +31,8 @@ VERSOES = (
         (_p("supervisor"), "No primeiro acesso, use o usuário e o código que o orientador enviou. O código vale uma vez."),
         (GESTAO, "Folha de primeiro acesso: em Contas, filtre “Ainda não entraram” para gerar códigos de uso único "
                  "(supervisores e quem não tem data de nascimento). Esqueceu a senha? “Novo primeiro acesso” na conta."),
-        (GESTAO, "Importação: nova coluna estagiario_nascimento. Reenviar a planilha completa o cadastro de quem já tem estágio."),
+        (GESTAO, "Importação: novas colunas estagiario_nascimento, presencas_desde (dias já cumpridos entram como presença "
+                 "confirmada) e curso_carga_horaria. Reenviar a planilha completa o cadastro de quem já tem estágio."),
         (_p("todos"), "Calendário: a legenda de feriado/recesso agora aparece listrada, igual ao dia no calendário."),
     )),
     Versao("2026.11.17", "Mais segurança no login", (

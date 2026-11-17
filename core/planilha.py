@@ -47,6 +47,9 @@ COLUNAS_ESTAGIARIOS = [
     ("concedente_nome", "Concedente", True, "Escolha da aba Concedentes (ou o nome de uma já cadastrada no sistema).", 30, None),
     ("supervisor_nome", "Supervisor", False, "Escolha da aba Supervisores. Vazio = o único supervisor da concedente na aba.", 30, None),
     ("orientador", "Orientador (usuário)", False, "Usuário de acesso do orientador. Vazio = o escolhido na tela.", 18, None),
+    ("presencas_desde", "Presenças já cumpridas desde", False, "Dias da escala desta data até ontem entram como presença "
+     "confirmada (horas feitas e ainda não lançadas no SICE). Vazio = nenhum.", 14, DATA),
+    ("curso_carga_horaria", "Carga horária do curso", False, "Só vale quando o curso é criado. Vazio = a da tela.", 11, None),
 ]
 COLUNAS_CONCEDENTES = [
     ("concedente_nome", "Nome da unidade", True, "Nome fantasia ou unidade (sai na folha de frequência). Órgãos com várias unidades: uma linha por unidade.", 32, None),

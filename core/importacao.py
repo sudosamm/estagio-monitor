@@ -9,14 +9,15 @@ import io
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
+from django.utils import timezone
 
-from .models import CAMPOS_CONCEDENTE, Curso, Escala, Estagio, LocalEstagio, Usuario, horas_dos_horarios
-from .services import criar_usuario, normalizar_nome, turma_para
+from .models import CAMPOS_CONCEDENTE, Curso, Escala, Estagio, LocalEstagio, Registro, Usuario, horas_dos_horarios
+from .services import criar_usuario, dias_sem_estagio, normalizar_nome, turma_para
 from .validators import cnpj_valido, cpf_valido, formatar_cnpj, formatar_cpf, so_digitos
 
 # (coluna, obrigatória, descrição) — a ordem é a do modelo para download
@@ -28,11 +29,14 @@ COLUNAS = [
     ("estagiario_email", False, ""),
     ("matricula", False, ""),
     ("curso", True, "Nome do curso (é criado se não existir)"),
+    ("curso_carga_horaria", False, "Carga horária do curso, usada só quando ele é criado. Vazio = a da tela"),
     ("turma", False, "Nome da turma (ex.: 3º A). Vazio = nome do curso"),
     ("ano_turma", False, "Ano de ingresso da turma (ex.: 2024). Vazio = 2 anos antes do início do estágio"),
     ("data_inicio", True, "Início do estágio (dd/mm/aaaa)"),
     ("data_fim", False, "Término previsto no termo (dd/mm/aaaa)"),
     ("horas_anteriores", False, "Horas já cumpridas antes do sistema"),
+    ("presencas_desde", False, "Dias da escala desta data até ontem entram como presença confirmada "
+                               "(horas feitas e ainda não lançadas no SICE). Vazio = nenhum"),
     ("dias", False, "Ex.: seg,ter ou seg-sex. Vazio = padrão da tela"),
     ("horas_por_dia", False, "Qualquer carga (ex.: 4, 5, 7). Vazio = pelos horários ou o da tela"),
     ("entrada", False, "HH:MM"),
@@ -200,6 +204,7 @@ class Resultado:
     concedentes_existentes: set = field(default_factory=set)
     cursos_novos: list = field(default_factory=list)
     completados: list = field(default_factory=list)        # (n, estagiário já com estágio ativo, campos preenchidos)
+    presencas: int = 0                                      # dias já cumpridos lançados como presença confirmada
     confirmado: bool = False
 
     @property
@@ -265,6 +270,12 @@ def _linha(n, d, op, usuario, r, senha_hash, concedentes, supervisores, cursos, 
     if nascimento and not (date(1930, 1, 1) <= nascimento <= date(inicio.year - 10, 12, 31)):
         raise ErroImportacao(f"estagiario_nascimento: data fora do esperado “{d['estagiario_nascimento']}”")
     horas_ant = _decimal(d.get("horas_anteriores"), "horas_anteriores") or Decimal(0)
+    presencas_desde = _data(d.get("presencas_desde"), "presencas_desde")
+    if presencas_desde and not (inicio <= presencas_desde < timezone.localdate()):
+        raise ErroImportacao("presencas_desde: precisa estar entre o início do estágio e ontem")
+    carga_curso = _decimal(d.get("curso_carga_horaria"), "curso_carga_horaria")
+    if carga_curso is not None and not (0 < carga_curso <= 2000):
+        raise ErroImportacao("curso_carga_horaria: valor fora do esperado")
 
     # escala (colunas do CSV ou padrão da tela)
     dias = _dias(d.get("dias", "")) or op.dias
@@ -302,7 +313,8 @@ def _linha(n, d, op, usuario, r, senha_hash, concedentes, supervisores, cursos, 
         cursos[ck] = next((c for c in Curso.objects.all() if _chave(c.nome) == ck), None)
         if not cursos[ck]:
             cursos[ck] = Curso.objects.create(nome=nome_curso.upper() if nome_curso.isupper() else nome_curso,
-                                              carga_horaria=op.carga_cursos_novos, horas_por_dia_padrao=horas)  # só referência interna
+                                              carga_horaria=int(carga_curso or op.carga_cursos_novos),
+                                              horas_por_dia_padrao=horas)  # só referência interna
             r.cursos_novos.append(cursos[ck])
     curso = cursos[ck]
     ano_turma = d.get("ano_turma", "").strip()
@@ -343,16 +355,37 @@ def _linha(n, d, op, usuario, r, senha_hash, concedentes, supervisores, cursos, 
         aluno = criar_usuario(nome, Usuario.Papel.ESTAGIARIO, usuario, senha_hash=senha_hash, **extra)
         r.estagiarios.append(aluno)
 
+    desde = presencas_desde or op.acompanhamento_desde  # com presenças lançadas, o sistema acompanha desde elas
     estagio = Estagio.objects.create(
         estagiario=aluno, orientador=orientador, supervisor=supervisor, curso=curso, turma=turma,
         local=local, data_inicio=inicio, data_fim=fim, horas_anteriores=horas_ant,
-        acompanhamento_desde=op.acompanhamento_desde if op.acompanhamento_desde and op.acompanhamento_desde > inicio else None,
+        acompanhamento_desde=desde if desde and desde > inicio else None,
     )
     Escala.objects.create(
         estagio=estagio, vigente_desde=inicio, dias=",".join(map(str, dias)), horas_por_dia=horas, criado_por=usuario,
         horario_entrada=turnos[0], saida_intervalo=turnos[1], volta_intervalo=turnos[2], horario_saida=turnos[3],
     )
+    if presencas_desde:
+        r.presencas += _lancar_presencas(estagio, presencas_desde, dias, horas, turnos, usuario)
     r.linhas_ok.append((n, aluno, local, supervisor))
+
+
+def _lancar_presencas(estagio, desde, dias, horas, turnos, usuario):
+    """Dias da escala de `desde` até ontem, fora feriados e recessos, como presença já confirmada pela gestão."""
+    ontem = timezone.localdate() - timedelta(days=1)
+    feriados = dias_sem_estagio(estagio, desde, ontem)
+    agora, registros, dia = timezone.now(), [], desde
+    while dia <= ontem:
+        if dia.weekday() in dias and dia not in feriados:
+            registros.append(Registro(
+                estagio=estagio, data=dia, situacao=Registro.Situacao.PRESENTE, horas=horas,
+                hora_chegada=turnos[0], saida_intervalo=turnos[1], volta_intervalo=turnos[2], hora_saida=turnos[3],
+                confirmacao=Registro.Confirmacao.CONFIRMADA, confirmado_por=usuario, confirmado_em=agora,
+                registrado_por=usuario, obs_supervisor="Lançado na importação (dia já cumprido).",
+            ))
+        dia += timedelta(days=1)
+    Registro.objects.bulk_create(registros)
+    return len(registros)
 
 
 def _concedente(d, op, r, cache):
