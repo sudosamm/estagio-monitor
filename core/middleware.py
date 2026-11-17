@@ -5,7 +5,7 @@ from django.urls import reverse
 class TrocaSenhaObrigatoriaMiddleware:
     """Obriga quem entrou com a senha padrão a criar uma senha própria."""
 
-    LIBERADOS = ("trocar_senha", "logout")
+    LIBERADOS = ("trocar_senha", "logout", "primeiro_acesso", "primeiro_acesso_senha")
 
     def __init__(self, get_response):
         self.get_response = get_response

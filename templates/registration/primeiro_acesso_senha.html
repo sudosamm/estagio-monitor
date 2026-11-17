@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titulo %}Criar senha{% endblock %}
+{% block corpo %}
+<div class="login-wrap">
+  {% include "registration/_login_lado.html" %}
+  <section class="login-form">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <h2>Olá, {{ alvo.first_name|default:alvo.nome_completo }}!</h2>
+      <div class="caixa-info">Seu usuário é <strong>{{ alvo.username }}</strong>. Anote: é com ele que você entra daqui em diante.</div>
+      <p class="muted mt-1" style="font-size:.88rem">Crie uma senha com pelo menos 8 caracteres, que não seja só números nem fácil de adivinhar.</p>
+      <input type="text" name="username" value="{{ alvo.username }}" autocomplete="username" hidden>
+      {% include "core/_form.html" %}
+      <button class="btn grande bloco" type="submit">Salvar senha e entrar</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

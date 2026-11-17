@@ -10,19 +10,27 @@
   </div></div>
 <form class="filtros card" method="get">
   <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ q }}" placeholder="Nome ou usuário"></div>
-  <div><label class="rotulo">Situação</label><select name="situacao"><option value="">Ativas</option><option value="inativas"{% if situacao == "inativas" %} selected{% endif %}>Desativadas</option><option value="todas"{% if situacao == "todas" %} selected{% endif %}>Todas</option></select></div>
+  <div><label class="rotulo">Situação</label><select name="situacao"><option value="">Ativas</option><option value="inativas"{% if situacao == "inativas" %} selected{% endif %}>Desativadas</option><option value="pendentes"{% if situacao == "pendentes" %} selected{% endif %}>Ainda não entraram</option><option value="todas"{% if situacao == "todas" %} selected{% endif %}>Todas</option></select></div>
   <div><label class="rotulo">Perfil</label><select name="papel"><option value="">Todos</option>{% for v, r in papeis %}<option value="{{ v }}"{% if papel == v %} selected{% endif %}>{{ r }}</option>{% endfor %}</select></div>
   <button class="btn" type="submit">Filtrar</button>
 </form>
+{% if situacao == "pendentes" and usuarios %}
+<form method="post" action="{% url 'codigos_lote' %}" class="card flex" style="justify-content:space-between;flex-wrap:wrap;gap:.5rem"
+      data-confirmar="Gerar a folha de primeiro acesso desta lista? Quem precisa de código ganha um novo, e os anteriores deixam de valer.">
+  {% csrf_token %}<input type="hidden" name="papel" value="{{ papel }}"><input type="hidden" name="q" value="{{ q }}">
+  <span class="muted">Estagiários com data de nascimento entram pelo nome + nascimento. Os demais precisam de um código.</span>
+  <button class="btn" type="submit" style="white-space:normal">Folha de primeiro acesso (com códigos)</button>
+</form>
+{% endif %}
 <div class="card"><div class="tabela-wrap"><table class="tabela">
-  <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Concedente</th><th>Senha</th><th></th></tr></thead>
+  <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Concedente</th><th>Acesso</th><th></th></tr></thead>
   <tbody>{% for u in usuarios %}
     <tr{% if not u.is_active %} style="opacity:.55"{% endif %}>
       <td><strong>{{ u.nome_completo }}</strong>{% if not u.is_active %} <span class="etiqueta">desativada</span>{% endif %}{% if u.telefone %}<br><small>{{ u.telefone }}</small>{% endif %}</td>
       <td>{{ u.username }}</td>
       <td>{{ u.get_papel_display }}{% if u.is_coordenador %}<br><small>{{ u.cursos_coordenados.all|join:", "|default:"todos os cursos" }}</small>{% endif %}{% if u.is_supervisor %}<br><small>{{ u.n_supervisionados }} estagiário(s) ativo(s)</small>{% endif %}</td>
       <td>{% for c in u.concedentes.all %}{{ c }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
-      <td>{% if u.deve_trocar_senha %}<span class="selo ausencia">padrão</span>{% else %}<span class="selo confirmado">própria</span>{% endif %}</td>
+      <td>{% if u.deve_trocar_senha %}<span class="selo ausencia">não entrou</span>{% if u.is_estagiario and not u.data_nascimento %}<br><small class="muted">sem nascimento</small>{% endif %}{% else %}<span class="selo confirmado">ativo</span>{% endif %}</td>
       <td class="nowrap"><a class="btn sec sm" href="{% url 'editar_usuario' u.pk %}">Editar</a>{% if u != user and not u.is_superuser %} <a class="btn sec sm" href="{% url 'ativacao_usuario' u.pk %}?next={{ request.get_full_path|urlencode }}">{% if u.is_active %}Desativar{% else %}Reativar{% endif %}</a>{% endif %}</td>
     </tr>
   {% empty %}<tr><td colspan="6" class="vazio">Nenhuma conta.</td></tr>{% endfor %}</tbody>

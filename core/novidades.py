@@ -24,6 +24,16 @@ def _p(*publico):
 
 
 VERSOES = (
+    Versao("2026.11.17.1", "Primeiro acesso sem senha padrão", (
+        (_p("todos"), "A senha inicial igual para todos acabou. Quem ainda não entrou cria a senha em “Primeiro acesso”, "
+                      "na tela de login."),
+        (_p("estagiario"), "No primeiro acesso, informe seu nome completo e sua data de nascimento."),
+        (_p("supervisor"), "No primeiro acesso, use o usuário e o código que o orientador enviou. O código vale uma vez."),
+        (GESTAO, "Folha de primeiro acesso: em Contas, filtre “Ainda não entraram” para gerar códigos de uso único "
+                 "(supervisores e quem não tem data de nascimento). Esqueceu a senha? “Novo primeiro acesso” na conta."),
+        (GESTAO, "Importação: nova coluna estagiario_nascimento. Reenviar a planilha completa o cadastro de quem já tem estágio."),
+        (_p("todos"), "Calendário: a legenda de feriado/recesso agora aparece listrada, igual ao dia no calendário."),
+    )),
     Versao("2026.11.17", "Mais segurança no login", (
         (_p("todos"), "Depois de 5 senhas erradas seguidas, o login espera 15 minutos. Esqueceu a senha? Peça ao "
                       "orientador para redefinir."),

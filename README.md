@@ -37,8 +37,14 @@ O sistema pode ser **instalado como app** (PWA): ícone na tela inicial, abre em
 
 ### Contas
 - Usuário gerado como `primeiro.ultimo` sem acentos (ex.: *Maria da Silva Souza* → `maria.souza`). Se já existir, recebe um número (`maria.souza2`).
-- Todas as contas nascem com a `SENHA_PADRAO` e a pessoa **é obrigada a criar a própria senha** no primeiro acesso.
-- O orientador pode voltar a senha de alguém para a padrão (em *Contas → Editar*).
+- **Não existe senha inicial.** As contas nascem sem senha, e cada pessoa cria a sua em **Primeiro acesso** (link na tela de login, `/primeiro-acesso/`):
+  - **Estagiário:** nome completo (acentos e maiúsculas não importam) + data de nascimento. A data vem da importação (coluna `estagiario_nascimento`), do cadastro em lote (`Nome; matrícula; 26/04/2008`) ou de *Contas → Editar*.
+  - **Supervisor, orientador, coordenador ou estagiário sem data de nascimento:** usuário + **código de uso único** (ex.: `K7PM-3QXD`), gerado pela gestão. Vale uma vez, por 30 dias, e só aparece na tela em que foi gerado: o sistema guarda apenas um resumo dele.
+  - A folha impressa depois de criar contas (cadastro, importação) já traz o código de quem precisa. Para quem ainda não entrou, *Contas → Situação: Ainda não entraram → Folha de primeiro acesso* gera a folha de novo, com códigos novos.
+  - Depois de criar a senha, o primeiro acesso fecha para aquela conta.
+- **Esqueceu a senha:** em *Contas → Editar*, “Esqueceu a senha: novo primeiro acesso”. A senha atual deixa de valer e aparece um código novo.
+- **Contas antigas** criadas com a `SENHA_PADRAO` e ainda não ativadas não entram mais com ela: usam o primeiro acesso. Em emergência, `ACEITAR_SENHA_PADRAO=1` faz a senha padrão voltar a valer para elas.
+- **Proteção do primeiro acesso:** 10 tentativas erradas com o mesmo nome (de qualquer lugar) param o primeiro acesso dele por 24 horas; 5 por nome no mesmo aparelho/rede e 60 por rede valem por 15 minutos.
 - **Proteção do login:** depois de 5 senhas erradas para o mesmo usuário (no mesmo aparelho/rede), o login espera 15 minutos. Também há limite por usuário (20) e por rede (40) na mesma janela, inclusive no `/admin/`. Entrou certo, a contagem zera.
 - **Senha nova:** pelo menos 8 caracteres, não pode ser só números, uma senha comum (ex.: `password`) nem a senha inicial.
 - **Desativar/reativar** (em *Contas*): a pessoa deixa de entrar, mas o histórico fica guardado.
@@ -173,7 +179,8 @@ Também dá para enviar um CSV com **uma linha por estagiário**: dados do estag
 - **Prévia:** primeiro aparece uma prévia com tudo o que será criado e os erros de cada linha, e nada é gravado até você confirmar.
 - **Padrões:** dias e horários vazios no CSV usam os padrões escolhidos na tela.
 - **Estágio já em andamento:** “Acompanhar no sistema a partir de” evita que os dias anteriores apareçam como sem registro. As horas já feitas vão na coluna `horas_anteriores`.
-- **Reenvio:** reenviar o mesmo arquivo não duplica, porque estagiários com o mesmo CPF e estágio ativo são ignorados.
+- **Reenvio:** reenviar o mesmo arquivo não duplica, porque estagiários com o mesmo CPF e estágio ativo não ganham outro estágio. Se a linha trouxer algo que faltava no cadastro (data de nascimento, telefone, e-mail, matrícula), isso é completado: a prévia mostra quem será completado.
+- **Data de nascimento** (`estagiario_nascimento`, dd/mm/aaaa): é o que o estagiário usa no primeiro acesso, junto com o nome completo.
 
 O arquivo gerado a partir dos TCEs fica em `importacao/`, pasta que não vai para o Git porque tem dados pessoais. A planilha preenchida também tem dados pessoais: guarde-a em local seguro.
 
@@ -409,7 +416,7 @@ python3 -m venv .venv
 DEBUG=1 COOKIES_SEGUROS=0 .venv/bin/python manage.py runserver
 ```
 
-Acesse http://localhost:8000. O comando `popular_demo` cria contas fictícias (a lista está no topo de `core/management/commands/popular_demo.py`), todas com a senha padrão.
+Acesse http://localhost:8000. O comando `popular_demo` cria contas fictícias (a lista está no topo de `core/management/commands/popular_demo.py`), todas com a senha padrão e já ativadas (o primeiro acesso não vale para elas).
 
 Testes automatizados:
 
@@ -427,13 +434,13 @@ O serviço sobe com **Gunicorn na porta 8000** dentro do container. O banco (SQL
    - `SECRET_KEY`: uma chave longa e aleatória
    - `ALLOWED_HOSTS`: o domínio do túnel, sem `https://` (ex.: `estagio.seudominio.com.br`)
    - `CSRF_TRUSTED_ORIGINS`: o mesmo domínio, com `https://`
-   - `SENHA_PADRAO`: a senha inicial das contas
+   - `SENHA_PADRAO`: a senha das contas antigas (não abre mais contas novas; veja *Contas*)
    - `ADMIN_NOME`: seu nome completo, que cria o primeiro orientador administrador
    - `PORTA`: a porta livre do servidor que o túnel vai usar (ex.: `8010`)
    - *(opcional, avisos por e-mail)* `EMAIL_HOST` (ex.: `smtp.gmail.com`), `EMAIL_PORT` (`587`), `EMAIL_HOST_USER` (o e-mail remetente), `EMAIL_HOST_PASSWORD` (no Gmail, uma “senha de app”, não a senha normal) e `SITE_URL` (ex.: `https://estagio.seudominio.com.br`, para os links dos e-mails; vazio = o de `CSRF_TRUSTED_ORIGINS`). O resumo semanal sai sozinho às segundas; `RESUMO_AUTOMATICO=0` desliga esse disparo, se preferir agendar o comando.
 4. Garanta que o volume `/data` é persistente. No modo Compose isso já vem configurado.
 5. Faça o deploy. No Cloudflare Tunnel, aponte o hostname para `http://localhost:<PORTA>` (ou o IP da VPS, se o cloudflared rodar em outra máquina).
-6. Entre com o usuário gerado a partir de `ADMIN_NOME` (aparece no log do container) e a senha padrão. O sistema vai pedir para trocar a senha.
+6. No log do container aparecem o usuário gerado a partir de `ADMIN_NOME` e um **código de primeiro acesso**. Abra `/primeiro-acesso/`, escolha “Tenho um código” e crie a senha.
 
 Para criar outros orientadores depois: entre como administrador → *Contas* → *+ Orientador*, ou pelo terminal do container:
 

@@ -22,9 +22,13 @@
     </div>
   {% else %}
     <form method="post" class="card destaque">{% csrf_token %}<input type="hidden" name="etapa" value="confirmar">
-      <p class="mb-0">Tudo certo. Confira o resumo abaixo e confirme. As contas novas usam a senha padrão e pedem troca no primeiro acesso.</p>
+      <p class="mb-0">Tudo certo. Confira o resumo abaixo e confirme. As contas novas não têm senha: cada pessoa cria a sua em “Primeiro acesso”.</p>
       <div class="acoes mt-1"><button class="btn grande" type="submit">{% icone "check" %} Confirmar importação</button><a class="btn sec" href="{% url 'importar_csv' %}">Cancelar</a></div>
     </form>
+  {% endif %}
+  {% if resultado.completados %}
+    <div class="card"><h3>Já têm estágio ativo: só o cadastro será completado</h3>
+      <ul class="lista compacta">{% for n, u, campos in resultado.completados %}<li><span class="etiqueta">{{ n|rotulo_linha }}</span><span class="cresce">{{ u.nome_completo }} ({{ u.username }}): {{ campos|join:", " }}</span></li>{% endfor %}</ul></div>
   {% endif %}
   {% if resultado.ignoradas %}
     <div class="card"><h3>Linhas que serão ignoradas</h3>

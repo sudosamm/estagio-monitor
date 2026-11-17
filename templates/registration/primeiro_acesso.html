@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block titulo %}Primeiro acesso{% endblock %}
+{% block corpo %}
+<div class="login-wrap">
+  {% include "registration/_login_lado.html" %}
+  <section class="login-form">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <h2>Primeiro acesso</h2>
+      <p class="muted">Confirme quem você é para criar sua senha.</p>
+      {% if messages %}{% for m in messages %}<div class="aviso {{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+      <nav class="abas" aria-label="Como confirmar">
+        <a href="{% url 'primeiro_acesso' %}"{% if modo == "nascimento" %} class="ativo" aria-current="page"{% endif %}>Sou estagiário(a)</a>
+        <a href="{% url 'primeiro_acesso' %}?modo=codigo"{% if modo == "codigo" %} class="ativo" aria-current="page"{% endif %}>Tenho um código</a>
+      </nav>
+      <input type="hidden" name="modo" value="{{ modo }}">
+      {% if erro %}<div class="aviso error">{{ erro }}</div>{% endif %}
+      {% if modo == "codigo" %}<p class="muted" style="font-size:.88rem">Supervisores e quem recebeu um código do orientador: informe o usuário e o código. O código vale uma vez só.</p>{% endif %}
+      {% include "core/_form.html" %}
+      <button class="btn grande bloco" type="submit">Continuar</button>
+      <p class="muted mt-1" style="font-size:.85rem">Já criou sua senha? <a href="{% url 'login' %}">Entrar</a>.
+        {% if modo == "nascimento" %}Não deu certo? Peça ao orientador para conferir seu cadastro ou para gerar um código.{% endif %}</p>
+    </form>
+  </section>
+</div>
+<script>
+  document.querySelectorAll("[data-mascara-data]").forEach((c) => c.addEventListener("input", () => {
+    const d = c.value.replace(/\D/g, "").slice(0, 8);
+    c.value = d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+  }));
+</script>
+{% endblock %}

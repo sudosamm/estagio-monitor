@@ -68,6 +68,10 @@ class Usuario(AbstractUser):
         help_text="Concedentes em que a pessoa é supervisora. Só pode supervisionar estagiários dessas concedentes.",
     )
     cpf = models.CharField("CPF", max_length=14, blank=True)
+    data_nascimento = models.DateField(
+        "Data de nascimento", null=True, blank=True,
+        help_text="Para estagiários: com o nome completo, é o que a pessoa usa no primeiro acesso para criar a senha.",
+    )
     foto = models.ImageField(upload_to="fotos/", blank=True)
     # perfil profissional (banco de talentos)
     apresentacao = models.TextField("Sobre mim", blank=True, help_text="Uma apresentação curta: objetivos, interesses, experiências.")
@@ -92,7 +96,10 @@ class Usuario(AbstractUser):
         "Curso", blank=True, related_name="coordenadores", verbose_name="Cursos que coordena",
         help_text="Vazio = todos os cursos.",
     )
-    deve_trocar_senha = models.BooleanField(default=True)
+    deve_trocar_senha = models.BooleanField(default=True, help_text="Ainda não criou a própria senha (primeiro acesso)")
+    # código de uso único do primeiro acesso (guardado só o resumo HMAC; o código aparece uma vez para a gestão)
+    codigo_acesso = models.CharField(max_length=64, blank=True, editable=False)
+    codigo_acesso_validade = models.DateTimeField(null=True, blank=True, editable=False)
     class Tema(models.TextChoices):
         AUTO = "AUTO", "Automático (igual ao celular)"
         CLARO = "CLARO", "Claro"

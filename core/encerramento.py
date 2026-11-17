@@ -147,7 +147,8 @@ def anonimizar(estagios, usuario):
         u.username = f"anonimizado-{u.pk}"
         u.nome_completo = f"Estagiário anonimizado nº {u.pk}"
         u.first_name, u.last_name = "Estagiário", f"nº {u.pk}"
-        u.email = u.telefone = u.matricula = u.cpf = u.apresentacao = u.habilidades = ""
+        u.email = u.telefone = u.matricula = u.cpf = u.apresentacao = u.habilidades = u.codigo_acesso = ""
+        u.data_nascimento = u.codigo_acesso_validade = None
         u.foto = u.curriculo = ""
         u.perfil_visivel = u.is_active = False
         u.set_unusable_password()

@@ -22,8 +22,9 @@ from ..models import (
 )
 from ..services import (
     agrupar_periodos, ano_em_uso, ano_referencia, anos_disponiveis, cadastrar_dias, pessoas_da_concedente, criar_usuario, estagios_do_municipio, estagios_visiveis,
-    feriados_nacionais, filtrar_ano, municipios_das_concedentes, notificar, redefinir_senha_padrao, resumo_horas, status_hoje, status_periodo, trocar_supervisor,
+    feriados_nacionais, filtrar_ano, municipios_das_concedentes, notificar, resumo_horas, status_hoje, status_periodo, trocar_supervisor,
 )
+from ..seguranca import gerar_codigo, liberar_primeiro_acesso, precisa_de_codigo
 from .base import destino_seguro, orientador_requerido, permissao
 
 
@@ -133,8 +134,9 @@ def criar_estagiarios(request):
         d = form.cleaned_data
         criados = []
         with transaction.atomic():
-            for nome, matricula in d["nomes"]:
-                user = criar_usuario(nome, Usuario.Papel.ESTAGIARIO, request.user, matricula=matricula)
+            for nome, matricula, nascimento in d["nomes"]:
+                user = criar_usuario(nome, Usuario.Papel.ESTAGIARIO, request.user, matricula=matricula,
+                                     data_nascimento=nascimento)
                 estagio = Estagio.objects.create(
                     estagiario=user, orientador=d.get("orientador") or request.user, supervisor=d["supervisor"],
                     curso=d["turma"].curso, turma=d["turma"], local=d["local"], setor=d["setor"], data_inicio=d["data_inicio"],
@@ -150,7 +152,8 @@ def criar_estagiarios(request):
     return render(request, "core/form_pagina.html", {
         "form": form, "titulo": "Cadastrar estagiários em lote", "voltar": reverse("estagios_lista"),
         "ajuda": "O usuário de cada pessoa é gerado como primeiro.ultimo nome (sem acentos). "
-                 "Todos recebem a senha padrão e precisam trocá-la no primeiro acesso.",
+                 "Com a data de nascimento, o estagiário cria a senha no primeiro acesso com nome completo + nascimento; "
+                 "sem ela, a folha impressa traz um código de uso único para cada um.",
         "botao": "Criar contas",
     })
 
@@ -203,21 +206,22 @@ def criar_coordenador(request):
     })
 
 
-def _resultado_contas(request, usuarios, titulo):
-    from django.conf import settings
-
-    messages.success(request, f"{len(usuarios)} conta(s) criada(s).")
+def folha_primeiro_acesso(request, usuarios, titulo, aviso=""):
+    """Folha para repassar o primeiro acesso. Quem não entra por nome + nascimento ganha um código novo agora:
+    o código só aparece nesta tela (fica guardado só um resumo dele)."""
+    linhas = [(u, gerar_codigo(u) if precisa_de_codigo(u) else None) for u in usuarios]
     return render(request, "core/contas_criadas.html", {
-        "usuarios": usuarios, "titulo": titulo, "senha": settings.SENHA_PADRAO,
-        "endereco": request.build_absolute_uri("/"),
+        "linhas": linhas, "titulo": titulo, "aviso": aviso, "tem_codigo": any(c for _, c in linhas),
+        "endereco": request.build_absolute_uri(reverse("primeiro_acesso")),
     })
 
 
-@permissao("contas")
-def usuarios(request):
-    papel = request.GET.get("papel", "")
-    q = request.GET.get("q", "")
-    situacao = request.GET.get("situacao", "")
+def _resultado_contas(request, usuarios, titulo):
+    messages.success(request, f"{len(usuarios)} conta(s) criada(s).")
+    return folha_primeiro_acesso(request, usuarios, titulo)
+
+
+def _contas(request, papel, q, situacao):
     if request.user.is_superuser:
         qs = Usuario.objects.all()
     else:
@@ -228,11 +232,21 @@ def usuarios(request):
         )
     if papel:
         qs = qs.filter(papel=papel)
-    if situacao != "todas":
+    if situacao == "pendentes":
+        qs = qs.filter(is_active=True, deve_trocar_senha=True)
+    elif situacao != "todas":
         qs = qs.filter(is_active=situacao != "inativas")
     if q:
         qs = qs.filter(Q(nome_completo__icontains=q) | Q(username__icontains=q))
-    qs = qs.prefetch_related("concedentes").annotate(
+    return qs
+
+
+@permissao("contas")
+def usuarios(request):
+    papel = request.GET.get("papel", "")
+    q = request.GET.get("q", "")
+    situacao = request.GET.get("situacao", "")
+    qs = _contas(request, papel, q, situacao).prefetch_related("concedentes").annotate(
         n_supervisionados=Count("estagios_supervisionados", filter=Q(estagios_supervisionados__ativo=True), distinct=True))
     return render(request, "core/usuarios.html", {
         "usuarios": qs.distinct(), "papel": papel, "q": q, "papeis": Usuario.Papel.choices, "situacao": situacao,
@@ -258,7 +272,7 @@ def editar_usuario(request, pk):
     if not alvo.is_supervisor:
         del form.fields["concedentes"], form.fields["cargo"]
     if not alvo.is_estagiario:
-        del form.fields["cpf"]
+        del form.fields["cpf"], form.fields["data_nascimento"]
     if not (alvo.is_coordenador and request.user.is_superuser):
         del form.fields["cursos_coordenados"]
     if request.method == "POST" and form.is_valid():
@@ -274,14 +288,28 @@ def editar_usuario(request, pk):
 @permissao("contas")
 @require_POST
 def redefinir_senha(request, pk):
-    from django.conf import settings
-
+    """Esqueceu a senha: a atual deixa de valer e a pessoa faz o primeiro acesso de novo (com um código novo)."""
     alvo = get_object_or_404(Usuario, pk=pk)
     if not _pode_gerir(request, alvo) or alvo.pk == request.user.pk:
         raise PermissionDenied
-    redefinir_senha_padrao(alvo)
-    messages.success(request, f"A senha de {alvo.username} voltou para a senha padrão ({settings.SENHA_PADRAO}).")
-    return redirect(request.POST.get("next") or "usuarios")
+    codigo = liberar_primeiro_acesso(alvo)
+    return render(request, "core/contas_criadas.html", {
+        "linhas": [(alvo, codigo)], "titulo": f"Novo primeiro acesso de {alvo}", "tem_codigo": True,
+        "aviso": "A senha antiga deixou de valer.", "endereco": request.build_absolute_uri(reverse("primeiro_acesso")),
+    })
+
+
+@permissao("contas")
+@require_POST
+def codigos_lote(request):
+    """Folha de primeiro acesso de quem ainda não entrou (filtros da tela de contas). Gera códigos novos para quem precisa."""
+    alvos = [u for u in _contas(request, request.POST.get("papel", ""), request.POST.get("q", ""), "pendentes")
+             .exclude(is_superuser=True).distinct() if _pode_gerir(request, u) and u.pk != request.user.pk]
+    if not alvos:
+        messages.info(request, "Ninguém nesta lista está esperando o primeiro acesso.")
+        return redirect("usuarios")
+    return folha_primeiro_acesso(request, alvos, "Folha de primeiro acesso",
+                                 aviso="Códigos gerados antes para essas pessoas deixaram de valer.")
 
 
 @permissao("contas")

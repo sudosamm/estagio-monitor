@@ -56,10 +56,11 @@ def criar_usuario(nome_completo, papel, criado_por=None, senha_hash=None, conced
         deve_trocar_senha=True,
         **extra,
     )
-    if senha_hash:  # importação em massa: reaproveita o hash da senha padrão (muito mais rápido)
+    # sem senha: a pessoa cria a própria no primeiro acesso (nome + nascimento ou código de uso único)
+    if senha_hash:  # importação em massa: um hash “inutilizável” pronto, sem gerar um por conta
         user.password = senha_hash
     else:
-        user.set_password(settings.SENHA_PADRAO)
+        user.set_unusable_password()
     user.save()
     if concedente:  # supervisor sempre nasce ligado a uma concedente
         user.concedentes.add(concedente)
@@ -76,12 +77,6 @@ def processar_foto(arquivo, lado=400):
     saida = io.BytesIO()
     img.save(saida, "JPEG", quality=85, optimize=True)
     return ContentFile(saida.getvalue(), name=f"{get_random_string(12)}.jpg")
-
-
-def redefinir_senha_padrao(user):
-    user.set_password(settings.SENHA_PADRAO)
-    user.deve_trocar_senha = True
-    user.save(update_fields=["password", "deve_trocar_senha"])
 
 
 # ---------------------------------------------------------------- acesso

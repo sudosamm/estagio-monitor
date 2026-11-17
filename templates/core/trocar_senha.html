@@ -4,7 +4,7 @@
 <div style="max-width:480px;margin:0 auto">
   <div class="card destaque">
     <h1>{% if obrigatorio %}Crie sua senha{% else %}Alterar senha{% endif %}</h1>
-    {% if obrigatorio %}<div class="caixa-alerta">Você está usando a senha padrão. Para continuar, crie uma senha só sua (mínimo de 6 caracteres).</div>{% endif %}
+    {% if obrigatorio %}<div class="caixa-alerta">Você entrou com a senha inicial. Para continuar, crie uma senha só sua (mínimo de 8 caracteres, não só números).</div>{% endif %}
     <form method="post" novalidate>{% csrf_token %}
       {% include "core/_form.html" %}
       <button class="btn bloco" type="submit">Salvar nova senha</button>

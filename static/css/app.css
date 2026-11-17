@@ -265,6 +265,7 @@ textarea { resize: vertical; }
 .aviso.success { border-color: var(--verde); } .aviso.error { border-color: var(--vermelho); }
 .aviso.warning { border-color: var(--laranja); } .aviso.info { border-color: var(--azul); }
 .caixa-info { background: var(--verde-claro); border-radius: 8px; padding: .75rem 1rem; color: var(--verde-escuro); font-size: .9rem; margin-bottom: 1rem; }
+.codigo-acesso { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 1.05rem; letter-spacing: .08em; white-space: nowrap; }
 .caixa-alerta { background: var(--t-alerta); border-radius: 8px; padding: .75rem 1rem; color: var(--tx-alerta-forte); font-size: .9rem; margin-bottom: 1rem; }
 
 /* ------------------------------------------------ tabelas e listas */
@@ -368,6 +369,7 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .dia.sem_registro { background: var(--t-erro); border-color: var(--t-erro-borda); color: var(--tx-erro); }
 .dia.hoje { background: var(--amarelo); color: var(--cinza-900); }
 .dia.sem_estagio { background: repeating-linear-gradient(45deg, var(--cinza-100), var(--cinza-100) 6px, var(--cinza-200) 6px, var(--cinza-200) 12px); color: var(--cinza-500); }
+.legenda i.chave-sem-estagio { background: repeating-linear-gradient(45deg, var(--cinza-100), var(--cinza-100) 3px, var(--cinza-300) 3px, var(--cinza-300) 6px); }
 .dia.fora, .dia.livre { color: var(--cinza-500); }
 .dia.e-hoje { outline: 3px solid var(--cinza-900); outline-offset: 1px; }
 .dia .visita { position: absolute; top: 4px; right: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--laranja); box-shadow: 0 0 0 2px var(--superficie); }

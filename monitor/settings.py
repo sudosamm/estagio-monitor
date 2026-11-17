@@ -143,7 +143,10 @@ TAMANHO_MAX_ANEXO_MB = int(os.environ.get("TAMANHO_MAX_ANEXO_MB", "10"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Regras do sistema
+# Senha que as contas antigas recebiam ao ser criadas. Ela não abre mais contas que ainda não fizeram o primeiro
+# acesso (agora é nome + nascimento ou código de uso único). ACEITAR_SENHA_PADRAO=1 reabre, só para emergência.
 SENHA_PADRAO = os.environ.get("SENHA_PADRAO", "estagio123")
+ACEITAR_SENHA_PADRAO = env_bool("ACEITAR_SENHA_PADRAO", False)
 NOME_SISTEMA = os.environ.get("NOME_SISTEMA", "Estágio Monitor")
 NOME_INSTITUICAO = os.environ.get("NOME_INSTITUICAO", "Secretaria da Educação do Ceará")
 

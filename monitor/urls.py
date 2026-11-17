@@ -4,12 +4,14 @@ from django.http import HttpResponse
 from django.urls import path
 
 from core.seguranca import LoginForm
-from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, encerramento, estagio, feedback, frequencia, importacao, novidades, visitas, orientador, pasta, pwa, qrcheckin, relatorios, supervisor
+from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, encerramento, estagio, feedback, frequencia, importacao, novidades, visitas, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
     path("entrar/", auth_views.LoginView.as_view(redirect_authenticated_user=True, authentication_form=LoginForm), name="login"),
     path("sair/", auth_views.LogoutView.as_view(), name="logout"),
+    path("primeiro-acesso/", primeiro_acesso.primeiro_acesso, name="primeiro_acesso"),
+    path("primeiro-acesso/senha/", primeiro_acesso.primeiro_acesso_senha, name="primeiro_acesso_senha"),
     path("senha/", comum.trocar_senha, name="trocar_senha"),
     path("perfil/", comum.perfil, name="perfil"),
     path("tema/", comum.trocar_tema, name="trocar_tema"),
@@ -85,6 +87,7 @@ urlpatterns = [
     path("contas/importar/", importacao.importar_csv, name="importar_csv"),
     path("contas/<int:pk>/", orientador.editar_usuario, name="editar_usuario"),
     path("contas/<int:pk>/senha-padrao/", orientador.redefinir_senha, name="redefinir_senha"),
+    path("contas/codigos/", orientador.codigos_lote, name="codigos_lote"),
     path("contas/<int:pk>/ativacao/", orientador.ativacao_usuario, name="ativacao_usuario"),
     path("cursos/", orientador.cursos, name="cursos"),
     path("cursos/<int:pk>/", orientador.cursos, name="curso_editar"),

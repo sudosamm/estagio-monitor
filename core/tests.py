@@ -56,8 +56,13 @@ class ContasTests(Base):
         self.assertEqual(gerar_username("José Ávila Conceição"), "jose.conceicao")
 
     def test_troca_de_senha_obrigatoria(self):
+        """Conta antiga, criada quando todas recebiam a senha padrão: só entra com ACEITAR_SENHA_PADRAO (emergência)."""
         novo = criar_usuario("Novo Aluno", Usuario.Papel.ESTAGIARIO)
-        self.assertTrue(self.client.login(username="novo.aluno", password="senha-teste-1"))
+        novo.set_password("senha-teste-1")
+        novo.save()
+        self.assertFalse(self.client.login(username="novo.aluno", password="senha-teste-1"))
+        with self.settings(ACEITAR_SENHA_PADRAO=True):
+            self.assertTrue(self.client.login(username="novo.aluno", password="senha-teste-1"))
         self.assertRedirects(self.client.get("/painel/"), reverse("trocar_senha"), fetch_redirect_response=False)
         r = self.client.post(reverse("trocar_senha"), {"old_password": "senha-teste-1", "new_password1": "Outra#Senha9",
                                                        "new_password2": "Outra#Senha9"})
@@ -539,7 +544,7 @@ class ImportacaoCSVTests(Base):
         self.assertContains(r, "ana.fernandes")
         ana = Usuario.objects.get(username="ana.fernandes")
         self.assertEqual((ana.nome_completo, ana.cpf), ("Ana Beatriz Castro Fernandes", "529.982.247-25"))
-        self.assertTrue(ana.check_password("senha-teste-1"))
+        self.assertFalse(ana.has_usable_password())  # sem senha até o primeiro acesso
         est = ana.estagios.get()
         self.assertEqual((est.horas_anteriores, est.acompanhamento_desde, est.orientador), (160, date(2026, 11, 11), self.ori))
         esc = est.escalas.get()
@@ -1205,9 +1210,9 @@ class PlanilhaModeloTests(Base):
                          ["Clínica Sem Estagiário", "", "", "Privada"]],
             supervisores=[["Rita de Cássia Lima", "Escola Nova Esperança", "(88) 99999-1111", "", "Coordenadora"],
                           ["Pedro Alves Sozinho", "Clínica Sem Estagiário"]],
-            estagiarios=[["João Pedro Matos", 100000037, "", "", "", "Informática", "3º A", 2024, date(2026, 8, 24), None, 40,
+            estagiarios=[["João Pedro Matos", 100000037, None, "", "", "", "Informática", "3º A", 2024, date(2026, 8, 24), None, 40,
                           "seg-qua", 4, None, None, None, None, "Escola Nova Esperança", None],
-                         ["Lia Gomes Torres", "", "", "", "", "Informática", "3º A", 2024, date(2026, 8, 24), None, None,
+                         ["Lia Gomes Torres", "", None, "", "", "", "Informática", "3º A", 2024, date(2026, 8, 24), None, None,
                           "", "", None, None, None, None, "Escola Nova Esperança", "Rita de Cássia Lima"]],
         )
         r = self._enviar(arquivo)
@@ -2827,3 +2832,129 @@ class SegurancaTests(Base):
         self.entrar(self.ori)
         r = self.client.get(reverse("trocar_supervisor", args=[self.est.pk]))
         self.assertNotContains(r, '<img src=x onerror="alert(1)">', html=False)
+
+
+class PrimeiroAcessoTests(Base):
+    def _nascimento(self, nome, data, ip="10.0.0.1"):
+        return self.client.post(reverse("primeiro_acesso"), {"modo": "nascimento", "nome": nome, "nascimento": data},
+                                REMOTE_ADDR=ip)
+
+    def _codigo(self, usuario, codigo, ip="10.0.0.1"):
+        return self.client.post(reverse("primeiro_acesso"), {"modo": "codigo", "usuario": usuario, "codigo": codigo},
+                                REMOTE_ADDR=ip)
+
+    def _criar_senha(self, senha="Minha#Senha9"):
+        return self.client.post(reverse("primeiro_acesso_senha"), {"new_password1": senha, "new_password2": senha})
+
+    def _codigo_da_tela(self, resposta):
+        import re
+
+        return re.search(r'class="codigo-acesso">([A-Z0-9]{4}-[A-Z0-9]{4})<', resposta.content.decode()).group(1)
+
+    def test_estagiario_cria_a_senha_com_nome_e_nascimento(self):
+        novo = criar_usuario("Joana D'Arc Araújo Lima", Usuario.Papel.ESTAGIARIO, data_nascimento=date(2008, 4, 26))
+        self.assertFalse(novo.has_usable_password())
+        self.assertContains(self._nascimento("joana d'arc araujo lima", "27/04/2008"), "Não encontramos")
+        self.assertContains(self._nascimento("Joana Lima", "26/04/2008"), "Não encontramos")  # nome incompleto
+        r = self._nascimento("  JOANA D'ARC ARAUJO   LIMA ", "26042008")  # sem acento, maiúsculas e sem barras
+        self.assertRedirects(r, reverse("primeiro_acesso_senha"), fetch_redirect_response=False)
+        self.assertContains(self.client.get(reverse("primeiro_acesso_senha")), novo.username)
+        self.assertEqual(self._criar_senha("12345678").status_code, 200)  # senha fraca não passa
+        self.assertRedirects(self._criar_senha(), reverse("inicio"), fetch_redirect_response=False)
+        novo.refresh_from_db()
+        self.assertFalse(novo.deve_trocar_senha)
+        self.assertTrue(novo.check_password("Minha#Senha9"))
+        self.assertEqual(int(self.client.session["_auth_user_id"]), novo.pk)
+        # depois de ativada, o primeiro acesso não abre mais a conta
+        self.client.logout()
+        self.assertContains(self._nascimento("Joana D'Arc Araújo Lima", "26/04/2008"), "Não encontramos")
+
+    def test_supervisor_nao_entra_por_nascimento(self):
+        criar_usuario("Ana Rocha Lima", Usuario.Papel.SUPERVISOR, data_nascimento=date(1990, 1, 2))
+        self.assertContains(self._nascimento("Ana Rocha Lima", "02/01/1990"), "Não encontramos")
+
+    def test_limite_de_tentativas_do_primeiro_acesso(self):
+        from .seguranca import LIMITE_1O_CHAVE_DIA
+
+        criar_usuario("Pedro Henrique Sales", Usuario.Papel.ESTAGIARIO, data_nascimento=date(2008, 1, 1))
+        for i in range(LIMITE_1O_CHAVE_DIA):  # de IPs diferentes: o limite é pelo nome, por um dia inteiro
+            self._nascimento("Pedro Henrique Sales", f"{i + 2:02d}/01/2008", ip=f"10.0.1.{i}")
+        r = self._nascimento("Pedro Henrique Sales", "01/01/2008", ip="10.0.2.1")
+        self.assertContains(r, "Muitas tentativas")
+        self.assertNotIn("primeiro_acesso", self.client.session)
+
+    def test_supervisor_usa_codigo_de_uso_unico_gerado_pela_gestao(self):
+        novo = criar_usuario("Rita de Cássia Moura", Usuario.Papel.SUPERVISOR, concedente=self.local)
+        self.entrar(self.ori)
+        r = self.client.post(reverse("redefinir_senha", args=[novo.pk]))
+        codigo = self._codigo_da_tela(r)
+        self.assertNotIn(codigo.replace("-", ""), Usuario.objects.get(pk=novo.pk).codigo_acesso)  # só o resumo fica salvo
+        self.client.logout()
+        self.assertContains(self._codigo(novo.username, "AAAA-BBBB"), "Não encontramos")
+        r = self._codigo(novo.username.upper(), codigo.lower().replace("-", " "))
+        self.assertRedirects(r, reverse("primeiro_acesso_senha"), fetch_redirect_response=False)
+        self._criar_senha()
+        novo.refresh_from_db()
+        self.assertEqual((novo.deve_trocar_senha, novo.codigo_acesso), (False, ""))
+        self.client.logout()
+        self.assertContains(self._codigo(novo.username, codigo), "Não encontramos")  # vale uma vez só
+
+    def test_codigo_vencido_nao_entra(self):
+        from .seguranca import gerar_codigo
+
+        novo = criar_usuario("Lucas Prado Neto", Usuario.Papel.SUPERVISOR, concedente=self.local)
+        codigo = gerar_codigo(novo)
+        Usuario.objects.filter(pk=novo.pk).update(codigo_acesso_validade=timezone.now() - timedelta(minutes=1))
+        self.assertContains(self._codigo(novo.username, codigo), "Não encontramos")
+
+    def test_senha_padrao_antiga_nao_abre_conta_pendente(self):
+        antigo = criar_usuario("Conta Antiga Silva", Usuario.Papel.ESTAGIARIO)
+        antigo.set_password(settings.SENHA_PADRAO)
+        antigo.save()
+        r = self.client.post(reverse("login"), {"username": antigo.username, "password": settings.SENHA_PADRAO})
+        self.assertContains(r, "A senha inicial deixou de valer")
+        self.assertContains(r, reverse("primeiro_acesso"))
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_folha_de_primeiro_acesso_da_lista_de_contas(self):
+        com = criar_usuario("Bia Torres Melo", Usuario.Papel.ESTAGIARIO, criado_por=self.ori, data_nascimento=date(2008, 5, 5))
+        sem = criar_usuario("Davi Nunes Costa", Usuario.Papel.ESTAGIARIO, criado_por=self.ori)
+        self.entrar(self.ori)
+        lista = self.client.get(reverse("usuarios"), {"situacao": "pendentes"})
+        self.assertContains(lista, "Davi Nunes Costa")
+        self.assertNotContains(lista, self.aluno.nome_completo)  # já ativou
+        r = self.client.post(reverse("codigos_lote"), {"papel": "ESTAGIARIO", "q": ""})
+        com.refresh_from_db()
+        sem.refresh_from_db()
+        self.assertEqual(com.codigo_acesso, "")
+        self.assertNotEqual(sem.codigo_acesso, "")
+        self.assertContains(r, "nome completo + data de nascimento")
+        self.assertEqual(r.content.decode().count('class="codigo-acesso"'), 1)
+
+    def test_importacao_completa_nascimento_de_quem_ja_tem_estagio(self):
+        self.ori.is_superuser = True
+        self.ori.save()
+        self.entrar(self.ori)
+        csv_ = ("estagiario_nome;estagiario_nascimento;curso;data_inicio;concedente_nome;supervisor_nome\n"
+                f"{self.aluno.nome_completo.upper()};03/11/2008;Informática;02/11/2026;Empresa X;Sérgio Supervisor\n")
+        arquivo = SimpleUploadedFile("t.csv", csv_.encode(), "text/csv")
+        r = self.client.post(reverse("importar_csv"), {
+            "etapa": "previa", "arquivo": arquivo, "orientador": self.ori.pk, "dias": ["0"], "horas_por_dia": "4",
+            "carga_cursos_novos": "300"})
+        self.assertContains(r, "data de nascimento")
+        self.client.post(reverse("importar_csv"), {"etapa": "confirmar"})
+        self.aluno.refresh_from_db()
+        self.assertEqual(self.aluno.data_nascimento, date(2008, 11, 3))
+        self.assertEqual(self.aluno.estagios.count(), 1)
+
+    def test_cadastro_em_lote_aceita_nascimento_e_matricula(self):
+        self.entrar(self.ori)
+        self.client.post(reverse("criar_estagiarios"), {
+            "nomes": "Caio Mendes Rocha; 2024001; 15/03/2008", "turma": self.turma.pk, "local": self.local.pk,
+            "supervisor": self.sup.pk, "data_inicio": "2026-11-16", "dias": ["0"], "horas_por_dia": "4"})
+        caio = Usuario.objects.get(nome_completo="Caio Mendes Rocha")
+        self.assertEqual((caio.matricula, caio.data_nascimento), ("2024001", date(2008, 3, 15)))
+
+    def test_legenda_mostra_feriado_listrado(self):
+        self.entrar(self.aluno)
+        self.assertContains(self.client.get(self.est.get_absolute_url()), 'class="chave-sem-estagio"')

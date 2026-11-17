@@ -11,7 +11,7 @@ class UsuarioAdmin(UserAdmin):
     search_fields = ("username", "nome_completo", "email")
     fieldsets = UserAdmin.fieldsets + (
         ("Estágio Monitor", {"fields": ("papel", "nome_completo", "telefone", "cpf", "matricula", "cargo", "concedentes", "foto",
-                                   "cursos_coordenados", "deve_trocar_senha")}),
+                                   "cursos_coordenados", "data_nascimento", "deve_trocar_senha")}),
         ("Perfil profissional", {"fields": ("apresentacao", "habilidades", "curriculo", "perfil_visivel")}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (("Estágio Monitor", {"fields": ("papel", "nome_completo")}),)

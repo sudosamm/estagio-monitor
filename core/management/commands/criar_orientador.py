@@ -1,7 +1,7 @@
-from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from core.models import Usuario
+from core.seguranca import gerar_codigo
 from core.services import criar_usuario
 
 
@@ -21,6 +21,8 @@ class Command(BaseCommand):
         if admin:
             user.is_superuser = user.is_staff = True
             user.save()
+        codigo = gerar_codigo(user)
         self.stdout.write(self.style.SUCCESS(
-            f"Orientador criado: usuário '{user.username}', senha inicial '{settings.SENHA_PADRAO}' (troca obrigatória no 1º acesso)."
+            f"Orientador criado: usuário '{user.username}', código de primeiro acesso '{codigo}' (vale 30 dias). "
+            "Abra /primeiro-acesso/, escolha “Tenho um código” e crie a senha."
         ))

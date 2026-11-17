@@ -28,6 +28,7 @@ TEXTO, DATA, HORA = "@", "DD/MM/YYYY", "HH:MM"
 COLUNAS_ESTAGIARIOS = [
     ("estagiario_nome", "Nome completo", True, "Nome e sobrenome, como no documento.", 34, None),
     ("estagiario_cpf", "CPF", False, "Evita cadastrar a mesma pessoa duas vezes. Com ou sem pontos.", 16, TEXTO),
+    ("estagiario_nascimento", "Data de nascimento", False, "dd/mm/aaaa. Com o nome completo, é o primeiro acesso do estagiário.", 13, DATA),
     ("estagiario_telefone", "Telefone", False, "", 16, TEXTO),
     ("estagiario_email", "E-mail", False, "", 26, None),
     ("matricula", "Matrícula", False, "", 14, TEXTO),
@@ -197,7 +198,7 @@ def _leia_me(ws):
         ("", None),
         ("Depois de preencher:", Font(bold=True)),
         ("Contas → Importar planilha → envie este arquivo. O sistema mostra uma prévia com os erros por linha antes de gravar.", None),
-        ("As contas novas usam a senha padrão e pedem troca no primeiro acesso.", None),
+        ("Não há senha inicial: cada pessoa cria a própria em “Primeiro acesso” (estagiário: nome completo + data de nascimento; os demais: código da folha impressa).", None),
         ("", None),
         ("Atenção: esta planilha contém dados pessoais (CPF, telefone). Guarde-a em local seguro e apague cópias que não forem mais necessárias.", Font(italic=True, color="9A3412")),
     ]

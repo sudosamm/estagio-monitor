@@ -1,4 +1,5 @@
-from datetime import timedelta
+import re
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django import forms
@@ -229,8 +230,9 @@ class EscalaLoteForm(CamposEscalaMixin, Formulario):
 class EstagiariosLoteForm(CamposEscalaMixin, Formulario):
     nomes = forms.CharField(
         label="Estagiários (um por linha)",
-        widget=forms.Textarea(attrs={"rows": 8, "placeholder": "Maria da Silva Souza\nJoão Pedro Lima; 2024001234"}),
-        help_text="Nome completo por linha. Opcional: “; matrícula” depois do nome.",
+        widget=forms.Textarea(attrs={"rows": 8, "placeholder": "Maria da Silva Souza; 26/04/2008\nJoão Pedro Lima; 2024001234; 03/11/2007"}),
+        help_text="Nome completo por linha. Opcional, separados por “;”: matrícula e data de nascimento (usada no "
+                  "primeiro acesso).",
     )
     turma = TurmaChoiceField()
     local = forms.ModelChoiceField(queryset=LocalEstagio.objects.none(), label="Concedente")
@@ -271,11 +273,17 @@ class EstagiariosLoteForm(CamposEscalaMixin, Formulario):
         for bruto in self.cleaned_data["nomes"].splitlines():
             if not bruto.strip():
                 continue
-            nome, _, matricula = bruto.partition(";")
+            nome, *resto = [p.strip() for p in bruto.split(";")]
             nome = " ".join(nome.split())
             if len(nome.split()) < 2:
                 raise forms.ValidationError(f"Informe nome e sobrenome: “{nome}”.")
-            linhas.append((nome, matricula.strip()))
+            matricula, nascimento = "", None
+            for parte in resto:
+                if re.fullmatch(r"\d{1,2}/\d{1,2}/\d{2,4}", parte):
+                    nascimento = validar_nascimento(ler_nascimento(parte, nome))
+                elif parte:
+                    matricula = parte
+            linhas.append((nome, matricula, nascimento))
         if not linhas:
             raise forms.ValidationError("Informe ao menos um nome.")
         return linhas
@@ -327,8 +335,18 @@ class CoordenadorForm(Formulario):
 class UsuarioEditForm(FormularioModelo):
     class Meta:
         model = Usuario
-        fields = ["nome_completo", "email", "telefone", "cpf", "matricula", "cargo", "concedentes", "cursos_coordenados"]
+        fields = ["nome_completo", "email", "telefone", "cpf", "data_nascimento", "matricula", "cargo", "concedentes",
+                  "cursos_coordenados"]
         widgets = {"cursos_coordenados": forms.CheckboxSelectMultiple, "concedentes": forms.CheckboxSelectMultiple}
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        if "data_nascimento" in self.fields:
+            self.fields["data_nascimento"].widget = NascimentoInput()
+            self.fields["data_nascimento"].input_formats = FORMATOS_NASCIMENTO
+
+    def clean_data_nascimento(self):
+        return validar_nascimento(self.cleaned_data.get("data_nascimento"))
 
     def clean_cpf(self):
         return limpar_cpf(self.cleaned_data.get("cpf"))
@@ -1329,3 +1347,52 @@ class ImportarCalendarioForm(Formulario):
         if arq.size > 5 * 1024 * 1024:
             raise forms.ValidationError("O arquivo deve ter no máximo 5 MB.")
         return arq
+
+
+# ------------------------------------------------------------------ primeiro acesso
+
+FORMATOS_NASCIMENTO = ["%d/%m/%Y", "%d%m%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y-%m-%d"]
+
+
+def ler_nascimento(texto, nome=""):
+    for fmt in ("%d/%m/%Y", "%d/%m/%y"):
+        try:
+            return datetime.strptime(texto, fmt).date()
+        except ValueError:
+            pass
+    raise forms.ValidationError(f"Data de nascimento inválida para {nome}: “{texto}” (use dd/mm/aaaa).")
+
+
+def validar_nascimento(valor):
+    if valor and not (date(1930, 1, 1) <= valor <= timezone.localdate() - timedelta(days=365 * 10)):
+        raise forms.ValidationError(f"Data de nascimento fora do esperado: {valor:%d/%m/%Y}.")
+    return valor
+
+
+class NascimentoInput(forms.TextInput):
+    """Campo de texto dd/mm/aaaa (no celular, o calendário obriga a voltar 18 anos mês a mês)."""
+
+    def __init__(self, **kw):
+        attrs = {"inputmode": "numeric", "placeholder": "dd/mm/aaaa", "maxlength": 10, "autocomplete": "bday",
+                 "data-mascara-data": "1", **kw.pop("attrs", {})}
+        super().__init__(attrs=attrs, **kw)
+
+    def format_value(self, value):
+        return value.strftime("%d/%m/%Y") if hasattr(value, "strftime") else value
+
+
+class PrimeiroAcessoNascimentoForm(Formulario):
+    nome = forms.CharField(label="Nome completo", max_length=150,
+                           widget=forms.TextInput(attrs={"autocomplete": "name", "autocapitalize": "words"}),
+                           help_text="Do jeito que está no termo de compromisso (acentos não importam).")
+    nascimento = forms.DateField(label="Data de nascimento", input_formats=FORMATOS_NASCIMENTO, widget=NascimentoInput(),
+                                 error_messages={"invalid": "Use o formato dd/mm/aaaa (ex.: 26/04/2007)."})
+
+
+class PrimeiroAcessoCodigoForm(Formulario):
+    usuario = forms.CharField(label="Usuário", max_length=150,
+                              widget=forms.TextInput(attrs={"autocomplete": "username", "autocapitalize": "none"}),
+                              help_text="O que veio junto com o código (ex.: ana.rocha).")
+    codigo = forms.CharField(label="Código de acesso", max_length=20,
+                             widget=forms.TextInput(attrs={"autocomplete": "one-time-code", "autocapitalize": "characters",
+                                                           "placeholder": "XXXX-XXXX", "spellcheck": "false"}))

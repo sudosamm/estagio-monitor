@@ -2,19 +2,7 @@
 {% block titulo %}Entrar{% endblock %}
 {% block corpo %}
 <div class="login-wrap">
-  <section class="login-lado">
-    <div class="flex"><span class="marca-icone">{% include "core/_logo.svg" %}</span><strong>{{ NOME_INSTITUICAO }}</strong></div>
-    <div>
-      <h1>{{ NOME_SISTEMA }}</h1>
-      <p>Todo mundo sabendo do que acontece no estágio.</p>
-      <ul>
-        <li>Estagiários marcam presença e informam ausências</li>
-        <li>Supervisores confirmam a presença no local</li>
-        <li>Orientadores acompanham horas, dias e visitas</li>
-      </ul>
-    </div>
-    <small class="rodape-login" style="color:#cfe3d7">Ferramenta de apoio. Os registros oficiais continuam no SICE.</small>
-  </section>
+  {% include "registration/_login_lado.html" %}
   <section class="login-form">
     <form method="post" novalidate>
       {% csrf_token %}
@@ -25,7 +13,8 @@
       <div class="campo"><label for="id_password">Senha</label><input type="password" name="password" id="id_password" autocomplete="current-password" required></div>
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn grande bloco" type="submit">Entrar</button>
-      <p class="muted mt-1" style="font-size:.85rem">Esqueceu a senha? Peça ao seu orientador para redefini-la. Outro problema? <a href="{% url 'sugestoes' %}?tipo=ERRO">Avise a equipe</a>.</p>
+      <a class="btn sec bloco mt-1" href="{% url 'primeiro_acesso' %}">Primeiro acesso: criar minha senha</a>
+      <p class="muted mt-1" style="font-size:.85rem">Esqueceu a senha? Peça ao seu orientador um novo primeiro acesso. Outro problema? <a href="{% url 'sugestoes' %}?tipo=ERRO">Avise a equipe</a>.</p>
       {% if CAPTACAO_ABERTA %}<div class="caixa-info mt-1">Sua empresa ou órgão quer receber estagiários? <a href="{% url 'candidatura_publica' %}"><strong>Cadastre-se como concedente</strong></a>.</div>{% endif %}
     </form>
   </section>

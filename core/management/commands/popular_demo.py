@@ -10,6 +10,7 @@ import random
 from datetime import date, time, timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
@@ -48,6 +49,7 @@ class Command(BaseCommand):
 
         def conta(nome, papel, **kw):
             u = criar_usuario(nome, papel, **kw)
+            u.set_password(settings.SENHA_PADRAO)
             u.deve_trocar_senha = False
             u.save()
             return u

@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
 
-from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 
@@ -24,6 +23,7 @@ from .validators import cnpj_valido, cpf_valido, formatar_cnpj, formatar_cpf, so
 COLUNAS = [
     ("estagiario_nome", True, "Nome completo do estagiário"),
     ("estagiario_cpf", False, "CPF (evita cadastrar a mesma pessoa duas vezes)"),
+    ("estagiario_nascimento", False, "Data de nascimento (dd/mm/aaaa): com o nome, é o primeiro acesso do estagiário"),
     ("estagiario_telefone", False, ""),
     ("estagiario_email", False, ""),
     ("matricula", False, ""),
@@ -73,6 +73,10 @@ MAPA_CONCEDENTE = {  # coluna do CSV -> campo da concedente
     "representante_email": "representante_email", "representante_cpf": "representante_cpf",
     "representante_documento": "representante_documento",
 }
+
+
+CAMPOS_COMPLETADOS = {"cpf": "CPF", "telefone": "telefone", "email": "e-mail", "matricula": "matrícula",
+                      "data_nascimento": "data de nascimento"}
 
 
 class ErroImportacao(Exception):
@@ -195,6 +199,7 @@ class Resultado:
     concedentes_novas: list = field(default_factory=list)
     concedentes_existentes: set = field(default_factory=set)
     cursos_novos: list = field(default_factory=list)
+    completados: list = field(default_factory=list)        # (n, estagiário já com estágio ativo, campos preenchidos)
     confirmado: bool = False
 
     @property
@@ -208,7 +213,7 @@ def importar(linhas, opcoes, usuario, confirmar=False, concedentes_extra=(), sup
     `concedentes_extra` e `supervisores_extra` (da planilha modelo) são cadastros sem estagiário: cada linha tem as
     colunas concedente_* (e supervisor_*, no caso dos supervisores)."""
     r = Resultado()
-    senha_hash = make_password(settings.SENHA_PADRAO)
+    senha_hash = make_password(None)  # conta sem senha até o primeiro acesso
     concedentes, supervisores, cursos, orientadores = {}, {}, {}, {}
     cpfs_no_arquivo = {}
     with transaction.atomic():
@@ -256,6 +261,9 @@ def _linha(n, d, op, usuario, r, senha_hash, concedentes, supervisores, cursos, 
     if not inicio:
         raise ErroImportacao("data_inicio: obrigatória")
     fim = _data(d.get("data_fim"), "data_fim")
+    nascimento = _data(d.get("estagiario_nascimento"), "estagiario_nascimento")
+    if nascimento and not (date(1930, 1, 1) <= nascimento <= date(inicio.year - 10, 12, 31)):
+        raise ErroImportacao(f"estagiario_nascimento: data fora do esperado “{d['estagiario_nascimento']}”")
     horas_ant = _decimal(d.get("horas_anteriores"), "horas_anteriores") or Decimal(0)
 
     # escala (colunas do CSV ou padrão da tela)
@@ -312,16 +320,24 @@ def _linha(n, d, op, usuario, r, senha_hash, concedentes, supervisores, cursos, 
     if not existente:
         candidatos = [u for u in Usuario.objects.filter(papel=Usuario.Papel.ESTAGIARIO, nome_completo__iexact=nome)]
         existente = candidatos[0] if len(candidatos) == 1 and (not cpf or not candidatos[0].cpf) else None
-    if existente and existente.estagios.filter(ativo=True).exists():
-        r.ignoradas.append((n, f"{existente} já tem estágio ativo no sistema ({existente.username})"))
-        return
     extra = {k: v for k, v in {"cpf": cpf, "telefone": d.get("estagiario_telefone", ""),
-                                "email": d.get("estagiario_email", ""), "matricula": d.get("matricula", "")}.items() if v}
+                                "email": d.get("estagiario_email", ""), "matricula": d.get("matricula", ""),
+                                "data_nascimento": nascimento}.items() if v}
+    completados = [k for k, v in extra.items() if existente and not getattr(existente, k)]
+    if existente and existente.estagios.filter(ativo=True).exists():
+        # não cria outro estágio, mas completa o que faltava no cadastro (ex.: a data de nascimento do primeiro acesso)
+        for k in completados:
+            setattr(existente, k, extra[k])
+        if completados:
+            existente.save(update_fields=completados)
+            r.completados.append((n, existente, [CAMPOS_COMPLETADOS.get(k, k) for k in completados]))
+        else:
+            r.ignoradas.append((n, f"{existente} já tem estágio ativo no sistema ({existente.username})"))
+        return
     if existente:
         aluno = existente
-        for k, v in extra.items():
-            if not getattr(aluno, k):
-                setattr(aluno, k, v)
+        for k in completados:
+            setattr(aluno, k, extra[k])
         aluno.save()
     else:
         aluno = criar_usuario(nome, Usuario.Papel.ESTAGIARIO, usuario, senha_hash=senha_hash, **extra)
@@ -434,7 +450,7 @@ def modelo_csv():
     w = csv.writer(saida, delimiter=";")
     w.writerow(NOMES_COLUNAS)
     exemplo = {
-        "estagiario_nome": "Maria da Silva Souza", "estagiario_cpf": "529.982.247-25", "estagiario_telefone": "(85) 99999-0000",
+        "estagiario_nome": "Maria da Silva Souza", "estagiario_cpf": "529.982.247-25", "estagiario_nascimento": "26/04/2008", "estagiario_telefone": "(85) 99999-0000",
         "curso": "Técnico em Informática", "turma": "3º A", "ano_turma": "2024", "data_inicio": "24/08/2026", "horas_anteriores": "120",
         "dias": "seg-sex", "horas_por_dia": "8", "entrada": "07:00", "saida_intervalo": "11:00",
         "volta_intervalo": "13:00", "saida": "17:00", "concedente_nome": "EEM Escola Exemplo",

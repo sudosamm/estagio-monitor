@@ -68,13 +68,13 @@ def importar_csv(request):
         del request.session[CHAVE_SESSAO]
         messages.success(request, f"Importação concluída: {len(resultado.linhas_ok)} estágio(s), "
                                   f"{len(resultado.concedentes_novas)} concedente(s) e "
-                                  f"{len(resultado.supervisores_novos)} supervisor(es) novos.")
-        from django.conf import settings
+                                  f"{len(resultado.supervisores_novos)} supervisor(es) novos"
+                                  + (f"; {len(resultado.completados)} cadastro(s) completado(s)." if resultado.completados else "."))
+        from .orientador import folha_primeiro_acesso
 
-        return render(request, "core/contas_criadas.html", {
-            "usuarios": resultado.estagiarios + resultado.supervisores_novos, "titulo": "Contas criadas pela importação",
-            "senha": settings.SENHA_PADRAO, "endereco": request.build_absolute_uri("/"),
-        })
+        pendentes = [u for _, u, _ in resultado.completados if u.deve_trocar_senha]
+        return folha_primeiro_acesso(request, resultado.estagiarios + resultado.supervisores_novos + pendentes,
+                                     "Contas criadas pela importação")
 
     form = ImportarCSVForm(request.POST or None, request.FILES or None, initial={
         "orientador": request.user if request.user.is_orientador else None,
