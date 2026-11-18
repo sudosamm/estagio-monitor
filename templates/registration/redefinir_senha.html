@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block titulo %}Criar senha nova{% endblock %}
+{% block corpo %}
+<div class="login-wrap">
+  {% include "registration/_login_lado.html" %}
+  <section class="login-form">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <h2>Criar senha nova</h2>
+      {% if validlink %}
+        <div class="caixa-info">Usuário: <strong>{{ form.user.username }}</strong></div>
+        <p class="muted mt-1" style="font-size:.88rem">Pelo menos 8 caracteres, não só números e nada fácil de adivinhar.</p>
+        <input type="text" name="username" value="{{ form.user.username }}" autocomplete="username" hidden>
+        {% include "core/_form.html" %}
+        <button class="btn grande bloco" type="submit">Salvar senha nova</button>
+      {% else %}
+        <div class="caixa-alerta">Este link não vale mais: ele já foi usado ou passou de 2 horas. Peça outro.</div>
+        <a class="btn bloco mt-1" href="{% url 'esqueci_senha' %}">Pedir outro link</a>
+      {% endif %}
+    </form>
+  </section>
+</div>
+{% endblock %}

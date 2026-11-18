@@ -30,7 +30,7 @@ def _pendentes():
 def achar_por_nascimento(texto, nascimento):
     chave = chave_texto(texto)
     qs = _pendentes().filter(papel=Usuario.Papel.ESTAGIARIO, data_nascimento=nascimento)
-    achados = [u for u in qs if chave_texto(u.nome_completo) == chave or u.username.lower() == chave]
+    achados = [u for u in qs if chave_texto(u.nome_completo) == chave]
     return achados[0] if len(achados) == 1 else None
 
 

@@ -1,11 +1,12 @@
 <div class="card laranja">
   <h3>Senha</h3>
   <p class="muted">Usuário: <strong>{{ alvo.username }}</strong> · {% if alvo.deve_trocar_senha %}ainda não fez o primeiro acesso{% if alvo.is_estagiario and not alvo.data_nascimento %} (sem data de nascimento: precisa de um código){% endif %}{% else %}já criou a própria senha{% endif %}</p>
-  {% if alvo != user %}
+  {% if pode_liberar %}
   <form method="post" action="{% url 'redefinir_senha' alvo.pk %}" data-confirmar="{% if alvo.deve_trocar_senha %}Gerar um código novo para {{ alvo.username }}? O código anterior deixa de valer.{% else %}A senha atual de {{ alvo.username }} deixa de valer e a pessoa cria outra pelo primeiro acesso. Continuar?{% endif %}">
     {% csrf_token %}
     <button class="btn laranja" type="submit">{% if alvo.deve_trocar_senha %}Gerar código de primeiro acesso{% else %}Esqueceu a senha: novo primeiro acesso{% endif %}</button>
   </form>
+  {% elif alvo != user %}<p class="muted" style="font-size:.85rem">Só o orientador de um estagiário dessa pessoa (ou o administrador) gera o código de acesso.</p>
   {% endif %}
 </div>
 {% if alvo != user and not alvo.is_superuser %}

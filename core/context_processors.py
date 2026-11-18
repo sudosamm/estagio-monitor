@@ -77,6 +77,7 @@ def globais(request):
         from .models import Usuario
 
         ctx["TEMAS"] = Usuario.Tema.choices
+    ctx["EMAIL_ATIVO"] = settings.EMAIL_ATIVO  # também nas telas sem login (esqueci a senha, bloqueio)
     if user and user.is_authenticated:
         from .models import Configuracao
 
@@ -86,7 +87,6 @@ def globais(request):
 
             ctx["NOVIDADES"] = pendentes(user)
         ctx["CONFIG"] = Configuracao.atual()
-        ctx["EMAIL_ATIVO"] = settings.EMAIL_ATIVO
         if user.pode("painel"):
             from .models import Justificativa
             from .services import estagios_visiveis

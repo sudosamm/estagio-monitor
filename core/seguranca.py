@@ -16,7 +16,9 @@ JANELA = timedelta(minutes=15)
 LIMITE_USUARIO_IP = 5
 LIMITE_USUARIO = 20
 LIMITE_IP = 40
-MENSAGEM_BLOQUEIO = "Muitas tentativas de entrar. Espere 15 minutos e tente de novo, ou peça ao orientador para redefinir a senha."
+MENSAGEM_BLOQUEIO = ("Muitas tentativas de entrar: o acesso ficou bloqueado por 15 minutos. Se esqueceu a senha, crie "
+                     "outra em “Esqueci minha senha” ou fale com o administrador.")
+LIMITE_AVISO_TENTATIVAS = 3  # na 3ª senha errada, a pessoa recebe um e-mail (se tiver e-mail confirmado)
 
 
 def ip_de(request):
@@ -40,7 +42,8 @@ def bloqueado(username, ip):
         return True
     if u and recentes.filter(username=u).count() >= LIMITE_USUARIO:
         return True
-    return bool(ip) and recentes.filter(ip=ip).exclude(username__startswith=PREFIXO_1O_ACESSO).count() >= LIMITE_IP
+    # linhas com “:” são de outras telas (primeiro acesso, esqueci a senha, pedido de ajuda): usuário não tem “:”
+    return bool(ip) and recentes.filter(ip=ip).exclude(username__contains=":").count() >= LIMITE_IP
 
 
 def registrar_falha(username, ip):
@@ -57,9 +60,14 @@ def limpar(username):
 
 
 def senha_inicial_antiga(user, password):
-    """A senha padrão compartilhada não abre mais contas que ainda não foram ativadas (ACEITAR_SENHA_PADRAO=1 reabre)."""
-    return (bool(password) and password == settings.SENHA_PADRAO and user.deve_trocar_senha
-            and not getattr(settings, "ACEITAR_SENHA_PADRAO", False))
+    """Conta que ainda não fez o primeiro acesso não entra por senha (ACEITAR_SENHA_PADRAO=1 reabre, só em emergência).
+
+    As contas antigas guardam o resumo da senha padrão de quando foram criadas; se a SENHA_PADRAO do servidor mudar,
+    a senha antiga continuaria abrindo essas contas. Por isso a regra vale para qualquer senha, não só a atual.
+    Exceção: administrador criado pelo terminal (createsuperuser), que nasce com senha própria."""
+    if not user.deve_trocar_senha or getattr(settings, "ACEITAR_SENHA_PADRAO", False):
+        return False
+    return not user.is_superuser or password == settings.SENHA_PADRAO
 
 
 class BackendComLimite(ModelBackend):
@@ -75,6 +83,8 @@ class BackendComLimite(ModelBackend):
 
 
 class LoginForm(AuthenticationForm):
+    bloqueado = False  # a tela mostra o botão de pedir ajuda ao administrador
+
     error_messages = {
         **AuthenticationForm.error_messages,
         "invalid_login": "Usuário ou senha incorretos.",
@@ -83,6 +93,7 @@ class LoginForm(AuthenticationForm):
 
     def clean(self):
         if bloqueado(self.data.get("username"), ip_de(self.request)):
+            self.bloqueado = True
             raise ValidationError(MENSAGEM_BLOQUEIO, code="bloqueado")
         try:
             return super().clean()
@@ -186,7 +197,48 @@ def concluir_primeiro_acesso(user, senha):
 
 
 def ao_falhar(sender, credentials, request=None, **kw):
-    registrar_falha(credentials.get("username"), ip_de(request))
+    ip = ip_de(request)
+    registrar_falha(credentials.get("username"), ip)
+    avisar_tentativas(credentials.get("username"), ip, request)
+
+
+def avisar_tentativas(username, ip, request=None):
+    """E-mail para o dono da conta na 3ª senha errada e quando o acesso fica bloqueado (só e-mail confirmado)."""
+    from django.urls import reverse
+
+    from . import emails
+    from .models import TentativaLogin, Usuario
+
+    u = _normal(username)
+    if not u or ":" in u:
+        return
+    user = Usuario.objects.filter(username__iexact=u, is_active=True, email_confirmado_em__isnull=False).exclude(email="").first()
+    if not user:
+        return
+    recentes = TentativaLogin.objects.filter(username=u, criado_em__gte=timezone.now() - JANELA)
+    total, deste_ip = recentes.count(), recentes.filter(ip=ip).count()
+    dados = {"nome": user.primeiro_nome, "usuario": user.username, "quando": emails.quando(), "ip": ip or "desconhecido"}
+    if deste_ip == LIMITE_USUARIO_IP or total == LIMITE_USUARIO:
+        emails.enviar("BLOQUEIO", [user.email], minutos=int(JANELA.total_seconds() // 60),
+                      link=emails.endereco(request, reverse("esqueci_senha")), **dados)
+    elif total == LIMITE_AVISO_TENTATIVAS:
+        emails.enviar("TENTATIVAS", [user.email], tentativas=total, **dados)
+
+
+# ---------------------------------------------------------------- limites das telas públicas
+
+def excedeu(prefixo, chave, ip, por_chave, por_ip, janela=timedelta(hours=1)):
+    """Pedidos demais nesta tela (esqueci a senha, pedido de ajuda) para a mesma conta ou do mesmo IP?"""
+    from .models import TentativaLogin
+
+    recentes = TentativaLogin.objects.filter(criado_em__gte=timezone.now() - janela, username__startswith=prefixo)
+    if chave and recentes.filter(username=(prefixo + chave_texto(chave))[:150]).count() >= por_chave:
+        return True
+    return bool(ip) and recentes.filter(ip=ip).count() >= por_ip
+
+
+def registrar_pedido(prefixo, chave, ip):
+    registrar_falha((prefixo + chave_texto(chave))[:150], ip)
 
 
 def ao_entrar(sender, request, user, **kw):

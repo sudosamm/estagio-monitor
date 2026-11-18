@@ -24,6 +24,19 @@ def _p(*publico):
 
 
 VERSOES = (
+    Versao("2026.11.18", "Senha por e-mail e calendário com nível", (
+        (_p("estagiario"), "Calendário: cada horário marcado enche o dia de água (25%, 50%, 75%, 100%). Confirmado pelo "
+                           "supervisor sem todos os horários, o dia vira grama."),
+        (_p("todos"), "Cadastre e confirme seu e-mail em Meus dados: se esquecer a senha, use “Esqueci minha senha” na "
+                      "tela de entrada e crie outra sozinho."),
+        (_p("todos"), "Segurança: avisamos por e-mail quando alguém erra sua senha várias vezes, quando o acesso é "
+                      "bloqueado e quando a senha muda. Bloqueado? Use “Falar com o administrador” na tela de entrada."),
+        (("orientador",), "Administrador: os textos de cada e-mail automático ficam em Configurações → Textos dos e-mails."),
+    )),
+    Versao("2026.11.17.2", "Primeiro acesso mais protegido", (
+        (GESTAO, "Código de acesso de supervisor: só gera quem tem estagiário com ele ou cadastrou a conta (o "
+                 "administrador gera para qualquer um). Contas que ainda não entraram não abrem por senha nenhuma."),
+    )),
     Versao("2026.11.17.1", "Primeiro acesso sem senha padrão", (
         (_p("todos"), "A senha inicial igual para todos acabou. Quem ainda não entrou cria a senha em “Primeiro acesso”, "
                       "na tela de login."),

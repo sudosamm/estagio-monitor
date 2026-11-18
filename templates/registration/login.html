@@ -8,13 +8,14 @@
       {% csrf_token %}
       <h2>Entrar</h2>
       <p class="muted">Use o usuário que seu orientador informou (ex.: <em>maria.souza</em>).</p>
-      {% if form.errors %}<div class="aviso error">{% for e in form.non_field_errors %}{{ e }}{% empty %}Usuário ou senha incorretos.{% endfor %}</div>{% endif %}
+      {% if form.errors %}<div class="aviso error">{% for e in form.non_field_errors %}{{ e }}{% empty %}Usuário ou senha incorretos.{% endfor %}
+        {% if form.bloqueado %}<div class="acoes mt-1">{% if EMAIL_ATIVO %}<a class="btn sm" href="{% url 'esqueci_senha' %}">Esqueci minha senha</a>{% endif %}<a class="btn sec sm" href="{% url 'pedir_ajuda' %}?usuario={{ form.username.value|default:''|urlencode }}">Falar com o administrador</a></div>{% endif %}</div>{% endif %}
       <div class="campo"><label for="id_username">Usuário</label><input type="text" name="username" id="id_username" autocomplete="username" autocapitalize="none" required autofocus value="{{ form.username.value|default:'' }}"></div>
       <div class="campo"><label for="id_password">Senha</label><input type="password" name="password" id="id_password" autocomplete="current-password" required></div>
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn grande bloco" type="submit">Entrar</button>
       <a class="btn sec bloco mt-1" href="{% url 'primeiro_acesso' %}">Primeiro acesso: criar minha senha</a>
-      <p class="muted mt-1" style="font-size:.85rem">Esqueceu a senha? Peça ao seu orientador um novo primeiro acesso. Outro problema? <a href="{% url 'sugestoes' %}?tipo=ERRO">Avise a equipe</a>.</p>
+      <p class="muted mt-1" style="font-size:.85rem">{% if EMAIL_ATIVO %}<a href="{% url 'esqueci_senha' %}">Esqueci minha senha</a> · {% else %}Esqueceu a senha? Peça ao seu orientador um novo primeiro acesso. {% endif %}<a href="{% url 'pedir_ajuda' %}">Falar com o administrador</a>. Outro problema? <a href="{% url 'sugestoes' %}?tipo=ERRO">Avise a equipe</a>.</p>
       {% if CAPTACAO_ABERTA %}<div class="caixa-info mt-1">Sua empresa ou órgão quer receber estagiários? <a href="{% url 'candidatura_publica' %}"><strong>Cadastre-se como concedente</strong></a>.</div>{% endif %}
     </form>
   </section>

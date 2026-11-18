@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block titulo %}Falar com o administrador{% endblock %}
+{% block corpo %}
+<div class="login-wrap">
+  {% include "registration/_login_lado.html" %}
+  <section class="login-form">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <h2>Falar com o administrador</h2>
+      {% if enviado %}
+        <div class="caixa-info">Pedido enviado. O administrador vai falar com você pelo contato informado.</div>
+      {% else %}
+        <p class="muted">Acesso bloqueado, esqueceu o usuário ou não consegue entrar? Conte o que aconteceu.</p>
+        {% include "core/_form.html" %}
+        <button class="btn grande bloco" type="submit">Enviar pedido</button>
+      {% endif %}
+      <p class="muted mt-1" style="font-size:.85rem"><a href="{% url 'login' %}">Voltar para Entrar</a></p>
+    </form>
+  </section>
+</div>
+{% endblock %}

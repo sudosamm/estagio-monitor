@@ -1,4 +1,5 @@
 import mimetypes
+import time
 
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
@@ -8,8 +9,11 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from .. import emails
 from ..forms import PerfilForm
 from ..models import Configuracao, Documento, Estagio, Notificacao, Usuario
 from ..services import estagios_visiveis
@@ -28,6 +32,38 @@ def inicio(request):
     return render(request, "core/estagiario_lista.html", {"estagios": estagios_visiveis(user)})
 
 
+def confirmar_email(request, token):
+    """Link do e-mail de confirmação. Funciona mesmo sem estar logado (o link abre no celular, por exemplo)."""
+    user = emails.usuario_do_token(token)
+    if user is None:
+        messages.error(request, "Link de confirmação inválido ou vencido. Peça outro em Meus dados.")
+    elif not user.email_confirmado_em:
+        user.email_confirmado_em = timezone.now()
+        user.save(update_fields=["email_confirmado_em"])
+        emails.enviar("EMAIL_CONFIRMADO", [user.email], nome=user.primeiro_nome, usuario=user.username)
+        messages.success(request, f"E-mail {user.email} confirmado. Se esquecer a senha, use “Esqueci minha senha”.")
+    else:
+        messages.info(request, "Este e-mail já estava confirmado.")
+    return redirect("perfil" if request.user.is_authenticated else "login")
+
+
+@login_required
+@require_POST
+def reenviar_confirmacao(request):
+    user = request.user
+    if not user.email or user.email_confirmado_em:
+        return redirect("perfil")
+    if time.time() - request.session.get("confirmacao_enviada", 0) < 60:
+        messages.info(request, "Aguarde um minuto para pedir outro link.")
+    elif emails.enviar_confirmacao(request, user):
+        request.session["confirmacao_enviada"] = time.time()
+        messages.info(request, f"Enviamos um novo link para {user.email}.")
+    else:
+        messages.error(request, "O envio de e-mails não está disponível agora. Fale com a escola.")
+    return redirect(request.POST.get("next") if url_has_allowed_host_and_scheme(
+        request.POST.get("next"), {request.get_host()}) else "perfil")
+
+
 @login_required
 def trocar_senha(request):
     obrigatorio = request.user.deve_trocar_senha
@@ -39,6 +75,7 @@ def trocar_senha(request):
         user.deve_trocar_senha = False
         user.save(update_fields=["deve_trocar_senha"])
         update_session_auth_hash(request, user)
+        emails.avisar_senha_alterada(request, user)
         messages.success(request, "Senha alterada com sucesso.")
         return redirect("inicio")
     return render(request, "core/trocar_senha.html", {"form": form, "obrigatorio": obrigatorio})
@@ -47,11 +84,15 @@ def trocar_senha(request):
 @login_required
 def perfil(request):
     config = Configuracao.atual()
+    email_antes = (request.user.email or "").strip().lower()
     form = PerfilForm(request.POST or None, request.FILES or None, instance=request.user,
                       curriculos=config.curriculos_habilitados)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        user = form.save()
         messages.success(request, "Dados atualizados.")
+        if user.email and user.email.strip().lower() != email_antes and emails.enviar_confirmacao(request, user):
+            request.session["confirmacao_enviada"] = time.time()
+            messages.info(request, f"Enviamos um link para {user.email}. Abra o e-mail e confirme (veja também o spam).")
         return redirect("perfil")
     return render(request, "core/perfil.html", {"form": form, "config": config})
 

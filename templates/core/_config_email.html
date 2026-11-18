@@ -4,7 +4,9 @@
   {% if EMAIL_ATIVO %}
     <p style="font-size:.88rem">Servidor de e-mail <strong>configurado</strong>. Os avisos do sino também vão para o e-mail de quem tem e-mail cadastrado (cada pessoa pode desligar em Meus dados).</p>
     <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="teste_email"><button class="btn sec sm" type="submit">{% icone "sino" %} Enviar e-mail de teste para mim</button></form>
-  {% else %}
+  {% endif %}
+  <p class="mt-1 mb-0"><a class="btn sec sm" href="{% url 'modelos_email' %}">{% icone "editar" %} Textos dos e-mails automáticos</a></p>
+  {% if not EMAIL_ATIVO %}
     <p style="font-size:.88rem">Servidor de e-mail <strong>não configurado</strong>: os avisos ficam só no sino. Para ligar, defina no Coolify as variáveis <code>EMAIL_HOST</code>, <code>EMAIL_PORT</code>, <code>EMAIL_HOST_USER</code> e <code>EMAIL_HOST_PASSWORD</code> (ex.: Gmail da escola com “senha de app”) e reinicie.</p>
   {% endif %}
 </div>

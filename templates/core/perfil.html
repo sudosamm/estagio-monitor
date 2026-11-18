@@ -28,8 +28,15 @@
       <dt>Usuário</dt><dd>{{ user.username }}</dd>
       <dt>Perfil</dt><dd>{{ user.get_papel_display }}</dd>
       {% if user.matricula %}<dt>Matrícula</dt><dd>{{ user.matricula }}</dd>{% endif %}
+      <dt>E-mail</dt><dd>{% if not user.email %}<span class="muted">não cadastrado</span>{% elif user.email_confirmado_em %}{{ user.email }} <span class="selo confirmado">confirmado</span>{% else %}{{ user.email }} <span class="selo ausencia">não confirmado</span>{% endif %}</dd>
       {% if user.is_supervisor %}<dt>Concedente{{ user.concedentes.count|pluralize }}</dt><dd>{{ user.concedentes_txt|default:"—" }}</dd>{% endif %}
     </dl>
+    {% if EMAIL_ATIVO and user.email and not user.email_confirmado_em %}
+    <form method="post" action="{% url 'reenviar_confirmacao' %}" class="mt-1">{% csrf_token %}
+      <p class="muted mb-0" style="font-size:.85rem">Abra o link que enviamos para confirmar. Com o e-mail confirmado, você cria uma senha nova sozinho se esquecer a sua.</p>
+      <button class="btn sec sm mt-1" type="submit">Reenviar link de confirmação</button>
+    </form>
+    {% endif %}
     <p class="muted mt-1" style="font-size:.85rem">Nome e matrícula são alterados pelo orientador.</p>
     <p class="mb-0"><a class="btn sec" href="{% url 'trocar_senha' %}">{% icone "chave" %} Alterar senha</a></p>
   </div>

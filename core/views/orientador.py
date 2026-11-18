@@ -10,6 +10,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_POST
 
 from ..forms import (
@@ -210,10 +211,16 @@ def folha_primeiro_acesso(request, usuarios, titulo, aviso=""):
     """Folha para repassar o primeiro acesso. Quem não entra por nome + nascimento ganha um código novo agora:
     o código só aparece nesta tela (fica guardado só um resumo dele)."""
     linhas = [(u, gerar_codigo(u) if precisa_de_codigo(u) else None) for u in usuarios]
-    return render(request, "core/contas_criadas.html", {
+    return _folha(request, linhas, titulo, aviso)
+
+
+def _folha(request, linhas, titulo, aviso=""):
+    resposta = render(request, "core/contas_criadas.html", {
         "linhas": linhas, "titulo": titulo, "aviso": aviso, "tem_codigo": any(c for _, c in linhas),
         "endereco": request.build_absolute_uri(reverse("primeiro_acesso")),
     })
+    add_never_cache_headers(resposta)  # o código não pode reaparecer no “voltar” do navegador
+    return resposta
 
 
 def _resultado_contas(request, usuarios, titulo):
@@ -263,6 +270,17 @@ def _pode_gerir(request, alvo):
     return estagios_visiveis(request.user).filter(estagiario=alvo).exists() or alvo.criado_por_id == request.user.pk
 
 
+def _pode_liberar_acesso(request, alvo):
+    """Gerar código / novo primeiro acesso dá a quem gera um jeito de entrar na conta. Supervisores são
+    compartilhados entre orientadores para editar contato, mas o acesso só sai para quem tem estagiário com ele
+    (ou cadastrou a conta)."""
+    if not _pode_gerir(request, alvo) or alvo.pk == request.user.pk:
+        return False
+    if request.user.is_superuser or not alvo.is_supervisor:
+        return True
+    return alvo.criado_por_id == request.user.pk or estagios_visiveis(request.user).filter(supervisor=alvo).exists()
+
+
 @permissao("contas")
 def editar_usuario(request, pk):
     alvo = get_object_or_404(Usuario, pk=pk)
@@ -281,7 +299,7 @@ def editar_usuario(request, pk):
         return redirect("usuarios")
     return render(request, "core/form_pagina.html", {
         "form": form, "titulo": f"Editar {alvo} ({alvo.username})", "voltar": reverse("usuarios"),
-        "extra_template": "core/_redefinir_senha.html", "alvo": alvo,
+        "extra_template": "core/_redefinir_senha.html", "alvo": alvo, "pode_liberar": _pode_liberar_acesso(request, alvo),
     })
 
 
@@ -290,13 +308,10 @@ def editar_usuario(request, pk):
 def redefinir_senha(request, pk):
     """Esqueceu a senha: a atual deixa de valer e a pessoa faz o primeiro acesso de novo (com um código novo)."""
     alvo = get_object_or_404(Usuario, pk=pk)
-    if not _pode_gerir(request, alvo) or alvo.pk == request.user.pk:
+    if not _pode_liberar_acesso(request, alvo):
         raise PermissionDenied
     codigo = liberar_primeiro_acesso(alvo)
-    return render(request, "core/contas_criadas.html", {
-        "linhas": [(alvo, codigo)], "titulo": f"Novo primeiro acesso de {alvo}", "tem_codigo": True,
-        "aviso": "A senha antiga deixou de valer.", "endereco": request.build_absolute_uri(reverse("primeiro_acesso")),
-    })
+    return _folha(request, [(alvo, codigo)], f"Novo primeiro acesso de {alvo}", "A senha antiga deixou de valer.")
 
 
 @permissao("contas")
@@ -304,7 +319,7 @@ def redefinir_senha(request, pk):
 def codigos_lote(request):
     """Folha de primeiro acesso de quem ainda não entrou (filtros da tela de contas). Gera códigos novos para quem precisa."""
     alvos = [u for u in _contas(request, request.POST.get("papel", ""), request.POST.get("q", ""), "pendentes")
-             .exclude(is_superuser=True).distinct() if _pode_gerir(request, u) and u.pk != request.user.pk]
+             .exclude(is_superuser=True).distinct() if _pode_liberar_acesso(request, u)]
     if not alvos:
         messages.info(request, "Ninguém nesta lista está esperando o primeiro acesso.")
         return redirect("usuarios")
@@ -321,6 +336,11 @@ def ativacao_usuario(request, pk):
     desativar = alvo.is_active
     estagios = list(alvo.estagios_supervisionados.filter(ativo=True).select_related("estagiario", "local")
                     ) if desativar and alvo.is_supervisor else []
+    # supervisor compartilhado: só o administrador desativa quem tem estagiários de outros orientadores
+    # (desativar troca o supervisor desses estágios)
+    meus = set(estagios_visiveis(request.user).values_list("pk", flat=True)) if estagios else set()
+    if not request.user.is_superuser and any(e.pk not in meus for e in estagios):
+        raise PermissionDenied
     orientados = alvo.estagios_orientados.filter(ativo=True).count() if desativar and alvo.is_orientador else 0
     form = SubstitutosForm(request.POST if request.method == "POST" else None, estagios=estagios, sair=alvo)
     ultimo_estagio = alvo.estagios.order_by("-data_inicio").first() if alvo.is_estagiario else None

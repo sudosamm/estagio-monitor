@@ -2884,7 +2884,7 @@ class PrimeiroAcessoTests(Base):
         self.assertNotIn("primeiro_acesso", self.client.session)
 
     def test_supervisor_usa_codigo_de_uso_unico_gerado_pela_gestao(self):
-        novo = criar_usuario("Rita de Cássia Moura", Usuario.Papel.SUPERVISOR, concedente=self.local)
+        novo = criar_usuario("Rita de Cássia Moura", Usuario.Papel.SUPERVISOR, concedente=self.local, criado_por=self.ori)
         self.entrar(self.ori)
         r = self.client.post(reverse("redefinir_senha", args=[novo.pk]))
         codigo = self._codigo_da_tela(r)
@@ -2996,3 +2996,233 @@ class PresencasNaImportacaoTests(Base):
             r = importar([(2, {**base, "presencas_desde": desde})], Opcoes(orientador=self.ori, dias=[0], horas_por_dia=Decimal(4)),
                          self.ori)
             self.assertIn("presencas_desde", r.erros[0][1])
+
+
+class ContasAntigasTests(Base):
+    def test_senha_antiga_nao_abre_mesmo_se_a_senha_padrao_mudar(self):
+        antigo = criar_usuario("Conta Antiga Lima", Usuario.Papel.SUPERVISOR, concedente=self.local)
+        antigo.set_password("estagio123")  # resumo guardado quando a conta foi criada
+        antigo.save()
+        with self.settings(SENHA_PADRAO="outra-senha-nova"):
+            self.assertFalse(self.client.login(username=antigo.username, password="estagio123"))
+        self.assertFalse(self.client.login(username=antigo.username, password="estagio123"))
+        # ativada (senha própria): entra normalmente
+        Usuario.objects.filter(pk=antigo.pk).update(deve_trocar_senha=False)
+        self.assertTrue(self.client.login(username=antigo.username, password="estagio123"))
+
+    def test_admin_criado_pelo_terminal_entra(self):
+        adm = Usuario.objects.create_superuser("admin.terminal", "", "Senha#Forte77")
+        self.assertTrue(adm.deve_trocar_senha)
+        self.assertTrue(self.client.login(username="admin.terminal", password="Senha#Forte77"))
+
+    def test_folha_com_codigo_nao_fica_em_cache(self):
+        novo = criar_usuario("Nina Prado Leal", Usuario.Papel.SUPERVISOR, concedente=self.local, criado_por=self.ori)
+        self.entrar(self.ori)
+        r = self.client.post(reverse("redefinir_senha", args=[novo.pk]))
+        self.assertIn("no-store", r["Cache-Control"])
+
+
+class PermissoesDeAcessoTests(Base):
+    def test_quem_pode_gerar_codigo(self):
+        outro_ori = _ativo(criar_usuario("Otto Orientador", Usuario.Papel.ORIENTADOR))
+        coord = _ativo(criar_usuario("Cora Coordenadora", Usuario.Papel.COORDENADOR))
+        for u in (self.aluno, self.sup):
+            self.client.force_login(u)
+            r = self.client.post(reverse("codigos_lote"), {})
+            self.assertEqual(r.status_code, 403, (u, r.get("Location")))
+        for u, alvo, esperado in [
+            (outro_ori, self.aluno, 403), (outro_ori, self.sup, 403), (outro_ori, self.ori, 403),
+            (coord, self.ori, 403), (self.aluno, self.sup, 403), (self.sup, self.aluno, 403), (self.ori, self.sup, 200),
+        ]:
+            self.client.force_login(u)
+            r = self.client.post(reverse("redefinir_senha", args=[alvo.pk]))
+            self.assertEqual(r.status_code, esperado, (u, alvo))
+        self.client.force_login(outro_ori)
+        r = self.client.post(reverse("codigos_lote"), {"papel": "", "q": ""}, follow=True)
+        self.assertNotContains(r, "codigo-acesso")
+
+    def test_csrf_e_sessao_do_primeiro_acesso(self):
+        from django.test import Client
+        c = Client(enforce_csrf_checks=True)
+        self.assertEqual(c.post(reverse("primeiro_acesso"), {"modo": "nascimento", "nome": "x", "nascimento": "01/01/2008"}).status_code, 403)
+        self.assertEqual(self.client.get(reverse("primeiro_acesso_senha")).status_code, 302)
+        s = self.client.session
+        s["primeiro_acesso"] = {"uid": self.aluno.pk, "ate": 9e12}  # conta já ativada: não serve
+        s.save()
+        self.assertEqual(self.client.get(reverse("primeiro_acesso_senha")).status_code, 302)
+
+    def test_outro_orientador_nao_troca_supervisor_alheio(self):
+        outro_ori = _ativo(criar_usuario("Otto Orientador", Usuario.Papel.ORIENTADOR))
+        self.client.force_login(outro_ori)
+        self.assertEqual(self.client.get(reverse("ativacao_usuario", args=[self.sup.pk])).status_code, 403)
+        self.client.force_login(self.ori)
+        self.assertEqual(self.client.get(reverse("ativacao_usuario", args=[self.sup.pk])).status_code, 200)
+
+
+class NivelDoDiaTests(Base):
+    def _reg(self, dia, confirmacao="PENDENTE", **horarios):
+        from datetime import time as t
+        from .models import Registro
+
+        campos = {k: t(*v) for k, v in horarios.items()}
+        return Registro.objects.create(estagio=self.est, data=dia, situacao="PRESENTE", horas=4, confirmacao=confirmacao,
+                                       **campos)
+
+    def test_nivel_sobe_a_cada_horario(self):
+        from .services import status_periodo
+
+        Escala.objects.filter(estagio=self.est).update(saida_intervalo="11:00", volta_intervalo="13:00")
+        self._reg(date(2026, 11, 2), hora_chegada=(7,))
+        self._reg(date(2026, 11, 3), hora_chegada=(7,), saida_intervalo=(11,))
+        self._reg(date(2026, 11, 9), hora_chegada=(7,), saida_intervalo=(11,), volta_intervalo=(13,))
+        self._reg(date(2026, 11, 10), hora_chegada=(7,), saida_intervalo=(11,), volta_intervalo=(13,), hora_saida=(17,))
+        self._reg(date(2026, 10, 27))  # só as horas, sem horário: conta como completo
+        dias = {d.data: d for d in status_periodo(self.est, date(2026, 10, 27), date(2026, 11, 10))}
+        self.assertEqual([dias[date(2026, 11, n)].nivel for n in (2, 3, 9, 10)], [25, 50, 75, 100])
+        self.assertEqual(dias[date(2026, 11, 3)].horarios, (2, 4))
+        self.assertEqual(dias[date(2026, 10, 27)].nivel, 100)
+
+    def test_sem_intervalo_sao_dois_horarios(self):
+        from .services import status_periodo
+
+        self._reg(date(2026, 11, 2), hora_chegada=(7,))
+        self.assertEqual(status_periodo(self.est, date(2026, 11, 2), date(2026, 11, 2))[0].nivel, 50)
+
+    def test_calendario_mostra_agua_e_grama(self):
+        self._reg(date(2026, 11, 2), hora_chegada=(7,))
+        self._reg(date(2026, 11, 3), confirmacao="CONFIRMADA", hora_chegada=(7,))
+        self.entrar(self.aluno)
+        r = self.client.get(self.est.get_absolute_url() + "?aba=visao&mes=2026-11")
+        self.assertContains(r, 'class="nivel agua"')
+        self.assertContains(r, 'class="nivel grama"')
+        self.assertContains(r, "--nivel:50%")
+        self.assertContains(r, "1 de 2 horários (50%)")
+
+
+@override_settings(EMAIL_ATIVO=True)
+class EmailDeContaTests(Base):
+    def setUp(self):
+        super().setUp()
+        from django.core import mail
+
+        self.mail = mail
+
+    def _link(self, msg):
+        import re
+
+        return re.search(r"https?://[^\s]+", msg.body).group(0).replace("http://testserver", "")
+
+    def _confirmar(self, user, email="maria@example.com"):
+        Usuario.objects.filter(pk=user.pk).update(email=email, email_confirmado_em=timezone.now())
+
+    def test_cadastrar_e_confirmar_email(self):
+        self.entrar(self.aluno)
+        self.assertContains(self.client.get(reverse("estagio_detalhe", args=[self.est.pk])), "Cadastre seu e-mail")
+        self.client.post(reverse("perfil"), {"email": "maria@example.com", "avisos_email": "on", "novidades_popup": "on"})
+        self.assertEqual(len(self.mail.outbox), 1)
+        self.assertIn("Confirme seu e-mail", self.mail.outbox[0].subject)
+        link = self._link(self.mail.outbox[0])
+        self.client.get(link)
+        self.aluno.refresh_from_db()
+        self.assertIsNotNone(self.aluno.email_confirmado_em)
+        self.assertIn("E-mail cadastrado", self.mail.outbox[1].subject)
+        self.assertNotContains(self.client.get(reverse("estagio_detalhe", args=[self.est.pk])), "Confirme seu e-mail")
+        # trocar o e-mail (por ela ou pela gestão) pede confirmação de novo; o link antigo não vale para o novo
+        self.aluno.email = "outro@example.com"
+        self.aluno.save()
+        self.assertIsNone(self.aluno.email_confirmado_em)
+        self.client.get(link)
+        self.aluno.refresh_from_db()
+        self.assertIsNone(self.aluno.email_confirmado_em)
+
+    def test_esqueci_minha_senha(self):
+        self._confirmar(self.aluno)
+        r = self.client.post(reverse("esqueci_senha"), {"identificador": "MARIA@example.com"}, REMOTE_ADDR="10.1.1.1")
+        self.assertContains(r, "Se houver uma conta")
+        self.assertEqual(len(self.mail.outbox), 1)
+        link = self._link(self.mail.outbox[0])
+        r = self.client.get(link)  # o Django troca o código da URL pela sessão
+        r = self.client.post(r["Location"], {"new_password1": "Nova#Senha2026", "new_password2": "Nova#Senha2026"})
+        self.assertRedirects(r, reverse("login"), fetch_redirect_response=False)
+        self.assertTrue(self.client.login(username="maria.souza", password="Nova#Senha2026"))
+        self.assertIn("Sua senha foi alterada", self.mail.outbox[-1].subject)
+        self.client.logout()
+        self.assertEqual(self.client.get(link).status_code, 200)  # link usado não vale mais
+        self.assertContains(self.client.get(link, follow=True), "não vale mais")
+
+    def test_esqueci_sem_email_confirmado_nao_envia_nem_revela(self):
+        Usuario.objects.filter(pk=self.aluno.pk).update(email="maria@example.com")
+        r1 = self.client.post(reverse("esqueci_senha"), {"identificador": "maria.souza"}, REMOTE_ADDR="10.1.1.2")
+        r2 = self.client.post(reverse("esqueci_senha"), {"identificador": "nao.existe"}, REMOTE_ADDR="10.1.1.2")
+        self.assertEqual(len(self.mail.outbox), 0)
+        self.assertContains(r1, "Se houver uma conta")
+        self.assertContains(r2, "Se houver uma conta")
+
+    def test_limite_de_pedidos_de_senha(self):
+        self._confirmar(self.aluno)
+        for i in range(5):
+            self.client.post(reverse("esqueci_senha"), {"identificador": "maria.souza"}, REMOTE_ADDR=f"10.2.0.{i}")
+        self.assertEqual(len(self.mail.outbox), 3)
+
+    def test_avisos_de_tentativas_e_bloqueio(self):
+        self.aluno.set_password("Senha#Certa9")
+        self.aluno.save()
+        self._confirmar(self.aluno)
+        for i in range(5):
+            r = self.client.post(reverse("login"), {"username": "maria.souza", "password": f"x{i}"}, REMOTE_ADDR="10.3.0.1")
+        assuntos = [m.subject for m in self.mail.outbox]
+        self.assertEqual(len(assuntos), 2, assuntos)
+        self.assertIn("Tentativas de entrar", assuntos[0])
+        self.assertIn("bloqueado", assuntos[1])
+        r = self.client.post(reverse("login"), {"username": "maria.souza", "password": "x"}, REMOTE_ADDR="10.3.0.1")
+        self.assertContains(r, reverse("pedir_ajuda") + "?usuario=maria.souza")
+        # criar senha nova pelo e-mail desbloqueia
+        self.client.post(reverse("esqueci_senha"), {"identificador": "maria.souza"}, REMOTE_ADDR="10.3.0.1")
+        r = self.client.get(self._link(self.mail.outbox[-1]))
+        self.client.post(r["Location"], {"new_password1": "Nova#Senha2026", "new_password2": "Nova#Senha2026"})
+        r = self.client.post(reverse("login"), {"username": "maria.souza", "password": "Nova#Senha2026"}, REMOTE_ADDR="10.3.0.1")
+        self.assertEqual(r.status_code, 302)
+
+    def test_pedido_de_ajuda_ao_administrador(self):
+        from .models import Notificacao
+
+        adm = _ativo(criar_usuario("Ana Admin Lima", Usuario.Papel.ORIENTADOR, email="adm@example.com"))
+        Usuario.objects.filter(pk=adm.pk).update(is_superuser=True)
+        dados = {"usuario": "maria.souza\nBcc: x@y.z", "nome": "Maria Souza", "contato": "(85) 9999-0000",
+                 "mensagem": "Fui bloqueada."}
+        r = self.client.post(reverse("pedir_ajuda"), dados, REMOTE_ADDR="10.4.0.1")
+        self.assertContains(r, "Pedido enviado")
+        self.assertTrue(Notificacao.objects.filter(usuario=adm, texto__contains="Maria Souza").exists())
+        self.assertEqual(self.mail.outbox[0].to, ["adm@example.com"])
+        self.assertNotIn("\n", self.mail.outbox[0].subject)
+        for _ in range(2):
+            self.client.post(reverse("pedir_ajuda"), dados, REMOTE_ADDR="10.4.0.1")
+        self.assertContains(self.client.post(reverse("pedir_ajuda"), dados, REMOTE_ADDR="10.4.0.1"), "Aguarde a resposta")
+        self.client.post(reverse("pedir_ajuda"), {**dados, "site": "spam"}, REMOTE_ADDR="10.4.0.9")  # robô
+        self.assertEqual(Notificacao.objects.filter(usuario=adm).count(), 3)
+
+    def test_administrador_edita_os_textos(self):
+        from .models import ModeloEmail
+
+        self.entrar(self.ori)
+        self.assertEqual(self.client.get(reverse("modelos_email")).status_code, 403)
+        Usuario.objects.filter(pk=self.ori.pk).update(is_superuser=True)
+        self.assertContains(self.client.get(reverse("modelos_email")), "Redefinição de senha")
+        url = reverse("modelo_email", args=["REDEFINIR_SENHA"])
+        r = self.client.post(url, {"assunto": "Senha {sistema}", "corpo": "Oi {nome} {xyz}", "ativo": "on"})
+        self.assertContains(r, "{xyz}")
+        r = self.client.post(url, {"assunto": "Senha {sistema}", "corpo": "Oi {nome}", "ativo": "on"})
+        self.assertContains(r, "{link}")
+        r = self.client.post(url, {"assunto": "Senha nova", "corpo": "Oi {nome}, use {link}", "ativo": "on", "acao": "previa"})
+        self.assertContains(r, "exemplo-de-link")
+        self.client.post(url, {"assunto": "Senha nova", "corpo": "Oi {nome}, use {link}", "ativo": "on"})
+        self.assertTrue(ModeloEmail.objects.filter(tipo="REDEFINIR_SENHA").exists())
+        self._confirmar(self.aluno)
+        self.client.logout()
+        self.client.post(reverse("esqueci_senha"), {"identificador": "maria.souza"}, REMOTE_ADDR="10.5.0.1")
+        self.assertEqual(self.mail.outbox[-1].subject, "Senha nova")
+        self.assertTrue(self.mail.outbox[-1].body.startswith("Oi Maria, use http"))
+        ModeloEmail.objects.filter(tipo="REDEFINIR_SENHA").update(ativo=False)
+        n = len(self.mail.outbox)
+        self.client.post(reverse("esqueci_senha"), {"identificador": "maria.souza"}, REMOTE_ADDR="10.5.0.2")
+        self.assertEqual(len(self.mail.outbox), n)

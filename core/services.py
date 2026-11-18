@@ -265,6 +265,26 @@ class StatusDia:
     horas_previstas: Decimal = Decimal(0)
 
     @property
+    def horarios(self):
+        """(preenchidos, esperados) dos horários do dia: entrada, saída e, se houver, as duas do intervalo."""
+        r = self.registro
+        if not r or r.situacao != Registro.Situacao.PRESENTE:
+            return (0, 0)
+        intervalo = bool((self.escala and self.escala.tem_intervalo) or r.saida_intervalo or r.volta_intervalo)
+        campos = ([r.hora_chegada, r.saida_intervalo, r.volta_intervalo, r.hora_saida] if intervalo
+                  else [r.hora_chegada, r.hora_saida])
+        return (sum(1 for c in campos if c), len(campos))
+
+    @property
+    def nivel(self):
+        """0, 25, 50, 75 ou 100: o “nível de água” do dia no calendário. Presença lançada só com as horas
+        (sem horário nenhum) conta como completa."""
+        feitos, total = self.horarios
+        if not total or not feitos:
+            return 100
+        return feitos * 100 // total // 25 * 25
+
+    @property
     def hoje(self):
         from django.utils import timezone
 

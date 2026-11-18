@@ -4,16 +4,21 @@ from django.http import HttpResponse
 from django.urls import path
 
 from core.seguranca import LoginForm
-from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, encerramento, estagio, feedback, frequencia, importacao, novidades, visitas, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
+from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, conta, encerramento, estagio, feedback, frequencia, importacao, novidades, visitas, modelos_email, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
     path("entrar/", auth_views.LoginView.as_view(redirect_authenticated_user=True, authentication_form=LoginForm), name="login"),
     path("sair/", auth_views.LogoutView.as_view(), name="logout"),
     path("primeiro-acesso/", primeiro_acesso.primeiro_acesso, name="primeiro_acesso"),
+    path("senha/esqueci/", conta.esqueci_senha, name="esqueci_senha"),
+    path("senha/nova/<uidb64>/<token>/", conta.RedefinirSenhaView.as_view(), name="redefinir_senha_email"),
+    path("acesso/ajuda/", conta.pedir_ajuda, name="pedir_ajuda"),
     path("primeiro-acesso/senha/", primeiro_acesso.primeiro_acesso_senha, name="primeiro_acesso_senha"),
     path("senha/", comum.trocar_senha, name="trocar_senha"),
     path("perfil/", comum.perfil, name="perfil"),
+    path("perfil/email/reenviar/", comum.reenviar_confirmacao, name="reenviar_confirmacao"),
+    path("email/confirmar/<str:token>/", comum.confirmar_email, name="confirmar_email"),
     path("tema/", comum.trocar_tema, name="trocar_tema"),
     path("novidades/", novidades.novidades, name="novidades"),
     path("novidades/visto/", novidades.novidades_visto, name="novidades_visto"),
@@ -103,6 +108,8 @@ urlpatterns = [
     path("turmas/", orientador.turmas, name="turmas"),
     path("turmas/<int:pk>/", orientador.turmas, name="turma_editar"),
     path("configuracoes/", orientador.configuracoes, name="configuracoes"),
+    path("configuracoes/emails/", modelos_email.lista, name="modelos_email"),
+    path("configuracoes/emails/<str:tipo>/", modelos_email.editar, name="modelo_email"),
     path("encerramento/", encerramento.encerramento, name="encerramento"),
     # captação de concedentes
     path("seja-concedente/", captacao.candidatura_publica, name="candidatura_publica"),

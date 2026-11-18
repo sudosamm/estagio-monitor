@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block titulo %}E-mails automáticos{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>E-mails automáticos</h1><p>Texto de cada e-mail que o sistema manda sozinho. Sem edição, vale o texto padrão.</p></div>
+  <div class="acoes"><a class="btn sec" href="{% url 'configuracoes' %}">Voltar</a></div></div>
+{% if not EMAIL_ATIVO %}<div class="caixa-alerta">O servidor de e-mail não está configurado: nenhum destes e-mails sai até configurar (veja Configurações).</div>{% endif %}
+<div class="card"><div class="tabela-wrap"><table class="tabela">
+  <thead><tr><th>E-mail</th><th>Quando é enviado</th><th>Situação</th><th></th></tr></thead>
+  <tbody>{% for chave, t, salvo in itens %}<tr>
+    <td><strong>{{ t.nome }}</strong></td><td><small>{{ t.quando }}</small></td>
+    <td>{% if salvo and not salvo.ativo %}<span class="selo falta">desligado</span>{% elif salvo %}<span class="selo confirmado">personalizado</span>{% else %}<span class="selo">padrão</span>{% endif %}</td>
+    <td><a class="btn sec sm" href="{% url 'modelo_email' chave %}">Editar</a></td>
+  </tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

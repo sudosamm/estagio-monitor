@@ -147,6 +147,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # acesso (agora é nome + nascimento ou código de uso único). ACEITAR_SENHA_PADRAO=1 reabre, só para emergência.
 SENHA_PADRAO = os.environ.get("SENHA_PADRAO", "estagio123")
 ACEITAR_SENHA_PADRAO = env_bool("ACEITAR_SENHA_PADRAO", False)
+PASSWORD_RESET_TIMEOUT = 2 * 3600  # link de “Esqueci minha senha” vale 2 horas
 NOME_SISTEMA = os.environ.get("NOME_SISTEMA", "Estágio Monitor")
 NOME_INSTITUICAO = os.environ.get("NOME_INSTITUICAO", "Secretaria da Educação do Ceará")
 

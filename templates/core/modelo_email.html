@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block titulo %}{{ t.nome }}{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>{{ t.nome }}</h1><p>{{ t.quando }}</p></div>
+  <div class="acoes"><a class="btn sec" href="{{ voltar }}">Voltar</a></div></div>
+<div class="grade grade-lado">
+  <div class="card destaque">
+    <form method="post" novalidate>{% csrf_token %}
+      {% include "core/_form.html" %}
+      <div class="acoes">
+        <button class="btn" type="submit" name="acao" value="salvar">Salvar</button>
+        <button class="btn sec" type="submit" name="acao" value="previa">Pré-visualizar</button>
+        {% if EMAIL_ATIVO %}<button class="btn sec" type="submit" name="acao" value="teste">Enviar teste para mim</button>{% endif %}
+      </div>
+    </form>
+    {% if salvo %}<form method="post" class="mt-1" data-confirmar="Voltar ao texto padrão? O texto atual será descartado.">{% csrf_token %}<button class="btn sec sm" type="submit" name="acao" value="padrao">Restaurar o texto padrão</button></form>
+    <p class="muted" style="font-size:.8rem">Editado por {{ salvo.atualizado_por|default:"—" }} em {{ salvo.atualizado_em|date:"d/m/Y H:i" }}.</p>{% endif %}
+  </div>
+  <div>
+    <div class="card">
+      <h3>Variáveis</h3>
+      <p class="muted" style="font-size:.85rem">Escreva entre chaves; o sistema troca pelo valor de cada pessoa.</p>
+      <dl class="dl">{% for v, desc in variaveis %}<dt><code>{{ "{" }}{{ v }}{{ "}" }}</code></dt><dd>{{ desc }}</dd>{% endfor %}</dl>
+    </div>
+    {% if previa %}<div class="card">
+      <h3>Pré-visualização (dados de exemplo)</h3>
+      <p><strong>{{ previa.0 }}</strong></p>
+      <pre class="previa-email">{{ previa.1 }}</pre>
+    </div>{% endif %}
+  </div>
+</div>
+{% endblock %}

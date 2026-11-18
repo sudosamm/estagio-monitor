@@ -1384,7 +1384,7 @@ class NascimentoInput(forms.TextInput):
 class PrimeiroAcessoNascimentoForm(Formulario):
     nome = forms.CharField(label="Nome completo", max_length=150,
                            widget=forms.TextInput(attrs={"autocomplete": "name", "autocapitalize": "words"}),
-                           help_text="Do jeito que está no termo de compromisso (acentos não importam).")
+                           help_text="Nome e todos os sobrenomes, como no termo de compromisso (acentos não importam).")
     nascimento = forms.DateField(label="Data de nascimento", input_formats=FORMATOS_NASCIMENTO, widget=NascimentoInput(),
                                  error_messages={"invalid": "Use o formato dd/mm/aaaa (ex.: 26/04/2007)."})
 
@@ -1396,3 +1396,47 @@ class PrimeiroAcessoCodigoForm(Formulario):
     codigo = forms.CharField(label="Código de acesso", max_length=20,
                              widget=forms.TextInput(attrs={"autocomplete": "one-time-code", "autocapitalize": "characters",
                                                            "placeholder": "XXXX-XXXX", "spellcheck": "false"}))
+
+
+# ------------------------------------------------------------------ conta: senha por e-mail, ajuda, modelos de e-mail
+
+class EsqueciSenhaForm(Formulario):
+    identificador = forms.CharField(label="Usuário ou e-mail", max_length=254,
+                                    widget=forms.TextInput(attrs={"autocomplete": "username", "autocapitalize": "none"}))
+
+
+class PedidoAjudaForm(Formulario):
+    usuario = forms.CharField(label="Seu usuário (se souber)", max_length=150, required=False,
+                              widget=forms.TextInput(attrs={"autocapitalize": "none"}))
+    nome = forms.CharField(label="Nome completo", max_length=150)
+    contato = forms.CharField(label="Como falar com você", max_length=150,
+                              help_text="E-mail ou telefone/WhatsApp para o administrador responder.")
+    mensagem = forms.CharField(label="O que aconteceu?", max_length=1000, widget=forms.Textarea(attrs={"rows": 4}))
+    site = forms.CharField(required=False, widget=forms.HiddenInput)  # armadilha para robôs: pessoas não preenchem
+
+
+class ModeloEmailForm(Formulario):
+    assunto = forms.CharField(max_length=200)
+    corpo = forms.CharField(label="Texto", widget=forms.Textarea(attrs={"rows": 14}))
+    ativo = forms.BooleanField(label="Enviar este e-mail", required=False)
+
+    def __init__(self, *a, tipo=None, **kw):
+        super().__init__(*a, **kw)
+        self.tipo = tipo
+
+    def clean(self):
+        import re
+
+        from .emails import COMUNS, TIPOS
+
+        dados = super().clean()
+        t = TIPOS[self.tipo]
+        validas = set(t.variaveis) | set(COMUNS)
+        texto = f"{dados.get('assunto', '')} {dados.get('corpo', '')}"
+        desconhecidas = sorted(set(re.findall(r"\{(\w+)\}", texto)) - validas)
+        if desconhecidas:
+            raise forms.ValidationError("Variáveis que este e-mail não tem: " + ", ".join(f"{{{v}}}" for v in desconhecidas)
+                                        + ". Use só as da lista ao lado.")
+        if "link" in t.variaveis and "{link}" not in dados.get("corpo", "") and self.tipo != "BLOQUEIO":
+            raise forms.ValidationError("Este e-mail precisa do {link} no texto: é por ele que a pessoa continua.")
+        return dados

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}Esqueci minha senha{% endblock %}
+{% block corpo %}
+<div class="login-wrap">
+  {% include "registration/_login_lado.html" %}
+  <section class="login-form">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <h2>Esqueci minha senha</h2>
+      {% if not EMAIL_ATIVO %}
+        <div class="caixa-alerta">O envio de e-mails não está ligado neste sistema. Peça ao seu orientador um novo primeiro acesso, ou <a href="{% url 'pedir_ajuda' %}">fale com o administrador</a>.</div>
+      {% elif enviado %}
+        <div class="caixa-info">Se houver uma conta com esse usuário ou e-mail <strong>confirmado</strong>, enviamos um link para criar uma senha nova. Ele vale por 2 horas. Confira também a caixa de spam.</div>
+        <p class="muted" style="font-size:.88rem">Não chegou? Talvez o e-mail ainda não tenha sido confirmado. Peça ao orientador um novo primeiro acesso ou <a href="{% url 'pedir_ajuda' %}">fale com o administrador</a>.</p>
+      {% else %}
+        <p class="muted">Informe seu usuário ou o e-mail que você confirmou em Meus dados. Enviaremos um link para criar uma senha nova.</p>
+        {% include "core/_form.html" %}
+        <button class="btn grande bloco" type="submit">Enviar link</button>
+      {% endif %}
+      <p class="muted mt-1" style="font-size:.85rem"><a href="{% url 'login' %}">Voltar para Entrar</a> · <a href="{% url 'primeiro_acesso' %}">Primeiro acesso</a></p>
+    </form>
+  </section>
+</div>
+{% endblock %}

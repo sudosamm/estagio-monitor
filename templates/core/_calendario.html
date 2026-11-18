@@ -9,19 +9,23 @@
     {% for d in dias_semana %}<div class="cab">{{ d }}</div>{% endfor %}
     {% for semana in semanas %}{% for d in semana %}
       {% if d %}
-        <a class="dia {{ d.codigo }}{% if d.hoje %} e-hoje{% endif %}{% if d.extra %} extra{% endif %}{% if d.data == horas.previsao_termino %} fim{% endif %}" href="{% url 'estagio_dia' estagio.pk d.data|date:'Y-m-d' %}" title="{{ d.data|date:'d/m' }} — {{ d.rotulo|default:'sem estágio' }}{% if d.motivo_sem_estagio %}: {{ d.motivo_sem_estagio }}{% endif %}">
+        {% with nivel=d.nivel horarios=d.horarios %}
+        <a class="dia {{ d.codigo }}{% if d.codigo == 'aguardando' or d.codigo == 'confirmado' and nivel < 100 %} com-nivel{% if nivel == 100 %} cheio{% endif %}{% endif %}{% if d.hoje %} e-hoje{% endif %}{% if d.extra %} extra{% endif %}{% if d.data == horas.previsao_termino %} fim{% endif %}" href="{% url 'estagio_dia' estagio.pk d.data|date:'Y-m-d' %}" title="{{ d.data|date:'d/m' }} — {{ d.rotulo|default:'sem estágio' }}{% if d.motivo_sem_estagio %}: {{ d.motivo_sem_estagio }}{% endif %}{% if horarios.1 and d.codigo == 'aguardando' or horarios.1 and d.codigo == 'confirmado' %} · {{ horarios.0 }} de {{ horarios.1 }} horários ({{ nivel }}%){% endif %}"{% if d.codigo == 'aguardando' or d.codigo == 'confirmado' and nivel < 100 %} style="--nivel:{{ nivel }}%"{% endif %}>
+          {% if d.codigo == "aguardando" %}<span class="nivel agua" aria-hidden="true"><i></i><i></i></span>{% elif d.codigo == "confirmado" and nivel < 100 %}<span class="nivel grama" aria-hidden="true"><i></i></span>{% endif %}
           <span class="n">{{ d.data.day }}</span>
           {% if d.data in dias_visita %}<span class="visita" title="Visita/conversa agendada"></span>{% endif %}
           {% if d.data == horas.previsao_termino %}<span class="marca-fim" title="Previsão de término">{% icone "bandeira" %}</span>{% endif %}
-          <span class="ic">{% if d.codigo == "confirmado" %}✓ {{ d.registro.horas|horas }}{% elif d.codigo == "aguardando" %}aguard.{% elif d.codigo == "ausencia" or d.codigo == "ausencia_ok" %}ausente{% elif d.codigo == "falta" %}falta{% elif d.codigo == "sem_registro" %}sem reg.{% elif d.codigo == "hoje" %}hoje{% elif d.codigo == "previsto" and d.extra %}extra {{ d.horas_previstas|horas }}{% elif d.codigo == "previsto" and d.plano %}{{ d.horas_previstas|horas }}{% elif d.codigo == "previsto" %}estágio{% elif d.codigo == "contestado" %}contest.{% elif d.codigo == "sem_estagio" %}feriado{% endif %}</span>
+          <span class="ic">{% if d.codigo == "confirmado" %}✓ {{ d.registro.horas|horas }}{% elif d.codigo == "aguardando" and nivel < 100 %}{{ nivel }}%{% elif d.codigo == "aguardando" %}aguard.{% elif d.codigo == "ausencia" or d.codigo == "ausencia_ok" %}ausente{% elif d.codigo == "falta" %}falta{% elif d.codigo == "sem_registro" %}sem reg.{% elif d.codigo == "hoje" %}hoje{% elif d.codigo == "previsto" and d.extra %}extra {{ d.horas_previstas|horas }}{% elif d.codigo == "previsto" and d.plano %}{{ d.horas_previstas|horas }}{% elif d.codigo == "previsto" %}estágio{% elif d.codigo == "contestado" %}contest.{% elif d.codigo == "sem_estagio" %}feriado{% endif %}</span>
         </a>
+        {% endwith %}
       {% else %}<div class="dia vazio"></div>{% endif %}
     {% endfor %}{% endfor %}
   </div>
   <div class="legenda">
     <span><i style="background:var(--superficie);border-color:var(--dia-previsto-borda)"></i>Previsto</span>
     <span><i style="background:var(--st-confirmado)"></i>Confirmado</span>
-    <span><i style="background:var(--st-aguardando)"></i>Aguardando supervisor</span>
+    <span><i class="chave-agua"></i>Aguardando supervisor (o nível sobe a cada horário marcado)</span>
+    <span><i class="chave-grama"></i>Confirmado sem todos os horários</span>
     <span><i style="background:var(--st-ausencia)"></i>Ausência informada</span>
     <span><i style="background:var(--st-falta)"></i>Falta</span>
     <span><i style="background:var(--t-erro);border-color:var(--t-erro-borda)"></i>Sem registro</span>

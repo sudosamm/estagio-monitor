@@ -104,6 +104,9 @@
   {% endif %}
   <main>
     <div class="container">
+      {% if user.is_authenticated and EMAIL_ATIVO and not user.email_confirmado_em and not user.deve_trocar_senha and request.resolver_match.url_name != "perfil" %}
+      <a class="faixa-aviso" href="{% url 'perfil' %}">{% icone "chave" %}<span><strong>{% if user.email %}Confirme seu e-mail:{% else %}Cadastre seu e-mail:{% endif %}</strong> {% if user.email %}abra o link que enviamos para {{ user.email }}.{% else %}com ele confirmado, você cria uma senha nova sozinho se esquecer a sua.{% endif %}</span><span class="btn sm">{% if user.email %}Ver{% else %}Cadastrar{% endif %}</span></a>
+      {% endif %}
       {% if messages %}
       <div class="avisos">{% for m in messages %}<div class="aviso {{ m.tags }}">{{ m }}</div>{% endfor %}</div>
       {% endif %}

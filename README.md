@@ -35,6 +35,11 @@ O sistema pode ser **instalado como app** (PWA): ícone na tela inicial, abre em
 - **iPhone (Safari):** Compartilhar → *Adicionar à Tela de Início*.
 - O app não guarda páginas com dados pessoais no aparelho: só o visual (CSS, ícones). Sem internet, aparece uma tela “Sem conexão”, e a presença só é marcada online, com o horário do servidor.
 
+### Calendário do estágio
+- Cada dia é um “recipiente”: a cada horário que o estagiário marca (entrada, saída para o intervalo, volta e saída), a água sobe 25% (sem intervalo na escala, 50% por horário), com uma onda leve. O dia mostra a porcentagem até ficar completo.
+- Confirmado pelo supervisor sem todos os horários, o dia vira grama até o nível em que estava. Completo e confirmado, fica todo verde.
+- Presença lançada só com as horas (sem horário) conta como completa. Quem prefere menos movimento (opção do celular) vê o nível sem animação.
+
 ### Contas
 - Usuário gerado como `primeiro.ultimo` sem acentos (ex.: *Maria da Silva Souza* → `maria.souza`). Se já existir, recebe um número (`maria.souza2`).
 - **Não existe senha inicial.** As contas nascem sem senha, e cada pessoa cria a sua em **Primeiro acesso** (link na tela de login, `/primeiro-acesso/`):
@@ -43,7 +48,14 @@ O sistema pode ser **instalado como app** (PWA): ícone na tela inicial, abre em
   - A folha impressa depois de criar contas (cadastro, importação) já traz o código de quem precisa. Para quem ainda não entrou, *Contas → Situação: Ainda não entraram → Folha de primeiro acesso* gera a folha de novo, com códigos novos.
   - Depois de criar a senha, o primeiro acesso fecha para aquela conta.
 - **Esqueceu a senha:** em *Contas → Editar*, “Esqueceu a senha: novo primeiro acesso”. A senha atual deixa de valer e aparece um código novo.
-- **Contas antigas** criadas com a `SENHA_PADRAO` e ainda não ativadas não entram mais com ela: usam o primeiro acesso. Em emergência, `ACEITAR_SENHA_PADRAO=1` faz a senha padrão voltar a valer para elas.
+- **Contas antigas** criadas com a `SENHA_PADRAO` e ainda não ativadas não entram mais por senha nenhuma (nem a antiga, mesmo que a `SENHA_PADRAO` do servidor mude): usam o primeiro acesso. Quem já criou a própria senha não é afetado. Em emergência, `ACEITAR_SENHA_PADRAO=1` faz a senha padrão voltar a valer para elas. Administrador criado pelo terminal (`createsuperuser`) entra normalmente.
+- **Quem gera código:** o administrador, para qualquer conta; orientador e coordenador, para os estagiários que acompanham e para supervisores que eles cadastraram ou que supervisionam algum estagiário deles. O mesmo vale para desativar um supervisor que tenha estagiários de outro orientador (só o administrador). As telas com código não ficam no cache do navegador.
+- **E-mail confirmado:** quem não tem e-mail confirmado vê uma faixa no topo pedindo para cadastrar. Ao salvar o e-mail em *Meus dados*, chega um link de confirmação (vale 3 dias). Trocar o e-mail, pela pessoa ou pela gestão, exige confirmar de novo; a gestão não consegue confirmar o e-mail de ninguém.
+- **Esqueci minha senha** (link na tela de entrada): informe o usuário ou o e-mail confirmado e chega um link para criar uma senha nova (vale 2 horas, uma vez só). A resposta é sempre a mesma, exista a conta ou não. Limite: 3 pedidos por conta e 10 por rede por hora. Criar a senha nova também desbloqueia o login.
+- **Avisos de segurança por e-mail** (só para e-mail confirmado): na 3ª senha errada seguida (“alguém tentou entrar”), quando o acesso fica bloqueado e sempre que a senha muda.
+- **Bloqueado ou sem acesso:** a tela de entrada mostra “Falar com o administrador”. O pedido (usuário, nome, contato e mensagem) chega no sino dos administradores e no e-mail deles. Limite: 3 pedidos por rede por hora.
+- **Textos dos e-mails:** em *Configurações → Textos dos e-mails automáticos* (administrador), cada e-mail (confirmação, e-mail cadastrado, redefinição de senha, senha alterada, tentativas, bloqueio, pedido de ajuda) pode ser editado, pré-visualizado, testado, desligado ou voltar ao padrão. As variáveis vão entre chaves, ex.: `{nome}`, `{link}`.
+- Sem servidor de e-mail configurado, nada disso é enviado: a faixa não aparece e “Esqueci minha senha” orienta a falar com o orientador.
 - **Proteção do primeiro acesso:** 10 tentativas erradas com o mesmo nome (de qualquer lugar) param o primeiro acesso dele por 24 horas; 5 por nome no mesmo aparelho/rede e 60 por rede valem por 15 minutos.
 - **Proteção do login:** depois de 5 senhas erradas para o mesmo usuário (no mesmo aparelho/rede), o login espera 15 minutos. Também há limite por usuário (20) e por rede (40) na mesma janela, inclusive no `/admin/`. Entrou certo, a contagem zera.
 - **Senha nova:** pelo menos 8 caracteres, não pode ser só números, uma senha comum (ex.: `password`) nem a senha inicial.

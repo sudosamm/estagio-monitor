@@ -97,6 +97,8 @@ class Usuario(AbstractUser):
         help_text="Vazio = todos os cursos.",
     )
     deve_trocar_senha = models.BooleanField(default=True, help_text="Ainda não criou a própria senha (primeiro acesso)")
+    email_confirmado_em = models.DateTimeField(null=True, blank=True, editable=False,
+                                               help_text="Quando a pessoa confirmou o e-mail pelo link (vale para recuperar a senha)")
     # código de uso único do primeiro acesso (guardado só o resumo HMAC; o código aparece uma vez para a gestão)
     codigo_acesso = models.CharField(max_length=64, blank=True, editable=False)
     codigo_acesso_validade = models.DateTimeField(null=True, blank=True, editable=False)
@@ -122,12 +124,27 @@ class Usuario(AbstractUser):
     def __str__(self):
         return self.nome_completo or self.username
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        obj = super().from_db(db, field_names, values)
+        obj._email_original = obj.__dict__.get("email")
+        return obj
+
     def save(self, *args, **kwargs):
+        # e-mail trocado (pela pessoa ou pela gestão) precisa ser confirmado de novo
+        antes = getattr(self, "_email_original", None)
+        campos = kwargs.get("update_fields")
+        if (self.pk and antes is not None and (campos is None or "email" in campos)
+                and (self.email or "").strip().lower() != (antes or "").strip().lower()):
+            self.email_confirmado_em = None
+            if campos is not None:
+                kwargs["update_fields"] = set(campos) | {"email_confirmado_em"}
         if self.is_superuser:
             self.papel = self.Papel.ORIENTADOR
         if not self.nome_completo:
             self.nome_completo = f"{self.first_name} {self.last_name}".strip() or self.username
         super().save(*args, **kwargs)
+        self._email_original = self.email
 
     @property
     def is_orientador(self):
@@ -1688,3 +1705,23 @@ class TentativaLogin(models.Model):
     class Meta:
         verbose_name = "tentativa de login com erro"
         verbose_name_plural = "tentativas de login com erro"
+
+
+class ModeloEmail(models.Model):
+    """Texto de um tipo de e-mail automático, editado pelo administrador. Sem registro, vale o texto padrão
+    (core/emails.py). Variáveis entre chaves, ex.: {nome}, {link}."""
+
+    tipo = models.CharField(max_length=30, unique=True)
+    assunto = models.CharField(max_length=200)
+    corpo = models.TextField()
+    ativo = models.BooleanField("Enviar este e-mail", default=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+    atualizado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                       related_name="+")
+
+    class Meta:
+        verbose_name = "modelo de e-mail"
+        verbose_name_plural = "modelos de e-mail"
+
+    def __str__(self):
+        return self.tipo
