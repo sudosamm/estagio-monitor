@@ -4360,3 +4360,75 @@ class DiasDaImportacaoTests(Base):
     def test_supervisor_nao_retira(self):
         self.entrar(self.sup)
         self.assertEqual(self.client.post(reverse("remover_importadas_fora"), {"registros": [1]}).status_code, 403)
+
+
+class ModoAdministradorTests(Base):
+    """Administrador que também é orientador: no modo orientador vê só os próprios estagiários; roteiro e agenda são
+    sempre só dele."""
+
+    SEGUNDA = date(2026, 11, 16)
+
+    def setUp(self):
+        super().setUp()
+        self.ori.is_superuser = True
+        self.ori.save()
+        self.outro_ori = _ativo(criar_usuario("Davi Redes", Usuario.Papel.ORIENTADOR))
+        self.local_redes = LocalEstagio.objects.create(nome="Provedor Rede Sul")
+        aluno = _ativo(criar_usuario("Igor Redes Lima", Usuario.Papel.ESTAGIARIO))
+        self.est_redes = Estagio.objects.create(estagiario=aluno, orientador=self.outro_ori, curso=self.curso,
+                                                local=self.local_redes, data_inicio=date(2026, 11, 2))
+        Escala.objects.create(estagio=self.est_redes, vigente_desde=date(2026, 11, 2), dias="0,1", horas_por_dia=4)
+        self.entrar(self.ori)
+
+    def _modo(self, modo):
+        return self.client.post(reverse("alternar_modo"), {"modo": modo}, follow=True)
+
+    def test_modo_orientador_ve_so_os_seus_e_esconde_a_administracao(self):
+        r = self.client.get(reverse("estagios_lista"))
+        self.assertContains(r, "Igor Redes Lima")
+        self._modo("orientador")
+        self.ori.refresh_from_db()
+        self.assertTrue(self.ori.is_superuser)  # no banco continua administrador
+        self.assertFalse(self.ori.modo_administrador)
+        r = self.client.get(reverse("estagios_lista"))
+        self.assertContains(r, "Maria da Silva Souza")
+        self.assertNotContains(r, "Igor Redes Lima")
+        self.assertEqual(self.client.get(self.est_redes.get_absolute_url()).status_code, 403)
+        r = self.client.get(reverse("configuracoes"))
+        self.assertEqual(r.status_code, 403)
+        self.assertContains(r, "Ligar o modo administrador e abrir", status_code=403)
+        r = self.client.get(reverse("painel"))
+        self.assertNotContains(r, "Erros do sistema")
+        self.assertContains(r, "Ligar o modo administrador")
+        # salvar os próprios dados no modo orientador não tira o administrador
+        self.client.post(reverse("perfil"), {"email": "paula@escola.test", "telefone": "", "avisos_email": "on",
+                                             "resumo_semanal": "on", "novidades_popup": "on"})
+        self.ori.refresh_from_db()
+        self.assertEqual((self.ori.email, self.ori.is_superuser), ("paula@escola.test", True))
+        r = self._modo("admin")
+        self.assertContains(r, "Modo administrador ligado")
+        self.assertEqual(self.client.get(reverse("configuracoes")).status_code, 200)
+
+    def test_quem_nao_e_administrador_nao_troca_de_modo(self):
+        self.entrar(self.outro_ori)
+        self.assertEqual(self.client.post(reverse("alternar_modo"), {"modo": "admin"}).status_code, 403)
+        self.assertNotContains(self.client.get(reverse("perfil")), "Modo administrador")
+
+    def test_roteiro_e_agendamento_sao_so_do_orientador_mesmo_no_modo_administrador(self):
+        r = self.client.get(reverse("roteiro") + f"?data={self.SEGUNDA.isoformat()}")
+        self.assertContains(r, "Empresa X")
+        self.assertNotContains(r, "Provedor Rede Sul")
+        r = self.client.post(reverse("agendamento_rapido"), {"data": self.SEGUNDA.isoformat(), "inicio": "08:00",
+                                                              "duracao": "30", "deslocamento": "15", "acao": "criar",
+                                                              "locais": [self.local.pk, self.local_redes.pk]})
+        self.assertEqual(list(Agendamento.objects.values_list("local__nome", "orientador")), [("Empresa X", self.ori.pk)])
+        r = self.client.get(reverse("novo_agendamento"))
+        self.assertContains(r, "Maria da Silva Souza")
+        self.assertNotContains(r, "Igor Redes Lima")
+        visita_do_outro = Agendamento.objects.create(orientador=self.outro_ori, solicitante=self.outro_ori,
+                                                     status=Agendamento.Status.AGENDADO, assunto="Visita da turma de redes",
+                                                     data_hora=timezone.now() + timedelta(days=2))
+        visita_do_outro.estagios.set([self.est_redes])
+        self.assertNotContains(self.client.get(reverse("agendamentos")), "Visita da turma de redes")
+        # pelo link, o administrador ainda abre a visita de outro orientador
+        self.assertEqual(self.client.get(visita_do_outro.get_absolute_url()).status_code, 200)

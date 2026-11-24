@@ -299,3 +299,30 @@ def excluir_documento(request, pk):
     doc.delete()
     messages.success(request, "Arquivo removido.")
     return redirect(destino)
+
+
+@login_required
+@require_POST
+def alternar_modo(request):
+    """Liga ou desliga o modo administrador (só para administradores)."""
+    from .. import auditoria
+    from .base import destino_seguro
+
+    user = request.user
+    if not user.e_administrador:
+        raise PermissionDenied
+    user.modo_administrador = request.POST.get("modo") == "admin"
+    user.save(update_fields=["modo_administrador"])
+    auditoria.registrar(request, "GESTAO", "Ligou o modo administrador" if user.modo_administrador
+                        else "Passou a usar a conta no modo orientador")
+    if user.modo_administrador:
+        messages.success(request, "Modo administrador ligado: você vê todos os estagiários e as telas de administração.")
+    else:
+        messages.success(request, "Modo orientador: agora você vê só os seus estagiários, como qualquer orientador. "
+                                  "Para administrar, ligue de novo em Meus dados ou no menu da sua foto.")
+    from django.urls import reverse
+
+    destino = destino_seguro(request, reverse("painel"))
+    if not user.modo_administrador and not destino.startswith(reverse("perfil")):
+        destino = reverse("painel")  # a tela em que estava pode ser só de administração
+    return redirect(destino)

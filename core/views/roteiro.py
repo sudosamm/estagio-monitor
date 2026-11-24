@@ -13,7 +13,7 @@ from django.views.decorators.http import require_POST
 
 from ..models import Agendamento, LocalEstagio, Usuario
 from ..seguranca import chave_texto
-from ..services import estagios_visiveis, notificar, preparar_lote, status_periodo
+from ..services import estagios_do_orientador, estagios_visiveis, notificar, preparar_lote, status_periodo
 from .base import orientador_requerido, permissao
 
 
@@ -55,9 +55,9 @@ def _destino_mapa(local):
 
 
 def paradas_do_dia(user, dia):
-    """Concedentes com estagiário (visível ao usuário) no local em `dia`, com horário, última visita e visita já
+    """Concedentes com estagiário do orientador (mesmo para o administrador) no local em `dia`, com horário, última visita e visita já
     marcada. Sem ordem definida."""
-    estagios = preparar_lote(estagios_visiveis(user).filter(ativo=True, local__isnull=False)
+    estagios = preparar_lote(estagios_do_orientador(user).filter(ativo=True, local__isnull=False)
                              .select_related("estagiario", "local", "supervisor"), min(dia, timezone.localdate()),
                              totais=False)
     ultima = dict(Agendamento.objects.filter(estagios__in=estagios, tipo=Agendamento.Tipo.VISITA,

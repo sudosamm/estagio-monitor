@@ -96,6 +96,13 @@ def estagios_visiveis(user):
     return qs.filter(estagiario=user)
 
 
+def estagios_do_orientador(user):
+    """Ferramentas do orientador (roteiro de visitas, agendamento): só os estagiários que ele orienta, mesmo para o
+    administrador. Para quem não é orientador, o mesmo que estagios_visiveis."""
+    qs = estagios_visiveis(user)
+    return qs.filter(orientador=user) if user.is_orientador else qs
+
+
 # ---------------------------------------------------------------- turmas e ano de referência
 
 ANOS_ATE_ESTAGIO = 2  # a turma de 2024 estagia em 2026

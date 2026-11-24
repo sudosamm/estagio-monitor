@@ -122,6 +122,11 @@ class Usuario(AbstractUser):
         help_text="Pode cadastrar a equipe da concedente (supervisores e funcionários) e dar permissões temporárias "
                   "para confirmar presenças quando o supervisor não estiver.",
     )
+    modo_administrador = models.BooleanField(
+        "Modo administrador", default=True,
+        help_text="Só para administradores. Desligado, a conta funciona como a de um orientador comum: vê só os próprios "
+                  "estagiários e esconde as telas de administração.",
+    )
     lembrete_expediente = models.BooleanField(
         "Lembrar no fim do expediente", default=True,
         help_text="Se você esquecer de marcar a presença ou a saída, o celular avisa uma hora depois do horário de saída.",
@@ -156,6 +161,17 @@ class Usuario(AbstractUser):
         return obj
 
     def save(self, *args, **kwargs):
+        # administrador no modo orientador: nesta requisição ele “não é” superusuário (ver ModoAdministradorMiddleware),
+        # mas o banco nunca pode perder isso
+        if getattr(self, "_admin_real", False):
+            self.is_superuser = True
+            try:
+                return self._salvar(*args, **kwargs)
+            finally:
+                self.is_superuser = False
+        return self._salvar(*args, **kwargs)
+
+    def _salvar(self, *args, **kwargs):
         # e-mail trocado (pela pessoa ou pela gestão) precisa ser confirmado de novo
         antes = getattr(self, "_email_original", None)
         campos = kwargs.get("update_fields")
@@ -179,6 +195,15 @@ class Usuario(AbstractUser):
     @property
     def is_orientador(self):
         return self.papel == self.Papel.ORIENTADOR
+
+    @property
+    def e_administrador(self):
+        """Administrador de verdade, mesmo usando a conta no modo orientador."""
+        return self.is_superuser or getattr(self, "_admin_real", False)
+
+    @property
+    def no_modo_orientador(self):
+        return getattr(self, "_admin_real", False)
 
     @property
     def is_coordenador(self):

@@ -63,7 +63,9 @@
         <details class="drop">
           <summary>{% avatar user %}</summary>
           <div class="drop-menu">
-            <div class="info"><strong>{{ user.nome_completo }}</strong><small>{{ user.username }} · {{ user.get_papel_display }}</small></div>
+            <div class="info"><strong>{{ user.nome_completo }}</strong><small>{{ user.username }} · {% if user.e_administrador %}{% if user.no_modo_orientador %}modo orientador{% else %}modo administrador{% endif %}{% else %}{{ user.get_papel_display }}{% endif %}</small></div>
+            {% if user.e_administrador %}<form method="post" action="{% url 'alternar_modo' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+              {% if user.no_modo_orientador %}<button type="submit" name="modo" value="admin">Ligar o modo administrador</button>{% else %}<button type="submit" name="modo" value="orientador">Usar como orientador</button>{% endif %}</form>{% endif %}
             <a href="{% url 'perfil' %}">Meus dados</a>
             <a href="{% url 'trocar_senha' %}">Alterar senha</a>
             <a href="{% url 'novidades' %}">O que há de novo</a>

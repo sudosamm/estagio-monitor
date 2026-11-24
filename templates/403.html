@@ -1,3 +1,9 @@
 {% extends "base.html" %}
 {% block titulo %}Erro 403{% endblock %}
-{% block conteudo %}<div class="card texto-centro" style="max-width:520px;margin:2rem auto"><h1>Acesso não permitido</h1><p class="muted">Você não tem permissão para ver esta página.</p><a class="btn" href="/">Ir para o início</a></div>{% endblock %}
+{% block conteudo %}<div class="card texto-centro" style="max-width:520px;margin:2rem auto"><h1>Acesso não permitido</h1>
+{% if user.is_authenticated and user.no_modo_orientador %}
+  <p class="muted">Você está usando a conta no <strong>modo orientador</strong>, e esta página é de administração (ou de um estagiário que não é seu).</p>
+  <form method="post" action="{% url 'alternar_modo' %}" class="acoes" style="justify-content:center">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button class="btn" type="submit" name="modo" value="admin">Ligar o modo administrador e abrir</button><a class="btn sec" href="/">Ir para o início</a></form>
+{% else %}<p class="muted">Você não tem permissão para ver esta página.</p><a class="btn" href="/">Ir para o início</a>{% endif %}
+</div>{% endblock %}

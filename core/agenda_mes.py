@@ -80,7 +80,9 @@ def agenda_do_mes(usuario, estagios, ano, mes, hoje=None):
         dias[dia].feriados = nomes
 
     ags = Agendamento.objects.filter(data_hora__date__range=(inicio, fim)).exclude(status=Agendamento.Status.CANCELADO)
-    if not usuario.is_superuser:
+    if usuario.is_superuser:  # as visitas no calendário são as dele, mesmo no modo administrador
+        ags = ags.filter(Q(orientador=usuario) | Q(solicitante=usuario))
+    else:
         ags = ags.filter(Q(orientador=usuario) | Q(estagios__in=estagios)).distinct()
     for a in ags.prefetch_related("estagios__estagiario").select_related("local"):
         quando = timezone.localtime(a.data_hora)

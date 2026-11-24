@@ -40,6 +40,19 @@
     <p class="muted mt-1" style="font-size:.85rem">Nome e matrícula são alterados pelo orientador.</p>
     <p class="mb-0"><a class="btn sec" href="{% url 'trocar_senha' %}">{% icone "chave" %} Alterar senha</a></p>
   </div>
+  {% if user.e_administrador %}
+  <div class="card {% if user.no_modo_orientador %}destaque{% else %}laranja{% endif %}" id="modo">
+    <h3>{% icone "engrenagem" %} Modo administrador: {% if user.no_modo_orientador %}<span class="selo livre">desligado</span>{% else %}<span class="selo confirmado">ligado</span>{% endif %}</h3>
+    {% if user.no_modo_orientador %}
+    <p class="muted" style="font-size:.88rem">Você está usando a conta como <strong>orientador</strong>: vê só os seus estagiários (painel, listas, frequências, roteiro e agenda) e as telas de administração ficam escondidas.</p>
+    {% else %}
+    <p class="muted" style="font-size:.88rem">Ligado, você vê os estagiários de todos os orientadores e as telas de administração (Configurações, Contas, Sistema). Roteiro de visitas e agenda continuam mostrando só os seus estagiários. Para trabalhar só como orientador, desligue.</p>
+    {% endif %}
+    <form method="post" action="{% url 'alternar_modo' %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'perfil' %}#modo">
+      {% if user.no_modo_orientador %}<button class="btn sm" type="submit" name="modo" value="admin">Ligar o modo administrador</button>
+      {% else %}<button class="btn sec sm" type="submit" name="modo" value="orientador">Desligar: usar como orientador</button>{% endif %}</form>
+  </div>
+  {% endif %}
   <div class="card" id="seguranca">
     <h3>{% icone "escudo" %} Segurança e privacidade</h3>
     {% if pode_2fa %}

@@ -446,6 +446,11 @@ Nos dois casos o sistema prepara uma mensagem para a concedente. Por enquanto o 
 ### Permissões
 As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em `core/models.py`. Para tirar ou dar algo ao coordenador, basta editar o conjunto dele. O administrador pode tudo.
 
+**Modo administrador** (para quem é administrador e também orientador): em **Meus dados → Modo administrador** ou no menu da foto (*Usar como orientador* / *Ligar o modo administrador*).
+- **Desligado:** a conta funciona como a de um orientador comum: só os próprios estagiários em todas as telas (painel, listas, frequências, relatórios) e sem as telas de administração (Configurações, Sistema, Administração). No banco ela continua sendo de administrador, e salvar os próprios dados nesse modo não muda isso. Ao abrir uma tela de administração, a página de acesso negado oferece *Ligar o modo administrador e abrir*. Os avisos de erro continuam chegando.
+- **Ligado** (padrão): vê os estagiários de todos os orientadores e as telas de administração.
+- **Nos dois modos**, as ferramentas de visita são só do próprio orientador: *Agendar visita* lista só os seus estagiários (e a visita sai no seu nome), o roteiro e o agendamento rápido só montam rotas com os seus, e a agenda, o calendário do painel e o link para o celular mostram só as suas visitas. Uma visita de outro orientador ainda abre pelo link no modo administrador.
+
 | Permissão | Orientador | Coordenador |
 |---|---|---|
 | Painel, estagiários, lançar/validar registros | ✔ | ✔ |

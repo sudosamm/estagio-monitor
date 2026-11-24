@@ -18,6 +18,22 @@ class CacheDaRequisicaoMiddleware:
             CACHE_REQUISICAO.reset(token)
 
 
+class ModoAdministradorMiddleware:
+    """Administrador com o “Modo administrador” desligado (Meus dados) usa o sistema como um orientador comum: só os
+    próprios estagiários e sem as telas de administração. Vale só para esta requisição (o banco continua dizendo que ele
+    é administrador; Usuario.save protege isso)."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated and user.is_superuser and not user.modo_administrador:
+            user.is_superuser = False
+            user._admin_real = True
+        return self.get_response(request)
+
+
 class TrocaSenhaObrigatoriaMiddleware:
     """Antes de usar o sistema: criar a senha própria, configurar a verificação em duas etapas (quando a escola
     exige) e aceitar a versão atual dos Termos de Uso e do Aviso de Privacidade."""

@@ -36,6 +36,7 @@ urlpatterns = [
     path("perfil/", comum.perfil, name="perfil"),
     path("perfil/email/reenviar/", comum.reenviar_confirmacao, name="reenviar_confirmacao"),
     path("perfil/acessos/", acessos.acessos, name="acessos"),
+    path("perfil/modo/", comum.alternar_modo, name="alternar_modo"),
     path("email/confirmar/<str:token>/", comum.confirmar_email, name="confirmar_email"),
     path("tema/", comum.trocar_tema, name="trocar_tema"),
     path("novidades/", novidades.novidades, name="novidades"),

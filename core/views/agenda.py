@@ -18,7 +18,7 @@ from django.views.decorators.http import require_POST
 from ..forms import AgendamentoForm, SolicitacaoForm
 from ..models import Agendamento, Estagio, Registro, Usuario
 from ..services import (
-    estagios_visiveis, limite_calendario, notificar, preparar_lote, resumo_horas, status_periodo,
+    estagios_do_orientador, estagios_visiveis, limite_calendario, notificar, preparar_lote, resumo_horas, status_periodo,
 )
 
 
@@ -27,10 +27,12 @@ def _sem_agenda(user):
     return user.is_gestor and not user.pode("agenda")
 
 
-def _agendamentos_de(user):
+def _agendamentos_de(user, so_meus=False):
+    """`so_meus`: listas e agenda do administrador mostram só as visitas dele (como orientador); abrir uma visita de
+    outro orientador pelo link continua valendo no modo administrador."""
     qs = Agendamento.objects.select_related("solicitante", "local", "orientador").prefetch_related("estagios__estagiario")
     if user.is_superuser:
-        return qs
+        return qs.filter(Q(orientador=user) | Q(solicitante=user)) if so_meus else qs
     if user.is_orientador:
         return qs.filter(orientador=user)
     return qs.filter(Q(solicitante=user) | Q(estagios__estagiario=user) | Q(estagios__supervisor=user)).distinct()
@@ -40,7 +42,7 @@ def _agendamentos_de(user):
 def agendamentos(request):
     if _sem_agenda(request.user):
         raise PermissionDenied
-    qs = _agendamentos_de(request.user)
+    qs = _agendamentos_de(request.user, so_meus=True)
     agora = timezone.now()
     return render(request, "core/agendamentos.html", {
         "solicitados": qs.filter(status=Agendamento.Status.SOLICITADO).order_by("criado_em"),
@@ -57,7 +59,8 @@ def novo_agendamento(request):
     user = request.user
     if _sem_agenda(user):
         raise PermissionDenied
-    estagios = estagios_visiveis(user).filter(ativo=True)
+    # agendar visita é do orientador: só os próprios estagiários, também para o administrador
+    estagios = estagios_do_orientador(user).filter(ativo=True)
     inicial = {}
     ids = [i for i in request.GET.get("estagios", request.GET.get("estagio", "")).split(",") if i.isdigit()][:30]
     if ids:  # um estagiário (tela do estágio) ou vários da mesma concedente (roteiro de visitas)
@@ -83,7 +86,7 @@ def novo_agendamento(request):
             messages.error(request, "Selecione ao menos um estagiário.")
             return redirect(request.path)
         if user.is_orientador or user.is_superuser:
-            ag.orientador = selecionados[0].orientador if user.is_superuser else user
+            ag.orientador = user
         else:
             ag.orientador = selecionados[0].orientador
             ag.status = Agendamento.Status.SOLICITADO
@@ -262,7 +265,7 @@ def agenda_ics(request, token):
     if not user or _sem_agenda(user):
         raise Http404
     desde = timezone.now() - timedelta(days=120)
-    qs = (_agendamentos_de(user).filter(data_hora__isnull=False, data_hora__gte=desde)
+    qs = (_agendamentos_de(user, so_meus=True).filter(data_hora__isnull=False, data_hora__gte=desde)
           .exclude(status=Agendamento.Status.SOLICITADO).order_by("data_hora"))
     host = request.get_host().split(":")[0]
     agora = timezone.now().strftime("%Y%m%dT%H%M%SZ")
