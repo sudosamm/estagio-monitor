@@ -59,13 +59,16 @@ def novo_agendamento(request):
         raise PermissionDenied
     estagios = estagios_visiveis(user).filter(ativo=True)
     inicial = {}
-    if request.GET.get("estagio", "").isdigit():
-        sel = estagios.filter(pk=request.GET["estagio"]).first()
+    ids = [i for i in request.GET.get("estagios", request.GET.get("estagio", "")).split(",") if i.isdigit()][:30]
+    if ids:  # um estagiário (tela do estágio) ou vários da mesma concedente (roteiro de visitas)
+        sel = list(estagios.filter(pk__in=ids).select_related("local"))
         if sel:
-            inicial = {"estagios": [sel], "local": sel.local}
-    try:  # vindo do calendário do painel: “Agendar neste dia”
+            inicial = {"estagios": sel, "local": sel[0].local}
+    try:  # vindo do calendário do painel ou do roteiro: “Agendar neste dia”
         dia = date.fromisoformat(request.GET.get("data", ""))
-        inicial["data_hora"] = datetime.combine(dia, time(8, 0))
+        hora = request.GET.get("hora", "")
+        h = time.fromisoformat(hora) if len(hora) == 5 else time(8, 0)
+        inicial["data_hora"] = datetime.combine(dia, h)
     except ValueError:
         pass
     if user.is_orientador or user.is_superuser:

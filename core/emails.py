@@ -83,6 +83,31 @@ TIPOS = {
         "Pedido enviado pela tela de entrada em {quando} (IP {ip}).\n\nUsuário informado: {usuario}\nNome: {nome}\n"
         "Contato: {contato}\n\nMensagem:\n{mensagem}\n\nContas no sistema: {link}",
     ),
+    "CONFIRMAR_PRESENCAS": Tipo(
+        "Confirmar presenças (para o supervisor)", "Uma vez por semana (dia escolhido em Configurações), para cada "
+        "supervisor com presenças esperando confirmação. Também quando a escola pede pelo painel.",
+        ("nome", "quantidade", "lista", "link", "validade"),
+        "[{sistema}] {quantidade} presença(s) esperando sua confirmação",
+        "Olá, {nome}.\n\nEstas presenças dos seus estagiários estão esperando a sua confirmação:\n\n{lista}\n\n"
+        "Para confirmar todas de uma vez, sem precisar entrar no sistema, abra o link e toque em “Confirmar”:\n\n"
+        "{link}\n\nO link vale por {validade} e só funciona uma vez. Se algum dia estiver errado, não use o link: "
+        "entre no sistema e conteste só aquele dia.\n\n— {escola}",
+    ),
+    "RESUMO_MENSAL_SUPERVISOR": Tipo(
+        "Resumo do mês (para o supervisor)", "No dia 1º de cada mês, para cada supervisor com estagiários ativos.",
+        ("nome", "mes", "lista", "link"),
+        "[{sistema}] Resumo de {mes} dos seus estagiários",
+        "Olá, {nome}.\n\nComo foi {mes} dos estagiários que você supervisiona:\n\n{lista}\n\n"
+        "Detalhes, presenças para confirmar e o feedback do mês: {link}\n\nObrigado pela parceria!\n\n— {escola}",
+    ),
+    "ERRO_SISTEMA": Tipo(
+        "Erro no sistema (para o administrador)", "Quando uma página ou tarefa dá erro. O mesmo erro avisa de novo "
+        "no máximo a cada 6 horas.",
+        ("erro", "mensagem", "pagina", "origem", "ocorrencias", "quando", "link"),
+        "[{sistema}] Erro: {erro} em {pagina}",
+        "O sistema registrou um erro em {quando}.\n\nErro: {erro}\nMensagem: {mensagem}\nPágina: {pagina}\n"
+        "Origem: {origem}\nVezes até agora: {ocorrencias}\n\nDetalhes e histórico: {link}",
+    ),
 }
 
 NOMES_VARIAVEIS = {
@@ -90,7 +115,9 @@ NOMES_VARIAVEIS = {
     "validade": "por quanto tempo o link vale", "quando": "data e hora", "ip": "endereço de rede de quem fez",
     "tentativas": "número de senhas erradas", "minutos": "duração do bloqueio", "contato": "contato informado",
     "mensagem": "mensagem escrita pela pessoa", "sistema": "nome do sistema", "escola": "nome da escola",
-    "site": "endereço do sistema",
+    "site": "endereço do sistema", "quantidade": "número de presenças", "lista": "lista (dias ou estagiários)",
+    "mes": "mês do resumo", "erro": "tipo do erro", "pagina": "página onde aconteceu",
+    "origem": "arquivo e linha do código", "ocorrencias": "quantas vezes aconteceu",
 }
 
 

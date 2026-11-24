@@ -37,7 +37,7 @@
   {# downloads, saídas e telas que registram algo ao abrir (notificação lida, abertura da folha, QR…). #}
   <script type="speculationrules">
   {"prefetch": [{"where": {"and": [{"href_matches": "/*"},
-    {"not": {"href_matches": ["/sair/*", "/admin/*", "/notificacoes/*", "/novidades/*", "/arquivos/*", "/p/*", "/email/*", "/senha/*", "/agenda/calendario/*", "/estagios/*/frequencia/*", "/frequencias/folhas/*", "/frequencia/*", "/usuarios/*", "/atestados/*/arquivo/*", "/documentos/tipos/*/modelo/*", "/estagios/exportar/*", "/estagios/*/declaracao/*", "/turmas/*/relatorio/*", "/folha/*", "/sugestoes/anexos/*", "/acompanhamentos/*/sice/*"]}},
+    {"not": {"href_matches": ["/sair/*", "/admin/*", "/notificacoes/*", "/novidades/*", "/arquivos/*", "/p/*", "/email/*", "/senha/*", "/agenda/calendario/*", "/estagios/*/frequencia/*", "/frequencias/folhas/*", "/frequencia/*", "/usuarios/*", "/atestados/*/arquivo/*", "/documentos/tipos/*/modelo/*", "/estagios/exportar/*", "/estagios/*/declaracao/*", "/turmas/*/relatorio/*", "/folha/*", "/sugestoes/anexos/*", "/acompanhamentos/*/sice/*", "/perfil/meus-dados/*", "/perfil/verificacao/*", "/s/*", "/sistema/erros/*", "/usuarios/*/curriculo/*"]}},
     {"not": {"selector_matches": "[download], [target=_blank], [data-sem-prefetch]"}}]}, "eagerness": "moderate"}]}
   </script>
   {% endif %}
@@ -94,8 +94,10 @@
           <div class="nav-menu">{% for i in sec.itens %}<a href="{{ i.url }}" class="{% if i.ativo %}ativo{% endif %}">{{ i.rotulo }}{% if i.contador %} <span class="contador">{{ i.contador }}</span>{% endif %}</a>{% endfor %}</div>
         </details>
         {% endfor %}
+        <button type="button" class="nav-busca" data-busca-abrir title="Buscar estagiário, concedente ou página (atalho: /)">{% icone "busca" %}<span>Buscar</span><kbd>/</kbd></button>
       {% elif user.is_supervisor %}
         <a href="{% url 'painel_supervisor' %}" class="{% if n in 'painel_supervisor,estagio_detalhe,estagio_dia' %}ativo{% endif %}">Meus estagiários</a>
+        {% if user.gere_concedente %}<a href="{% url 'minha_equipe' %}" class="{% if n in 'minha_equipe,equipe_concedente' %}ativo{% endif %}">Equipe</a>{% endif %}
         <a href="{% url 'agendamentos' %}" class="{% if n in 'agendamentos,novo_agendamento,agendamento_detalhe' %}ativo{% endif %}">Visitas e conversas</a>
         <a href="{% url 'escala_lote' %}" class="{% if n == 'escala_lote' %}ativo{% endif %}">Dias e horários</a>
         <a href="{% url 'recessos' %}" class="{% if n == 'recessos' %}ativo{% endif %}">Recessos</a>
@@ -113,7 +115,7 @@
   {% endif %}
   <main>
     <div class="container">
-      {% if user.is_authenticated and EMAIL_ATIVO and not user.email_confirmado_em and not user.deve_trocar_senha and request.resolver_match.url_name != "perfil" %}
+      {% if user.is_authenticated and EMAIL_ATIVO and not user.email_confirmado_em and not user.deve_trocar_senha and request.resolver_match.url_name not in "perfil,aceitar_termos,dois_fatores" %}
       <a class="faixa-aviso" href="{% url 'perfil' %}">{% icone "chave" %}<span><strong>{% if user.email %}Confirme seu e-mail:{% else %}Cadastre seu e-mail:{% endif %}</strong> {% if user.email %}abra o link que enviamos para {{ user.email }}.{% else %}com ele confirmado, você cria uma senha nova sozinho se esquecer a sua.{% endif %}</span><span class="btn sm">{% if user.email %}Ver{% else %}Cadastrar{% endif %}</span></a>
       {% endif %}
       {% if messages %}
@@ -126,7 +128,7 @@
   <footer class="rodape">
     <div class="container">
       <span>{{ NOME_SISTEMA }} — ferramenta de apoio ao acompanhamento de estágio</span>
-      <span><a href="{% url 'novidades' %}">Novidades</a> · <a href="{% url 'sugestoes' %}">Sugestões e erros</a> · Os registros oficiais continuam no SICE</span>
+      <span><a href="{% url 'novidades' %}">Novidades</a> · <a href="{% url 'sugestoes' %}">Sugestões e erros</a> · <a href="{% url 'termos' %}">Termos de Uso</a> · <a href="{% url 'privacidade' %}">Privacidade</a> · Os registros oficiais continuam no SICE</span>
     </div>
   </footer>
 {% endblock %}
@@ -146,6 +148,12 @@
       <button class="btn" name="acao" value="sempre" type="submit" data-sem-trava="1">Ver a cada atualização</button>
     </div>
   </form>
+</dialog>
+{% endif %}
+{% if user.is_authenticated and user.is_gestor and not user.deve_trocar_senha %}
+<dialog class="busca-dialogo" id="busca-dialogo" aria-label="Busca rápida" data-url="{% url 'buscar' %}">
+  <div class="busca-campo">{% icone "busca" %}<input type="search" placeholder="Estagiário, concedente, supervisor ou página…" autocomplete="off" aria-label="Buscar" data-busca-campo><kbd>Esc</kbd></div>
+  <div class="busca-resultados" data-busca-resultados role="listbox"><p class="busca-dica">Digite pelo menos 2 letras. Use ↑ ↓ e Enter.</p></div>
 </dialog>
 {% endif %}
 <script src="{% static 'js/app.js' %}" defer></script>

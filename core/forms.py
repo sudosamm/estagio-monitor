@@ -373,7 +373,8 @@ class PerfilForm(FormularioModelo):
 
     class Meta:
         model = Usuario
-        fields = ["foto", "email", "telefone", "cpf", "cargo", "avisos_email", "resumo_semanal", "novidades_popup",
+        fields = ["foto", "email", "telefone", "cpf", "cargo", "avisos_email", "resumo_semanal", "lembrete_expediente",
+                  "novidades_popup",
                   "apresentacao",
                   "habilidades", "curriculo", "perfil_visivel"]
         labels = {"foto": "Foto de perfil", "telefone": "Telefone / WhatsApp", "cargo": "Cargo/Função"}
@@ -391,7 +392,7 @@ class PerfilForm(FormularioModelo):
         if not u.is_gestor:
             del self.fields["resumo_semanal"]
         if not u.is_estagiario:
-            del self.fields["cpf"]
+            del self.fields["cpf"], self.fields["lembrete_expediente"]
         else:
             self.fields["cpf"].help_text = "Sai na sua folha de frequência."
         if not (u.is_estagiario and curriculos):
@@ -451,7 +452,7 @@ class ConfiguracaoForm(FormularioModelo):
     class Meta:
         model = Configuracao
         fields = ["nome_escola", "municipio_escola", "ano_referencia", "cabecalho_folha", "logo_folha",
-                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "periodo_testes", "email_sugestoes", "avaliacoes_abertas", "avaliacoes_prazo", "sice_url", "tema_escuro", "retencao_anos", "feedback_mensal", "atestados_supervisor", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
+                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "lembrete_expediente", "lembrete_minutos", "periodo_testes", "email_sugestoes", "avaliacoes_abertas", "avaliacoes_prazo", "sice_url", "tema_escuro", "exigir_dois_fatores", "retencao_anos", "contato_privacidade", "feedback_mensal", "atestados_supervisor", "avisos_email", "resumo_semanal", "confirmacao_por_email", "dia_confirmacao", "resumo_mensal_supervisor", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
                   "curriculos_habilitados", "banco_talentos_habilitado"]
         widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(), "avaliacoes_prazo": DataInput(),
                    "texto_captacao": forms.Textarea(attrs={"rows": 3})}
@@ -1190,6 +1191,10 @@ class AprovarCandidaturaForm(Formulario):
     destino = forms.ChoiceField(label="Cadastrar como", widget=forms.RadioSelect)
     criar_supervisor = forms.BooleanField(required=False, initial=True,
                                           label="Criar a conta do supervisor indicado")
+    criar_responsavel = forms.BooleanField(
+        required=False, initial=False, label="Criar a conta do responsável pela concedente",
+        help_text="Quem preencheu o cadastro poderá cadastrar a equipe e dar permissões temporárias para confirmar "
+                  "presenças. O código de acesso aparece na próxima tela.")
     parecer = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Observação (opcional)")
 
     def __init__(self, *a, candidatura=None, sugestoes=(), **kw):
@@ -1202,6 +1207,16 @@ class AprovarCandidaturaForm(Formulario):
             del self.fields["criar_supervisor"]
         else:
             self.fields["criar_supervisor"].label = f"Criar a conta do supervisor indicado ({candidatura.supervisor_nome})"
+        mesmo = candidatura.supervisor_nome and chave_nome(candidatura.supervisor_nome) == chave_nome(candidatura.contato_nome)
+        self.fields["criar_responsavel"].label = (
+            f"{'Tornar o supervisor também' if mesmo else 'Criar a conta de'} responsável pela concedente "
+            f"({candidatura.contato_nome})")
+
+
+def chave_nome(nome):
+    from .seguranca import chave_texto
+
+    return chave_texto(nome)
 
 
 class RecusarCandidaturaForm(Formulario):
@@ -1457,3 +1472,39 @@ class OpiniaoForm(Formulario):
         if not d.get("nota") and not (d.get("mensagem") or "").strip():
             raise forms.ValidationError("Escolha uma nota ou escreva um comentário.")
         return d
+
+
+# ------------------------------------------------------------------ equipe da concedente
+
+
+class MembroEquipeForm(Formulario):
+    """Responsável pela concedente cadastra alguém da equipe (supervisor ou funcionário que pode substituir)."""
+    nome_completo = forms.CharField(label="Nome completo", max_length=150)
+    cargo = forms.CharField(label="Cargo/Função", max_length=80, required=False)
+    telefone = forms.CharField(label="Telefone / WhatsApp", max_length=30, required=False)
+    email = forms.EmailField(label="E-mail", required=False)
+
+    def clean_nome_completo(self):
+        nome = " ".join(self.cleaned_data["nome_completo"].split())
+        if len(nome.split()) < 2:
+            raise forms.ValidationError("Escreva nome e sobrenome.")
+        return nome
+
+
+class SubstituicaoForm(Formulario):
+    substituto = forms.ModelChoiceField(label="Quem vai confirmar", queryset=Usuario.objects.none())
+    titular = forms.ModelChoiceField(label="No lugar de", queryset=Usuario.objects.none(), required=False,
+                                     empty_label="Todos os supervisores da concedente")
+    inicio = forms.DateField(label="De", widget=DataInput())
+    fim = forms.DateField(label="Até", widget=DataInput())
+    motivo = forms.CharField(label="Motivo", max_length=150, required=False,
+                             widget=forms.TextInput(attrs={"placeholder": "Ex.: férias do supervisor"}))
+
+    def __init__(self, *a, equipe=None, titular_fixo=None, **kw):
+        super().__init__(*a, **kw)
+        ativos = equipe.filter(is_active=True) if equipe is not None else Usuario.objects.none()
+        self.fields["substituto"].queryset = ativos.exclude(pk=titular_fixo.pk) if titular_fixo else ativos
+        self.fields["titular"].queryset = ativos
+        if titular_fixo:
+            del self.fields["titular"]
+        self.fields["substituto"].label_from_instance = lambda u: f"{u.nome_completo}" + (f" · {u.cargo}" if u.cargo else "")

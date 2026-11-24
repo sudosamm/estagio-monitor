@@ -182,10 +182,11 @@ def trocar_supervisor(estagio, novo, feita_por, motivo=""):
 # ---------------------------------------------------------------- notificações
 
 
-def notificar(usuarios, texto, link="", exceto=None, detalhe=""):
+def notificar(usuarios, texto, link="", exceto=None, detalhe="", email=True):
     """Aviso no sino de cada pessoa, no celular (se ela ativou) e, se estiver configurado, também por e-mail.
 
-    `detalhe`: texto completo que vai só no e-mail (o sino e o celular mostram o resumo)."""
+    `detalhe`: texto completo que vai só no e-mail (o sino e o celular mostram o resumo).
+    `email=False`: só sino e celular (lembretes do dia a dia, que no e-mail chegariam tarde demais)."""
     vistos = set()
     objs, destinatarios = [], []
     for u in usuarios:
@@ -193,7 +194,7 @@ def notificar(usuarios, texto, link="", exceto=None, detalhe=""):
             continue
         vistos.add(u.pk)
         objs.append(Notificacao(usuario=u, texto=texto[:255], link=link))
-        if u.email and u.is_active and u.avisos_email:
+        if email and u.email and u.is_active and u.avisos_email:
             destinatarios.append(u)
     Notificacao.objects.bulk_create(objs)
     if destinatarios and email_ativo():
@@ -761,8 +762,10 @@ def _nome_escola():
     return Configuracao.atual().nome_escola or settings.NOME_INSTITUICAO
 
 
-def aprovar_candidatura(cand, usuario, destino="nova", criar_supervisor=False, parecer="", endereco=""):
-    """Cadastra (ou atualiza) a concedente, cria o supervisor indicado e prepara o aviso para a concedente."""
+def aprovar_candidatura(cand, usuario, destino="nova", criar_supervisor=False, parecer="", endereco="",
+                        criar_responsavel=False):
+    """Cadastra (ou atualiza) a concedente, cria o supervisor indicado (e, se pedido, o responsável pela concedente)
+    e prepara o aviso para a concedente. O responsável fica em `cand._responsavel`."""
     from django.db import transaction
     from django.utils import timezone
 
@@ -783,6 +786,18 @@ def aprovar_candidatura(cand, usuario, destino="nova", criar_supervisor=False, p
             supervisor = criar_usuario(cand.supervisor_nome, Usuario.Papel.SUPERVISOR, usuario, concedente=local,
                                        telefone=cand.supervisor_telefone, email=cand.supervisor_email,
                                        cargo=cand.supervisor_cargo)
+        cand._responsavel = None
+        if criar_responsavel:
+            from .seguranca import chave_texto
+
+            if supervisor and chave_texto(supervisor.nome_completo) == chave_texto(cand.contato_nome):
+                responsavel = supervisor
+            else:
+                responsavel = criar_usuario(cand.contato_nome, Usuario.Papel.SUPERVISOR, usuario, concedente=local,
+                                            telefone=cand.contato_telefone, email=cand.contato_email,
+                                            cargo=cand.contato_cargo)
+            responsavel.concedentes_geridas.add(local)
+            cand._responsavel = responsavel
         cand.status, cand.local = cand.Status.APROVADA, local
         cand.analisado_por, cand.analisado_em, cand.parecer = usuario, timezone.now(), parecer
         cand.save()
@@ -800,7 +815,12 @@ def aprovar_candidatura(cand, usuario, destino="nova", criar_supervisor=False, p
         if supervisor:
             linhas += ["", f"O(a) supervisor(a) {supervisor.nome_completo} já tem acesso ao sistema de acompanhamento "
                            f"de estágio{f' ({endereco})' if endereco else ''}, com o usuário {supervisor.username}. "
-                           "A senha inicial será informada pela escola e deverá ser trocada no primeiro acesso."]
+                           "A escola vai repassar um código de primeiro acesso, com o qual ele(a) cria a própria senha."]
+        if cand._responsavel and cand._responsavel != supervisor:
+            r = cand._responsavel
+            linhas += ["", f"{r.nome_completo} também tem acesso, com o usuário {r.username}, como responsável pela "
+                           "concedente: pode cadastrar a equipe e indicar quem confirma as presenças quando o supervisor "
+                           "não estiver. O código de primeiro acesso será repassado pela escola."]
         linhas += ["", "Em breve entraremos em contato para combinar os próximos passos.",
                    f"{usuario.nome_completo} — {_nome_escola()}", f"Protocolo {cand.protocolo}"]
         aviso = AvisoExterno.objects.create(

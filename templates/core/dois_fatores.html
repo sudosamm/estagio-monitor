@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Verificação em duas etapas{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><div class="migalha"><a href="{% url 'perfil' %}">← Meus dados</a></div><h1>Verificação em duas etapas</h1></div></div>
+{% if codigos %}
+<div class="card destaque" style="max-width:640px">
+  <h2>Guarde seus códigos de recuperação</h2>
+  <p>Se perder o celular, use um destes códigos no lugar do código do app. <strong>Cada um funciona uma vez</strong>, e eles só aparecem agora: imprima, anote num papel ou guarde no gerenciador de senhas.</p>
+  <ol class="codigos-recuperacao">{% for c in codigos %}<li><code>{{ c }}</code></li>{% endfor %}</ol>
+  <div class="acoes"><button class="btn sec" type="button" onclick="window.print()">{% icone "impressora" %} Imprimir</button>
+    <a class="btn" href="{{ proximo|default:'/' }}">Já guardei, continuar</a></div>
+</div>
+{% elif ativo %}
+<div class="grade grade-lado">
+  <div class="card destaque">
+    <p><span class="selo confirmado">Ligada</span> desde {{ user.totp_ativo_em|date:"d/m/Y" }}. Ao entrar, o sistema pede a senha e o código de 6 números do app autenticador.</p>
+    <p class="muted">Códigos de recuperação restantes: <strong>{{ restam }}</strong>{% if restam < 3 %} — gere novos para não ficar sem acesso se perder o celular{% endif %}.</p>
+    {% if erro %}<div class="aviso error">{{ erro }}</div>{% endif %}
+    <form method="post" class="form-linha" style="align-items:end">{% csrf_token %}
+      <div class="campo"><label for="id_codigo">Código do app agora</label><input id="id_codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required class="codigo-2fa" placeholder="000000"></div>
+      <div class="acoes"><button class="btn sec" name="acao" value="novos_codigos" type="submit">Gerar novos códigos de recuperação</button>
+        {% if not exigido %}<button class="btn perigo" name="acao" value="desligar" type="submit">Desligar</button>{% endif %}</div>
+    </form>
+    {% if exigido %}<p class="muted mb-0" style="font-size:.85rem">A escola exige a verificação em duas etapas para quem gerencia estudantes, por isso ela não pode ser desligada.</p>{% endif %}
+  </div>
+  <div class="card"><h3>Trocou de celular?</h3><p class="muted mb-0">Com o celular antigo em mãos, desligue e ligue de novo para ler o QR code no aparelho novo. Sem o antigo, entre com um código de recuperação e faça o mesmo.</p></div>
+</div>
+{% else %}
+{% if exigido %}<div class="faixa-aviso">{% icone "chave" %}<span><strong>A escola pede a verificação em duas etapas</strong> para quem gerencia estudantes ou o sistema. Configure agora para continuar: leva 2 minutos.</span></div>{% endif %}
+<div class="grade grade-lado">
+  <div class="card destaque">
+    <h2>Como ligar</h2>
+    <ol class="passos-2fa">
+      <li>Instale um app autenticador no celular. Servem: <strong>Google Authenticator</strong>, <strong>Microsoft Authenticator</strong>, Authy, 2FAS ou o app Senhas do iPhone.</li>
+      <li>No app, toque em <em>Adicionar</em> ou <em>+</em> e leia este QR code:
+        <div class="qr-2fa">{{ qr|safe }}</div>
+        <details><summary class="muted" style="font-size:.88rem">Não consegue ler? Digite a chave</summary><p><code class="chave-2fa">{{ segredo }}</code></p><p class="muted" style="font-size:.85rem">Tipo: baseado em tempo (TOTP), 6 dígitos.</p></details>
+      </li>
+      <li>Digite o código de 6 números que o app mostrar:</li>
+    </ol>
+    {% if erro %}<div class="aviso error">{{ erro }}</div>{% endif %}
+    <form method="post" class="form-linha" style="align-items:end">{% csrf_token %}
+      <div class="campo"><label for="id_codigo">Código</label><input id="id_codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required autofocus class="codigo-2fa" placeholder="000000"></div>
+      <button class="btn" name="acao" value="ativar" type="submit">Ligar a verificação</button>
+    </form>
+  </div>
+  <div class="card">
+    <h3>Para que serve</h3>
+    <p class="muted">Mesmo que alguém descubra a sua senha, não consegue entrar sem o código que só o seu celular gera, e ele muda a cada 30 segundos.</p>
+    <p class="muted mb-0">O app funciona sem internet. Num computador seu, dá para marcar “não pedir de novo neste aparelho por 30 dias”.</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

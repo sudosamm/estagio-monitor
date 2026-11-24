@@ -55,7 +55,8 @@
       {% if dia_info.sem_registro %}<p class="dia-alerta"><a href="{% url 'estagios_lista' %}">{{ dia_info.sem_registro }} estagiário{{ dia_info.sem_registro|pluralize }} sem registro neste dia</a></p>{% endif %}
       <ul class="lista compacta dia-eventos">{% for ev in dia_info.eventos %}<li><i class="ag-chave t-{{ ev.tipo }}"></i><span class="cresce">{% if ev.url %}<a href="{{ ev.url }}">{% endif %}{% if ev.hora %}<b>{{ ev.hora }}</b> {% endif %}{{ ev.texto }}{% if ev.url %}</a>{% endif %}</span></li>{% empty %}{% if not dia_info.feriados and not dia_info.sem_registro %}<li class="vazio">Nada marcado neste dia.</li>{% endif %}{% endfor %}</ul>
     </div>
-    {% if user|pode:"agenda" %}<a class="btn bloco mt-1" data-dia-agendar href="{{ dia_info.agendar }}">{% icone "calendario" %} Agendar neste dia</a>{% endif %}
+    {% if user|pode:"agenda" %}<a class="btn bloco mt-1" data-dia-agendar href="{{ dia_info.agendar }}">{% icone "calendario" %} Agendar neste dia</a>
+    <a class="btn sec bloco mt-1" data-dia-roteiro href="{% url 'roteiro' %}?data={{ dia_sel }}">{% icone "rota" %} Roteiro de visitas do dia</a>{% endif %}
   </aside>
 </div>
 {{ dias_json|json_script:"agenda-dias" }}
@@ -79,6 +80,7 @@
     if (!d.eventos.length && !d.feriados.length && !d.sem_registro) ul.append(el("li", "vazio", "Nada marcado neste dia."));
     corpo.append(ul);
     const ag = painel.querySelector("[data-dia-agendar]"); if (ag) ag.href = d.agendar;
+    const rot = painel.querySelector("[data-dia-roteiro]"); if (rot) rot.href = `{% url 'roteiro' %}?data=${iso}`;
     document.querySelectorAll(".ag-dia.sel").forEach((x) => x.classList.remove("sel"));
     document.querySelector(`.ag-dia[data-dia="${iso}"]`)?.classList.add("sel");
     const url = new URL(location.href); url.searchParams.set("dia", iso); history.replaceState(null, "", url);
@@ -118,6 +120,19 @@
       <h3>Próximas visitas e conversas</h3>
       {% include "core/_lista_agendamentos.html" with itens=proximas %}
     </div>
+    {% if por_supervisor %}
+    <div class="card">
+      <h3>Supervisores com presenças para confirmar</h3>
+      <ul class="lista compacta">{% for p in por_supervisor %}
+        <li><span class="cresce"><strong>{{ p.supervisor.nome_completo }}</strong><small style="display:block">{{ p.n }} presença{{ p.n|pluralize }} · desde {{ p.desde|date:"d/m" }}</small></span>
+          <form method="post" action="{% url 'pedir_confirmacao' p.supervisor.pk %}" class="flex" style="gap:.3rem">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+            {% if p.whatsapp %}<button class="btn sm" name="canal" value="whatsapp" type="submit" formtarget="_blank" data-sem-trava="1" title="Abre o WhatsApp com a mensagem e o link “Confirmar todas” prontos">{% icone "whatsapp" %} WhatsApp</button>{% endif %}
+            {% if p.email and EMAIL_ATIVO %}<button class="btn sec sm" name="canal" value="email" type="submit" title="Manda agora o e-mail com o link “Confirmar todas”">E-mail</button>{% endif %}
+          </form></li>
+      {% endfor %}</ul>
+      <p class="muted mb-0" style="font-size:.8rem">O supervisor recebe um link que vale 7 dias, uma vez só: confere a lista e confirma sem precisar de senha.</p>
+    </div>
+    {% endif %}
     <div class="card">
       <h3>Aguardando o supervisor há mais de 2 dias</h3>
       <ul class="lista">{% for r in pendentes_validacao %}

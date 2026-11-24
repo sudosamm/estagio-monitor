@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Erros do sistema{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Erros do sistema</h1><p class="mb-0">Páginas que deram erro e tarefas em segundo plano que falharam. Você recebe um aviso no sino{% if EMAIL_ATIVO %} e por e-mail{% endif %} na primeira vez e, se continuar, no máximo a cada 6 horas.</p></div>
+  {% if ver == "resolvidos" %}<form method="post" action="{% url 'marcar_erro_lote' %}">{% csrf_token %}<button class="btn perigo" name="acao" value="limpar" type="submit" data-confirmar="Apagar todos os erros marcados como resolvidos?">Apagar resolvidos</button></form>{% endif %}</div>
+<nav class="abas">
+  <a href="?ver=abertos" class="{% if ver == 'abertos' %}ativo{% endif %}">Abertos{% if abertos %} <span class="contador">{{ abertos }}</span>{% endif %}</a>
+  <a href="?ver=resolvidos" class="{% if ver == 'resolvidos' %}ativo{% endif %}">Resolvidos</a>
+  <a href="?ver=todos" class="{% if ver == 'todos' %}ativo{% endif %}">Todos</a>
+</nav>
+{% if ultimas_24h %}<p class="muted">{{ ultimas_24h }} erro{{ ultimas_24h|pluralize }} diferente{{ ultimas_24h|pluralize }} nas últimas 24 horas.</p>{% endif %}
+<div class="lista-erros">
+{% for e in erros %}
+  <details class="card erro-item{% if e.resolvido %} resolvido{% endif %}">
+    <summary>
+      <span class="cresce"><strong>{{ e.tipo }}</strong> <span class="muted">{{ e.mensagem|truncatechars:140 }}</span>
+        <small style="display:block">{{ e.caminho|default:"tarefa em segundo plano" }} · {{ e.origem }} · última vez {{ e.ultimo_em|date:"d/m H:i" }}{% if e.ocorrencias > 1 %} · desde {{ e.primeiro_em|date:"d/m H:i" }}{% endif %}{% if e.usuario %} · com {{ e.usuario.nome_completo }}{% endif %}</small></span>
+      <span class="selo {% if e.resolvido %}confirmado{% elif e.ocorrencias > 5 %}falta{% else %}aguardando{% endif %}">{{ e.ocorrencias }}×</span>
+    </summary>
+    {% if e.detalhe %}<pre class="erro-detalhe">{{ e.detalhe }}</pre>{% endif %}
+    <form method="post" action="{% url 'marcar_erro' e.pk %}" class="acoes">{% csrf_token %}<input type="hidden" name="ver" value="{{ ver }}">
+      <button class="btn sm {% if e.resolvido %}sec{% endif %}" type="submit">{% if e.resolvido %}Reabrir{% else %}{% icone "check" %} Marcar como resolvido{% endif %}</button>
+      {% if e.metodo %}<span class="muted" style="font-size:.82rem">{{ e.metodo }} {{ e.caminho }}</span>{% endif %}
+    </form>
+  </details>
+{% empty %}<div class="card"><p class="vazio">{% if ver == "abertos" %}Nenhum erro aberto. 🎉{% else %}Nada por aqui.{% endif %}</p></div>{% endfor %}
+</div>
+<p class="muted" style="font-size:.85rem">Para mandar os detalhes a quem cuida do código, abra o erro e copie o texto. Ele não inclui senhas nem o que foi digitado nos formulários.</p>
+{% endblock %}

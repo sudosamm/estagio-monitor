@@ -40,6 +40,22 @@
     <p class="muted mt-1" style="font-size:.85rem">Nome e matrícula são alterados pelo orientador.</p>
     <p class="mb-0"><a class="btn sec" href="{% url 'trocar_senha' %}">{% icone "chave" %} Alterar senha</a></p>
   </div>
+  <div class="card" id="seguranca">
+    <h3>{% icone "escudo" %} Segurança e privacidade</h3>
+    {% if pode_2fa %}
+    <p class="mb-0"><strong>Verificação em duas etapas:</strong> {% if user.dois_fatores_ativo %}<span class="selo confirmado">ligada</span>{% else %}<span class="selo {% if exige_2fa %}sem_registro{% else %}livre{% endif %}">desligada</span>{% endif %}</p>
+    <p class="muted" style="font-size:.85rem">{% if user.dois_fatores_ativo %}Ao entrar, o sistema pede o código do app autenticador do seu celular.{% elif exige_2fa %}Recomendado para quem gerencia estudantes: mesmo com a senha, ninguém entra sem o código do seu celular.{% else %}Proteção extra: além da senha, um código do seu celular.{% endif %}</p>
+    <a class="btn sec sm" href="{% url 'dois_fatores' %}">{% if user.dois_fatores_ativo %}Gerenciar{% else %}Ligar{% endif %}</a>
+    <hr>
+    {% endif %}
+    <p class="mb-0"><strong>Últimos acessos à sua conta</strong></p>
+    <ul class="lista compacta">{% for a in acessos %}<li><span class="cresce">{% if a.tipo == "LOGIN" %}{{ a.descricao }}{% else %}<span class="alerta-txt">{{ a.descricao }}</span>{% endif %}<small style="display:block">{{ a.quando|date:"d/m/Y H:i" }} · {{ a.aparelho|default:"aparelho desconhecido" }}{% if a.ip %} · IP {{ a.ip }}{% endif %}</small></span></li>
+      {% empty %}<li class="vazio">Nenhum acesso registrado ainda.</li>{% endfor %}</ul>
+    <p class="muted" style="font-size:.82rem">Não reconhece algum? Troque a senha e avise a escola.</p>
+    <hr>
+    <p class="mb-0"><a class="btn sec sm" href="{% url 'baixar_meus_dados' %}" download data-sem-prefetch>{% icone "download" %} Baixar meus dados</a></p>
+    <p class="muted mb-0 mt-1" style="font-size:.82rem">Cópia de tudo o que o sistema guarda sobre você (LGPD). Leia os <a href="{% url 'termos' %}">Termos de Uso</a> e o <a href="{% url 'privacidade' %}">Aviso de Privacidade</a>.</p>
+  </div>
   {% include "core/_push.html" %}
 </div>
 {% endblock %}

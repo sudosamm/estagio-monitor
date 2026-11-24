@@ -17,7 +17,10 @@ def _exemplo(request):
     return {"nome": request.user.primeiro_nome, "usuario": "maria.souza", "validade": "2 horas",
             "link": emails.endereco(request, "/exemplo-de-link/"), "quando": emails.quando(), "ip": "200.100.50.25",
             "tentativas": 3, "minutos": 15, "contato": "(85) 99999-0000",
-            "mensagem": "Errei a senha várias vezes e o acesso foi bloqueado."}
+            "mensagem": "Errei a senha várias vezes e o acesso foi bloqueado.", "quantidade": 3,
+            "lista": "• Ana Souza — seg 16/11, 08:00–12:00 (4h)\n• Bruno Lima — seg 16/11, 08:00–12:00 (4h)",
+            "mes": "outubro de 2026", "erro": "ValueError", "pagina": "/painel/", "origem": "core/views/orientador.py:120",
+            "ocorrencias": 1}
 
 
 @orientador_requerido

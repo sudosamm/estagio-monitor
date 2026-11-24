@@ -60,11 +60,11 @@
     {% elif proximos %}Próximo dia de estágio: {{ proximos.0.data|date:"l, d/m" }}.{% endif %}
   </p>
   <div class="acoes">
-    {% if reg and reg.confirmacao == "PENDENTE" and e_supervisor or reg and reg.confirmacao == "PENDENTE" and e_orientador %}
+    {% if reg and reg.confirmacao == "PENDENTE" and pode_confirmar %}
       <form method="post" action="{% url 'validar_registro' reg.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="acao" value="confirmar"><button class="btn" type="submit">{% icone "check" %} Confirmar {% if reg.situacao == "PRESENTE" %}presença{% else %}ausência justificada{% endif %}</button></form>
       <form method="post" action="{% url 'validar_registro' reg.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="acao" value="contestar"><button class="btn sec" type="submit">{% icone "x" %} Não está aqui</button></form>
     {% endif %}
-    {% if e_supervisor or e_orientador %}<a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">Lançar / ajustar o dia</a>{% endif %}
+    {% if pode_confirmar %}<a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">Lançar / ajustar o dia</a>{% endif %}
   </div>
 {% endif %}
 </div>

@@ -6,7 +6,7 @@ def _item(rotulo, nome, ativos, url_atual, contador=0):
     return {"rotulo": rotulo, "url": reverse(nome), "ativo": url_atual in ativos, "contador": contador or 0}
 
 
-def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0, opinioes=0):
+def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0, opinioes=0, erros=0):
     """Barra da área de gestão: dois atalhos soltos e três seções (o que a pessoa não pode usar não aparece)."""
     pode = user.pode
     acompanhamento = [
@@ -14,6 +14,7 @@ def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0, opinioes=0
         _item("Resumo da semana", "resumo_semanal", {"resumo_semanal"}, url_atual),
         pode("agenda") and _item("Agenda de visitas", "agendamentos",
                                  {"agendamentos", "novo_agendamento", "agendamento_detalhe", "assinar_agenda"}, url_atual),
+        pode("agenda") and _item("Roteiro de visitas", "roteiro", {"roteiro"}, url_atual),
         _item("Frequências", "frequencias", {"frequencias"}, url_atual),
         _item("Feedback dos supervisores", "feedback_geral", {"feedback_geral"}, url_atual),
         _item("Avaliações (SICE)", "avaliacoes_escola", {"avaliacoes_escola", "ver_avaliacao", "perguntas_avaliacao",
@@ -34,7 +35,8 @@ def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0, opinioes=0
     cadastros = [
         _item("Contas", "usuarios", {"usuarios", "editar_usuario", "criar_supervisores", "criar_orientador",
                                      "criar_coordenador", "importar_csv", "ativacao_usuario"}, url_atual),
-        _item("Concedentes", "locais", {"locais", "local_editar", "local_novo", "ativacao_local"}, url_atual),
+        _item("Concedentes", "locais", {"locais", "local_editar", "local_novo", "ativacao_local", "equipe_concedente"},
+              url_atual),
         _item("Turmas e cursos", "turmas", {"turmas", "turma_editar", "cursos", "curso_editar"}, url_atual),
         feriados,
         pode("candidaturas") and _item("Captação de concedentes", "captacao", {"captacao", "captacao_detalhe"},
@@ -48,8 +50,15 @@ def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0, opinioes=0
         _item("Estagiários", "estagios_lista", {"estagios_lista", "estagio_detalhe", "estagio_dia", "criar_estagiarios",
                                                 "editar_estagio", "exportar_estagios"}, url_atual),
     ]
+    sistema = [
+        user.is_superuser and _item("Configurações", "configuracoes", {"configuracoes"}, url_atual),
+        user.is_superuser and _item("E-mails automáticos", "modelos_email", {"modelos_email", "modelo_email"}, url_atual),
+        user.is_superuser and _item("Registro de ações", "registro_acoes", {"registro_acoes"}, url_atual),
+        user.is_superuser and _item("Erros do sistema", "erros_sistema", {"erros_sistema"}, url_atual, erros),
+    ]
     secoes = []
-    for rotulo, itens in (("Acompanhamento", acompanhamento), ("Comunicação", comunicacao), ("Cadastros", cadastros)):
+    for rotulo, itens in (("Acompanhamento", acompanhamento), ("Comunicação", comunicacao), ("Cadastros", cadastros),
+                          ("Sistema", sistema)):
         itens = [i for i in itens if i]
         if itens:
             secoes.append({"rotulo": rotulo, "itens": itens, "ativo": any(i["ativo"] for i in itens),
@@ -103,13 +112,14 @@ def globais(request):
             ctx["candidaturas_pendentes"] = pendentes.count()
         if user.is_gestor and not user.deve_trocar_senha:
             url_atual = request.resolver_match.url_name if request.resolver_match else ""
-            opinioes = 0
+            opinioes = erros = 0
             if user.is_superuser:
-                from .models import Sugestao
+                from .models import ErroSistema, Sugestao
 
                 opinioes = Sugestao.objects.filter(resolvida=False).count()
+                erros = ErroSistema.objects.filter(resolvido=False).count()
             ctx["MENU"] = menu_gestor(user, url_atual, ctx["CONFIG"], ctx.get("atestados_pendentes"),
-                                      ctx.get("candidaturas_pendentes"), opinioes)
+                                      ctx.get("candidaturas_pendentes"), opinioes, erros)
     elif request.path in ("/entrar/", "/"):
         from .models import Configuracao
 

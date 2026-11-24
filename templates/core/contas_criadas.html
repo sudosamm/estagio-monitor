@@ -2,7 +2,7 @@
 {% block titulo %}{{ titulo }}{% endblock %}
 {% block conteudo %}
 <div class="titulo-pagina"><div><h1>{{ titulo }}</h1><p>Repasse a cada pessoa só a linha dela. No primeiro acesso, ela cria a própria senha.</p></div>
-  <div class="acoes"><button class="btn sec" onclick="window.print()">Imprimir</button><a class="btn" href="{% url 'usuarios' %}">Concluir</a></div></div>
+  <div class="acoes"><button class="btn sec" onclick="window.print()">Imprimir</button><a class="btn" href="{% if voltar %}{{ voltar }}{% else %}{% url 'usuarios' %}{% endif %}">Concluir</a></div></div>
 {% if tem_codigo %}<div class="caixa-alerta">{% if aviso %}{{ aviso }} {% endif %}<strong>Os códigos aparecem só agora.</strong> Imprima ou anote antes de sair desta tela. Cada código vale uma vez, por 30 dias. Se perder, gere outro na conta da pessoa.</div>{% elif aviso %}<div class="caixa-info">{{ aviso }}</div>{% endif %}
 <div class="card destaque">
   <p>Endereço: <strong>{{ endereco }}</strong></p>

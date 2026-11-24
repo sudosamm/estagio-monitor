@@ -1,14 +1,31 @@
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
-from django.http import HttpResponse
-from django.urls import path
+from urllib.parse import quote
 
-from core.seguranca import LoginForm
-from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, conta, encerramento, estagio, feedback, frequencia, importacao, novidades, opinioes, visitas, modelos_email, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
+from django.http import HttpResponse
+from django.shortcuts import redirect
+from django.urls import path, reverse
+
+from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, confirmacao, conta, dois_fatores, encerramento, equipe, estagio, feedback, frequencia, importacao, legal, novidades, opinioes, roteiro, sistema, visitas, modelos_email, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
+
+
+def _login_do_admin(request):
+    """O /admin/ entra pela tela normal, que tem o limite de tentativas e a verificação em duas etapas."""
+    proximo = request.GET.get("next", "/admin/")
+    return redirect(f"{reverse('login')}?next={quote(proximo if proximo.startswith('/admin/') else '/admin/')}")
+
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
-    path("entrar/", auth_views.LoginView.as_view(redirect_authenticated_user=True, authentication_form=LoginForm), name="login"),
+    path("entrar/", dois_fatores.EntrarView.as_view(), name="login"),
+    path("entrar/verificacao/", dois_fatores.verificar, name="verificar_dois_fatores"),
+    path("privacidade/", legal.privacidade, name="privacidade"),
+    path("termos/", legal.termos_de_uso, name="termos"),
+    path("termos/aceitar/", legal.aceitar_termos, name="aceitar_termos"),
+    path("perfil/meus-dados/", legal.baixar_meus_dados, name="baixar_meus_dados"),
+    path("perfil/verificacao/", dois_fatores.configurar, name="dois_fatores"),
+    path("s/<str:codigo>/", confirmacao.confirmar_por_link, name="confirmar_por_link"),
+    path("buscar/", roteiro.buscar, name="buscar"),
     path("sair/", auth_views.LogoutView.as_view(), name="logout"),
     path("primeiro-acesso/", primeiro_acesso.primeiro_acesso, name="primeiro_acesso"),
     path("senha/esqueci/", conta.esqueci_senha, name="esqueci_senha"),
@@ -113,6 +130,10 @@ urlpatterns = [
     path("configuracoes/", orientador.configuracoes, name="configuracoes"),
     path("configuracoes/emails/", modelos_email.lista, name="modelos_email"),
     path("configuracoes/emails/<str:tipo>/", modelos_email.editar, name="modelo_email"),
+    path("sistema/erros/", sistema.erros, name="erros_sistema"),
+    path("sistema/erros/limpar/", sistema.marcar_erro, name="marcar_erro_lote"),
+    path("sistema/erros/<int:pk>/", sistema.marcar_erro, name="marcar_erro"),
+    path("sistema/acoes/", sistema.acoes, name="registro_acoes"),
     path("encerramento/", encerramento.encerramento, name="encerramento"),
     # captação de concedentes
     path("seja-concedente/", captacao.candidatura_publica, name="candidatura_publica"),
@@ -134,6 +155,11 @@ urlpatterns = [
     # supervisor
     path("supervisao/", supervisor.painel_supervisor, name="painel_supervisor"),
     path("supervisao/confirmar/", supervisor.confirmar_lote, name="confirmar_lote"),
+    path("supervisao/ausencia/", equipe.indicar_substituto, name="indicar_substituto"),
+    path("supervisao/<int:pk>/pedir-confirmacao/", confirmacao.pedir_confirmacao, name="pedir_confirmacao"),
+    path("substituicoes/<int:pk>/encerrar/", equipe.encerrar_substituicao, name="encerrar_substituicao"),
+    path("equipe/", equipe.minha_equipe, name="minha_equipe"),
+    path("concedentes/<int:pk>/equipe/", equipe.equipe_concedente, name="equipe_concedente"),
     path("supervisao/qr/", qrcheckin.qr_supervisor, name="qr_supervisor"),
     path("supervisao/qr/novo/", qrcheckin.qr_novo, name="qr_novo"),
     path("p/ok/", qrcheckin.checkin_qr_confirmar, name="checkin_qr_confirmar"),
@@ -141,11 +167,13 @@ urlpatterns = [
     # agenda
     path("agenda/", agenda.agendamentos, name="agendamentos"),
     path("agenda/novo/", agenda.novo_agendamento, name="novo_agendamento"),
+    path("agenda/roteiro/", roteiro.roteiro, name="roteiro"),
     path("agenda/ficha/<int:pk>/", agenda.ficha_estagio, name="ficha_estagio"),
     path("agenda/<int:pk>/", agenda.agendamento_detalhe, name="agendamento_detalhe"),
     path("agenda/<int:pk>/cancelar/", agenda.cancelar_agendamento, name="cancelar_agendamento"),
     path("agenda/assinar/", agenda.assinar_agenda, name="assinar_agenda"),
     path("agenda/calendario/<str:token>.ics", agenda.agenda_ics, name="agenda_ics"),
+    path("admin/login/", _login_do_admin),
     path("admin/", admin.site.urls),
     path("manifest.webmanifest", pwa.manifesto, name="manifesto"),
     path("sw.js", pwa.service_worker, name="service_worker"),

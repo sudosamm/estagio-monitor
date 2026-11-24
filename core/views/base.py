@@ -44,12 +44,17 @@ def permissao(nome):
 orientador_requerido = permissao("painel")
 
 
-def pegar_estagio(request, pk):
+def pegar_estagio(request, pk, apoio=False):
+    """`apoio=True`: também abre para o responsável pela concedente e o substituto do supervisor (só as telas que
+    eles usam: o estágio, o dia e a validação)."""
     estagio = get_object_or_404(
         Estagio.objects.select_related("estagiario", "orientador", "supervisor", "local", "curso"), pk=pk
     )
     if not estagio.pode_ver(request.user):
-        raise PermissionDenied
+        from ..equipe import eh_apoio_do
+
+        if not (apoio and eh_apoio_do(request.user, estagio)):
+            raise PermissionDenied
     return estagio
 
 

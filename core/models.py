@@ -107,6 +107,23 @@ class Usuario(AbstractUser):
     # código de uso único do primeiro acesso (guardado só o resumo HMAC; o código aparece uma vez para a gestão)
     codigo_acesso = models.CharField(max_length=64, blank=True, editable=False)
     codigo_acesso_validade = models.DateTimeField(null=True, blank=True, editable=False)
+    # Termos de Uso e Aviso de Privacidade: versão que a pessoa leu e aceitou (ver core/termos.py)
+    termos_versao = models.CharField(max_length=20, blank=True, editable=False)
+    termos_aceitos_em = models.DateTimeField(null=True, blank=True, editable=False)
+    # verificação em duas etapas (código de 6 dígitos de um app autenticador; ver core/dois_fatores.py)
+    totp_segredo = models.CharField(max_length=64, blank=True, editable=False)
+    totp_ativo_em = models.DateTimeField(null=True, blank=True, editable=False)
+    totp_ultimo_passo = models.BigIntegerField(default=0, editable=False)
+    codigos_recuperacao = models.JSONField(default=list, blank=True, editable=False)
+    concedentes_geridas = models.ManyToManyField(
+        "LocalEstagio", blank=True, related_name="responsaveis", verbose_name="Responsável pelas concedentes",
+        help_text="Pode cadastrar a equipe da concedente (supervisores e funcionários) e dar permissões temporárias "
+                  "para confirmar presenças quando o supervisor não estiver.",
+    )
+    lembrete_expediente = models.BooleanField(
+        "Lembrar no fim do expediente", default=True,
+        help_text="Se você esquecer de marcar a presença ou a saída, o celular avisa uma hora depois do horário de saída.",
+    )
     class Tema(models.TextChoices):
         AUTO = "AUTO", "Automático (igual ao celular)"
         CLARO = "CLARO", "Claro"
@@ -183,6 +200,21 @@ class Usuario(AbstractUser):
     @property
     def is_supervisor(self):
         return self.papel == self.Papel.SUPERVISOR
+
+    def ids_geridas(self):
+        """Concedentes de que a pessoa é responsável (cadastra a equipe e as substituições)."""
+        if not hasattr(self, "_ids_geridas"):
+            self._ids_geridas = (set(self.concedentes_geridas.values_list("pk", flat=True))
+                                 if self.pk and self.is_supervisor else set())
+        return self._ids_geridas
+
+    @property
+    def gere_concedente(self):
+        return bool(self.ids_geridas())
+
+    @property
+    def dois_fatores_ativo(self):
+        return bool(self.totp_ativo_em and self.totp_segredo)
 
     @property
     def is_estagiario(self):
@@ -377,6 +409,8 @@ class Estagio(models.Model):
     )
     ativo = models.BooleanField(default=True)
     observacoes_orientador = models.TextField("Anotações privadas do orientador", blank=True)
+    lembrete_em = models.DateField(null=True, blank=True, editable=False,
+                                   help_text="Último dia em que o estagiário recebeu o lembrete de fim de expediente")
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -831,6 +865,7 @@ class HistoricoRegistro(models.Model):
         CANCELOU = "CANCELOU", "cancelou a ausência"
         REVOGOU = "REVOGOU", "revogou a presença"
         QRCODE = "QRCODE", "marcou pelo QR code do supervisor"
+        LINK = "LINK", "confirmou pelo link do e-mail/WhatsApp"
         CRIOU = "CRIOU", "criou o registro"
         ALTEROU = "ALTEROU", "alterou o registro"
         EXCLUIU = "EXCLUIU", "excluiu o registro"
@@ -1422,6 +1457,42 @@ class Configuracao(models.Model):
         help_text="A partir do dia 20, quem ainda não deu o feedback do mês sobre seus estagiários recebe um lembrete.",
     )
     lembrete_feedback_em = models.DateTimeField(null=True, blank=True, editable=False)
+    lembrete_expediente = models.BooleanField(
+        "Lembrar os estagiários no fim do expediente", default=True,
+        help_text="Quem não marcou a presença (ou a saída) recebe um aviso no celular e no sino algum tempo depois do "
+                  "horário de saída. Cada estagiário pode desligar em Meus dados.",
+    )
+    lembrete_minutos = models.PositiveSmallIntegerField(
+        "Minutos depois da saída para lembrar", default=60,
+        help_text="Ex.: 60 = uma hora depois do horário de saída da escala.",
+    )
+    confirmacao_por_email = models.BooleanField(
+        "Mandar aos supervisores o link “Confirmar todas”", default=True,
+        help_text="Uma vez por semana, cada supervisor com presenças esperando recebe por e-mail a lista e um botão "
+                  "para confirmar todas de uma vez, sem precisar entrar no sistema. O link vale 7 dias e uma vez só.",
+    )
+    dia_confirmacao = models.PositiveSmallIntegerField(
+        "Dia do e-mail de confirmação", choices=DIAS_SEMANA, default=4,
+        help_text="Sai a partir das 14h desse dia.",
+    )
+    confirmacao_enviada_em = models.DateTimeField(null=True, blank=True, editable=False)
+    resumo_mensal_supervisor = models.BooleanField(
+        "Mandar o resumo do mês aos supervisores", default=True,
+        help_text="No dia 1º de cada mês, cada supervisor recebe por e-mail as presenças, faltas e horas do mês "
+                  "anterior de cada estagiário.",
+    )
+    resumo_mensal_enviado_em = models.DateTimeField(null=True, blank=True, editable=False)
+    exigir_dois_fatores = models.BooleanField(
+        "Exigir verificação em duas etapas da gestão", default=False,
+        help_text="Orientadores, coordenadores, administradores e responsáveis por concedentes passam a precisar de um "
+                  "código do celular (app autenticador) para entrar. Quem ainda não configurou é levado à tela de "
+                  "configuração no próximo acesso.",
+    )
+    contato_privacidade = models.CharField(
+        "Contato para assuntos de dados pessoais", max_length=150, blank=True,
+        help_text="E-mail ou telefone do encarregado/responsável pelos dados na escola. Aparece no Aviso de "
+                  "Privacidade. Vazio = e-mail que recebe as sugestões.",
+    )
     atestados_supervisor = models.BooleanField(
         "O supervisor da concedente também analisa os atestados", default=True,
         help_text="Desligado: só a escola (orientador, coordenação) vê o arquivo e decide; o supervisor vê apenas que o "
@@ -1745,3 +1816,121 @@ class ModeloEmail(models.Model):
 
     def __str__(self):
         return self.tipo
+
+
+class ErroSistema(models.Model):
+    """Erro do servidor (página que deu erro 500 ou tarefa em segundo plano que falhou), agrupado por origem."""
+
+    assinatura = models.CharField(max_length=64, unique=True)
+    tipo = models.CharField(max_length=120)
+    mensagem = models.TextField(blank=True)
+    origem = models.CharField(max_length=255, blank=True, help_text="Arquivo, linha e função onde o erro aconteceu")
+    caminho = models.CharField(max_length=255, blank=True)
+    metodo = models.CharField(max_length=10, blank=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                related_name="+")
+    detalhe = models.TextField(blank=True)
+    ocorrencias = models.PositiveIntegerField(default=1)
+    primeiro_em = models.DateTimeField(default=timezone.now)
+    ultimo_em = models.DateTimeField(default=timezone.now, db_index=True)
+    avisado_em = models.DateTimeField(null=True, blank=True)
+    resolvido = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["resolvido", "-ultimo_em"]
+        verbose_name = "erro do sistema"
+        verbose_name_plural = "erros do sistema"
+
+    def __str__(self):
+        return f"{self.tipo}: {self.mensagem[:60]}"
+
+
+class RegistroAcao(models.Model):
+    """Registro de ações: quem fez o quê, quando e de onde (entradas, contas, senhas, cadastros, exportações)."""
+
+    quando = models.DateTimeField(default=timezone.now, db_index=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                related_name="acoes")
+    quem = models.CharField(max_length=160, blank=True, help_text="Nome e usuário no momento da ação")
+    tipo = models.CharField(max_length=30, db_index=True)
+    descricao = models.CharField(max_length=255)
+    alvo = models.CharField(max_length=255, blank=True)
+    caminho = models.CharField(max_length=255, blank=True)
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    aparelho = models.CharField(max_length=80, blank=True)
+
+    class Meta:
+        ordering = ["-quando", "-pk"]
+        indexes = [models.Index(fields=["usuario", "-quando"])]
+        verbose_name = "ação registrada"
+        verbose_name_plural = "registro de ações"
+
+    def __str__(self):
+        return f"{self.quando:%d/%m/%Y %H:%M} {self.quem}: {self.descricao}"
+
+
+class Substituicao(models.Model):
+    """Permissão temporária para um funcionário da concedente confirmar presenças no lugar do supervisor."""
+
+    concedente = models.ForeignKey(LocalEstagio, on_delete=models.CASCADE, related_name="substituicoes")
+    titular = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE, related_name="substituido_em",
+        verbose_name="No lugar de", help_text="Vazio = todos os estagiários da concedente",
+    )
+    substituto = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="substituicoes",
+                                   verbose_name="Quem vai confirmar")
+    inicio = models.DateField("De")
+    fim = models.DateField("Até")
+    motivo = models.CharField("Motivo", max_length=150, blank=True, help_text="Ex.: férias do supervisor")
+    criada_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    criada_em = models.DateTimeField(auto_now_add=True)
+    revogada_em = models.DateTimeField(null=True, blank=True)
+    revogada_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                     related_name="+")
+
+    class Meta:
+        ordering = ["-inicio", "-pk"]
+        verbose_name = "substituição de supervisor"
+        verbose_name_plural = "substituições de supervisor"
+
+    def __str__(self):
+        return f"{self.substituto} no lugar de {self.titular or 'todos'} ({self.inicio:%d/%m}–{self.fim:%d/%m})"
+
+    def vale_em(self, dia):
+        return self.revogada_em is None and self.inicio <= dia <= self.fim
+
+    def cobre(self, estagio):
+        return estagio.local_id == self.concedente_id and (not self.titular_id or estagio.supervisor_id == self.titular_id)
+
+    @property
+    def situacao(self):
+        hoje = timezone.localdate()
+        if self.revogada_em:
+            return "revogada"
+        if self.fim < hoje:
+            return "encerrada"
+        return "ativa" if self.inicio <= hoje else "agendada"
+
+
+class LinkConfirmacao(models.Model):
+    """Link de uso único para o supervisor confirmar as presenças pendentes sem entrar no sistema."""
+
+    class Canal(models.TextChoices):
+        EMAIL = "EMAIL", "E-mail"
+        WHATSAPP = "WHATSAPP", "WhatsApp"
+
+    resumo = models.CharField(max_length=64, unique=True, help_text="SHA-256 do código do link (o código não é guardado)")
+    supervisor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="links_confirmacao")
+    registros = models.JSONField(default=list)
+    canal = models.CharField(max_length=10, choices=Canal.choices, default=Canal.EMAIL)
+    criado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
+    criado_em = models.DateTimeField(auto_now_add=True)
+    expira_em = models.DateTimeField()
+    usado_em = models.DateTimeField(null=True, blank=True)
+    confirmados = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "link de confirmação"
+        verbose_name_plural = "links de confirmação"

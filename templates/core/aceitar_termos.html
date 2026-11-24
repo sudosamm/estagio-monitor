@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Termos e privacidade{% endblock %}
+{% block conteudo %}
+<div class="aceite-termos card destaque">
+  <h1>Antes de continuar</h1>
+  <p>O {{ NOME_SISTEMA }} agora tem <strong>Termos de Uso</strong> e um <strong>Aviso de Privacidade</strong>{% if user.termos_versao %}, e eles mudaram desde a última vez que você leu{% endif %}. Em resumo:</p>
+  <ul class="aceite-resumo">
+    <li><span aria-hidden="true">🎯</span><span>Os seus dados servem só para acompanhar o estágio, como pede a Lei do Estágio. Nada é vendido nem usado em propaganda.</span></li>
+    <li><span aria-hidden="true">👀</span><span>Cada pessoa vê só o que precisa: o estagiário vê o próprio estágio, o supervisor vê os seus estagiários e a escola vê quem acompanha.</span></li>
+    {% if localizacao != "DESLIGADO" %}<li><span aria-hidden="true">📍</span><span>A localização é lida só na hora de marcar a entrada e a saída.</span></li>{% endif %}
+    <li><span aria-hidden="true">🔒</span><span>A sua senha é pessoal. O sistema registra os acessos (IP e aparelho) para proteger a sua conta.</span></li>
+    <li><span aria-hidden="true">✅</span><span>Marque e confirme só horários verdadeiros.</span></li>
+    <li><span aria-hidden="true">📦</span><span>Você pode baixar uma cópia dos seus dados e pedir correções a qualquer momento, em Meus dados.</span></li>
+  </ul>
+  <p class="acoes"><a class="btn sec" href="{% url 'termos' %}" target="_blank" rel="noopener">Ler os Termos de Uso</a><a class="btn sec" href="{% url 'privacidade' %}" target="_blank" rel="noopener">Ler o Aviso de Privacidade</a></p>
+  {% if user.is_estagiario %}<p class="muted" style="font-size:.88rem">Se você tem menos de 18 anos, vale mostrar estes textos ao seu responsável.</p>{% endif %}
+  <form method="post">{% csrf_token %}
+    <input type="hidden" name="next" value="{{ proximo }}">
+    {% if erro %}<div class="aviso error">{{ erro }}</div>{% endif %}
+    <label class="flex aceite-caixa"><input type="checkbox" name="aceito" value="1" required> <span>Li e concordo com os Termos de Uso e estou ciente do Aviso de Privacidade.</span></label>
+    <div class="acoes mt-1"><button class="btn grande" type="submit">Continuar</button>
+      <button class="btn sec" type="submit" form="sair-termos">Sair</button></div>
+  </form>
+  <form id="sair-termos" method="post" action="{% url 'logout' %}">{% csrf_token %}</form>
+  <p class="muted mb-0 mt-1" style="font-size:.8rem">Versão {{ versao }} · {{ atualizado_em }}</p>
+</div>
+{% endblock %}

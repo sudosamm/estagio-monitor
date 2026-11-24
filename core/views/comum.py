@@ -94,7 +94,13 @@ def perfil(request):
             request.session["confirmacao_enviada"] = time.time()
             messages.info(request, f"Enviamos um link para {user.email}. Abra o e-mail e confirme (veja também o spam).")
         return redirect("perfil")
-    return render(request, "core/perfil.html", {"form": form, "config": config})
+    from .. import dois_fatores
+    from ..models import RegistroAcao
+
+    acessos = RegistroAcao.objects.filter(usuario=request.user, tipo__in=["LOGIN", "LOGIN_FALHOU", "2FA_FALHOU"])[:6]
+    return render(request, "core/perfil.html", {"form": form, "config": config, "acessos": acessos,
+                                                "pode_2fa": dois_fatores.pode_usar(request.user),
+                                                "exige_2fa": dois_fatores.precisa(request.user)})
 
 
 # Abrem no navegador só PDF e fotos comuns. SVG, HTML e o resto baixam, e qualquer arquivo enviado por usuário

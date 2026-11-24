@@ -21,24 +21,25 @@
       <a class="btn sec" href="{% url 'editar_estagio' estagio.pk %}">{% icone "editar" %} Editar</a>
       <a class="btn sec" href="{% url 'trocar_supervisor' estagio.pk %}">{% icone "usuario" %} Trocar supervisor</a>
       {% if pode_agenda %}<a class="btn" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "calendario" %} Agendar visita</a>{% endif %}
-    {% else %}
+    {% elif not e_apoio %}
       <a class="btn" href="{% url 'novo_agendamento' %}?estagio={{ estagio.pk }}">{% icone "mensagem" %} Pedir visita ou conversa</a>
     {% endif %}
     {% if e_estagiario %}<a class="btn sec" href="{% url 'enviar_atestado' estagio.pk %}">{% icone "arquivo" %} Enviar atestado</a>{% endif %}
     {% if e_estagiario %}<a class="btn sec" href="{% url 'minhas_folhas' estagio.pk %}?mes={{ nav.atual|default:'' }}">{% icone "impressora" %} Folha de frequência</a>
-    {% else %}<a class="btn sec" href="{% url 'folha_frequencia' estagio.pk %}?mes={{ nav.atual|default:'' }}" target="_blank" rel="noopener">{% icone "impressora" %} Folha de frequência</a>{% endif %}
+    {% elif not e_apoio %}<a class="btn sec" href="{% url 'folha_frequencia' estagio.pk %}?mes={{ nav.atual|default:'' }}" target="_blank" rel="noopener">{% icone "impressora" %} Folha de frequência</a>{% endif %}
     {% if e_orientador and horas.cumpridas %}<a class="btn {% if horas.pct < 100 %}sec{% endif %}" href="{% url 'declaracao_estagio' estagio.pk %}" target="_blank" rel="noopener" title="{% if horas.pct >= 100 %}Declaração de conclusão do estágio{% else %}Declaração de estágio em andamento{% endif %}">{% icone "arquivo" %} Declaração</a>{% endif %}
   </div>
 </div>
 
+{% if e_apoio %}<div class="caixa-info mb-1">Você está acompanhando este estagiário como {% if estagio.local_id in user.ids_geridas %}responsável pela concedente{% else %}substituto(a) do supervisor{% endif %}: pode confirmar, contestar e lançar os dias.</div>{% endif %}
 <nav class="abas">
   <a href="?aba=visao" class="{% if aba == 'visao' %}ativo{% endif %}">Visão geral</a>
   <a href="?aba=registros" class="{% if aba == 'registros' %}ativo{% endif %}">Registros e diário</a>
-  <a href="?aba=mensagens" class="{% if aba == 'mensagens' %}ativo{% endif %}">Dúvidas e mensagens</a>
+  {% if not e_apoio %}<a href="?aba=mensagens" class="{% if aba == 'mensagens' %}ativo{% endif %}">Dúvidas e mensagens</a>
   <a href="?aba=arquivos" class="{% if aba == 'arquivos' %}ativo{% endif %}">Arquivos</a>
   <a href="?aba=agenda" class="{% if aba == 'agenda' %}ativo{% endif %}">Visitas</a>
   <a href="?aba=feedback" class="{% if aba == 'feedback' %}ativo{% endif %}">Feedback</a>
-  <a href="?aba=escalas" class="{% if aba == 'escalas' %}ativo{% endif %}">Dias e horários</a>
+  <a href="?aba=escalas" class="{% if aba == 'escalas' %}ativo{% endif %}">Dias e horários</a>{% endif %}
 </nav>
 
 {% if aba == "visao" %}

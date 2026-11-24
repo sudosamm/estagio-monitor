@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.db.models import Q
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -14,8 +15,13 @@ supervisor_requerido = papel(Usuario.Papel.SUPERVISOR)
 
 @supervisor_requerido
 def painel_supervisor(request):
+    from ..equipe import estagios_de_apoio
+
     hoje = timezone.localdate()
     estagios = preparar_lote(estagios_visiveis(request.user).filter(ativo=True), hoje, totais=False)
+    apoio = preparar_lote(estagios_de_apoio(request.user), hoje, totais=False)
+    for e in apoio:
+        e.st = status_hoje(e)
     sem_horario = []
     for e in estagios:
         e.st = status_hoje(e)
@@ -23,13 +29,31 @@ def painel_supervisor(request):
         if not esc or not esc.horario_entrada:
             sem_horario.append(e)
     pendentes = Registro.objects.filter(
-        estagio__in=estagios, confirmacao=Registro.Confirmacao.PENDENTE, data__lte=timezone.localdate(),
+        estagio__in=estagios + apoio, confirmacao=Registro.Confirmacao.PENDENTE, data__lte=timezone.localdate(),
     ).exclude(justificativa__status=Justificativa.Status.PENDENTE).select_related("estagio__estagiario").order_by("-data")
     return render(request, "core/painel_supervisor.html", {"estagios": estagios, "pendentes": pendentes,
+                                                           "apoio": apoio, **_substituicoes(request.user, hoje),
                                                            "sem_horario": sem_horario,
                                                            "atestados": pendentes_para(request.user, estagios),
                                                            "documentos": _documentos_do_supervisor(estagios),
                                                            **_feedback_do_mes(estagios)})
+
+
+def _substituicoes(user, hoje):
+    """Quem me substitui (sou titular), a quem substituo e os colegas para indicar no “Vou me ausentar”."""
+    from ..equipe import equipe_de, substituicoes_ativas
+    from ..forms import SubstituicaoForm
+    from ..models import Substituicao
+
+    minhas = (Substituicao.objects.filter(titular=user, revogada_em__isnull=True, fim__gte=hoje)
+              .select_related("substituto", "concedente"))
+    locais = list(user.concedentes.all())
+    form = None
+    if locais and user.estagios_supervisionados.filter(ativo=True).exists():
+        form = SubstituicaoForm(prefix="s", equipe=equipe_de(locais[0]), titular_fixo=user,
+                                initial={"inicio": hoje})
+    return {"me_substituem": minhas, "substituo": substituicoes_ativas(user), "form_ausencia": form,
+            "locais_ausencia": locais}
 
 
 def _feedback_do_mes(estagios):
@@ -61,9 +85,12 @@ def _documentos_do_supervisor(estagios):
 @supervisor_requerido
 @require_POST
 def confirmar_lote(request):
+    from ..equipe import estagios_de_apoio
+
     ids = request.POST.getlist("registros")
     regs = Registro.objects.filter(
-        pk__in=ids, estagio__supervisor=request.user, confirmacao=Registro.Confirmacao.PENDENTE
+        Q(estagio__supervisor=request.user) | Q(estagio__in=estagios_de_apoio(request.user)),
+        pk__in=ids, confirmacao=Registro.Confirmacao.PENDENTE,
     ).exclude(justificativa__status=Justificativa.Status.PENDENTE).select_related("estagio__estagiario", "estagio__orientador")
     n = 0
     for reg in regs:

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Registro de ações{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Registro de ações</h1><p class="mb-0">Quem entrou, quem mudou o quê e quem baixou dados pessoais. Fica guardado por 1 ano. O que foi digitado nos formulários não é guardado.</p></div></div>
+<form class="filtros card" method="get">
+  <div><label class="rotulo" for="f-q">Buscar</label><input id="f-q" type="search" name="q" value="{{ q }}" placeholder="Pessoa, ação, alvo ou IP"></div>
+  <div><label class="rotulo" for="f-tipo">Tipo</label><select id="f-tipo" name="tipo">{% for v, r in tipos %}<option value="{{ v }}"{% if tipo == v %} selected{% endif %}>{{ r }}</option>{% endfor %}</select></div>
+  <div><label class="rotulo" for="f-de">De</label><input id="f-de" type="date" name="de" value="{{ de }}"></div>
+  <div><label class="rotulo" for="f-ate">Até</label><input id="f-ate" type="date" name="ate" value="{{ ate }}"></div>
+  <button class="btn" type="submit">Filtrar</button>
+</form>
+<div class="card"><div class="tabela-wrap"><table class="tabela">
+  <thead><tr><th>Quando</th><th>Quem</th><th>O quê</th><th>Sobre</th><th>De onde</th></tr></thead>
+  <tbody>{% for a in pagina %}
+    <tr class="acao-{{ a.tipo|lower }}">
+      <td style="white-space:nowrap">{{ a.quando|date:"d/m/Y H:i" }}</td>
+      <td>{% if a.usuario %}<a href="{% url 'editar_usuario' a.usuario_id %}">{{ a.quem|default:a.usuario }}</a>{% else %}{{ a.quem|default:"—" }}{% endif %}</td>
+      <td>{% if a.tipo == "LOGIN_FALHOU" or a.tipo == "2FA_FALHOU" %}<span class="selo falta">{{ a.descricao }}</span>{% else %}{{ a.descricao }}{% endif %}</td>
+      <td>{{ a.alvo|default:"" }}</td>
+      <td><small>{{ a.ip|default:"" }}{% if a.aparelho %}<br>{{ a.aparelho }}{% endif %}</small></td>
+    </tr>
+  {% empty %}<tr><td colspan="5" class="vazio">Nada encontrado.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% if pagina.has_other_pages %}<div class="paginacao">
+  {% if pagina.has_previous %}<a class="btn sec sm" href="?{{ filtros }}&pagina={{ pagina.previous_page_number }}">← Mais recentes</a>{% endif %}
+  <span class="muted">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+  {% if pagina.has_next %}<a class="btn sec sm" href="?{{ filtros }}&pagina={{ pagina.next_page_number }}">Mais antigas →</a>{% endif %}
+</div>{% endif %}
+</div>
+{% endblock %}

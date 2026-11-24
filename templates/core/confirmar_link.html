@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Confirmar presenças{% endblock %}
+{% block conteudo %}
+<div class="confirmar-link card destaque">
+{% if estado == "ok" %}
+  <h1>Olá, {{ link.supervisor.primeiro_nome }}!</h1>
+  <p>Confira as presenças abaixo. Se estiver tudo certo, toque em <strong>Confirmar</strong>.</p>
+  <ul class="lista compacta">
+    {% for r in registros %}<li><span class="cresce"><strong>{{ r.estagio.estagiario.nome_completo }}</strong><small style="display:block">{{ r.data|date:"l, d/m" }} · {% if r.situacao == "PRESENTE" %}{{ r.horario_display|default:"sem horários" }} · {{ r.horas|horas }}{% else %}{{ r.get_situacao_display }}{% endif %}</small></span></li>{% endfor %}
+  </ul>
+  <form method="post">{% csrf_token %}
+    <button class="btn grande bloco" type="submit">{% icone "check" %} Confirmar {{ registros|length }} presença{{ registros|length|pluralize }}</button>
+  </form>
+  <p class="muted mt-1 mb-0" style="font-size:.88rem">Algum dia errado? Não confirme por aqui: <a href="{% url 'login' %}?next={% url 'painel_supervisor' %}">entre no sistema</a> e conteste só aquele dia. Este link vale até {{ link.expira_em|date:"d/m H:i" }} e funciona uma vez.</p>
+{% elif estado == "feito" %}
+  <h1>Pronto, obrigado!</h1>
+  <p>{{ feitos }} presença{{ feitos|pluralize }} confirmada{{ feitos|pluralize }}. Os estagiários já foram avisados.</p>
+  <a class="btn sec" href="{% url 'login' %}">Entrar no sistema</a>
+{% elif estado == "nada" %}
+  <h1>Nada para confirmar</h1>
+  <p>Essas presenças já foram confirmadas ou contestadas por outro caminho.</p>
+  <a class="btn sec" href="{% url 'login' %}">Entrar no sistema</a>
+{% elif estado == "usado" %}
+  <h1>Este link já foi usado</h1>
+  <p>As presenças dele foram confirmadas em {{ link.usado_em|date:"d/m/Y H:i" }}. Para ver o que falta, entre no sistema.</p>
+  <a class="btn" href="{% url 'login' %}">Entrar</a>
+{% elif estado == "vencido" %}
+  <h1>Este link venceu</h1>
+  <p>Os links de confirmação valem 7 dias. Entre no sistema para confirmar, ou aguarde o próximo e-mail.</p>
+  <a class="btn" href="{% url 'login' %}">Entrar</a>
+{% else %}
+  <h1>Link inválido</h1>
+  <p>Confira se copiou o endereço inteiro. Se precisar, entre no sistema para confirmar.</p>
+  <a class="btn" href="{% url 'login' %}">Entrar</a>
+{% endif %}
+</div>
+{% endblock %}

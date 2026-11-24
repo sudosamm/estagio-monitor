@@ -11,6 +11,8 @@
       <p class="muted mt-1" style="font-size:.88rem">Crie uma senha com pelo menos 8 caracteres, que não seja só números nem fácil de adivinhar.</p>
       <input type="text" name="username" value="{{ alvo.username }}" autocomplete="username" hidden>
       {% include "core/_form.html" %}
+      {% if erro_termos %}<div class="aviso error">Para continuar, marque que leu e concorda com os termos.</div>{% endif %}
+      <label class="flex aceite-caixa mb-1"><input type="checkbox" name="aceito" value="1" required{% if request.POST.aceito == "1" %} checked{% endif %}> <span>Li e concordo com os <a href="{% url 'termos' %}" target="_blank" rel="noopener">Termos de Uso</a> e estou ciente do <a href="{% url 'privacidade' %}" target="_blank" rel="noopener">Aviso de Privacidade</a>.</span></label>
       <button class="btn grande bloco" type="submit">Salvar senha e entrar</button>
     </form>
   </section>

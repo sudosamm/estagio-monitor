@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block titulo %}Aviso de Privacidade{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Aviso de Privacidade</h1><p class="muted mb-0">Como o {{ NOME_SISTEMA }} usa e protege os seus dados pessoais · versão {{ versao }}, atualizada em {{ atualizado_em }}</p></div></div>
+<article class="card texto-legal">
+  <nav class="indice-legal" aria-label="Neste aviso">
+    <a href="#quem">Quem cuida dos dados</a><a href="#quais">Quais dados</a><a href="#para-que">Para quê</a><a href="#quem-ve">Quem vê</a><a href="#tempo">Por quanto tempo</a><a href="#seguranca">Segurança</a><a href="#direitos">Seus direitos</a><a href="#contato">Contato</a>
+  </nav>
+
+  <h2 id="quem">1. Quem cuida dos seus dados</h2>
+  <p>O {{ NOME_SISTEMA }} é a ferramenta que {{ escola }}, escola da rede da {{ instituicao }}, usa para acompanhar o estágio supervisionado dos seus estudantes. A escola é a <strong>controladora</strong> dos dados, como define a Lei Geral de Proteção de Dados Pessoais (LGPD, Lei nº 13.709/2018). Os registros oficiais continuam no SICE.</p>
+
+  <h2 id="quais">2. Quais dados o sistema guarda</h2>
+  <ul>
+    <li><strong>Identificação e contato:</strong> nome, usuário, perfil (estagiário, supervisor, orientador), e-mail, telefone, matrícula, data de nascimento, CPF (sai na folha de frequência) e cargo do supervisor.</li>
+    <li><strong>Estágio:</strong> curso, turma, concedente, supervisor, orientador, datas, carga horária, dias e horários.</li>
+    <li><strong>Frequência:</strong> horários de entrada, intervalo e saída, presenças, ausências, faltas, confirmações do supervisor, o texto “como foi o dia” e o histórico de cada mudança.</li>
+    {% if localizacao != "DESLIGADO" %}<li><strong>Localização:</strong> só no momento em que o estagiário marca a entrada ou a saída, e só se o celular permitir. Guardamos a distância até a concedente, para conferir se a marcação foi feita no local. O sistema não acompanha a localização em nenhum outro momento.</li>{% else %}<li><strong>Localização:</strong> hoje a escola não pede a localização. Se passar a pedir, ela será lida só no momento de marcar a entrada ou a saída.</li>{% endif %}
+    <li><strong>Atestados e comprovantes:</strong> enviados pelo estagiário para justificar uma falta. Podem conter dados de saúde, que a LGPD chama de <em>dados sensíveis</em>.</li>
+    <li><strong>Mensagens, arquivos, avaliações e feedback</strong> trocados entre estagiário, supervisor e escola.</li>
+    <li><strong>Foto de perfil</strong> (opcional){% if talentos %} e <strong>perfil profissional e currículo</strong> (opcionais, só aparecem às concedentes se o estagiário autorizar){% endif %}.</li>
+    <li><strong>Acessos e segurança:</strong> data, hora, IP e tipo de aparelho de cada entrada na conta, senhas erradas e ações da gestão (registro de ações).</li>
+  </ul>
+
+  <h2 id="para-que">3. Para que usamos e com base em quê</h2>
+  <p>Usamos os dados só para acompanhar o estágio: registrar a frequência, calcular as horas e a previsão de término, emitir a folha de frequência e as declarações, agendar visitas, avisar sobre pendências e proteger as contas.</p>
+  <p>A Lei do Estágio (Lei nº 11.788/2008) obriga a escola e a concedente a acompanhar o estágio, com professor orientador e supervisor. Por isso o tratamento se apoia no <strong>cumprimento de obrigação legal</strong> e na <strong>execução de política pública de educação</strong> (LGPD, art. 7º, II e III, e art. 23). Os atestados são usados só para justificar faltas, com base no art. 11, II. Para estudantes menores de 18 anos, os dados são tratados no seu melhor interesse (art. 14). Foto, perfil profissional e currículo são opcionais e podem ser apagados pelo próprio estagiário a qualquer momento.</p>
+  <p>O sistema <strong>não</strong> vende dados, <strong>não</strong> usa propaganda e <strong>não</strong> toma decisões automáticas sobre ninguém: a previsão de término e os avisos são apoio para as pessoas decidirem.</p>
+
+  <h2 id="quem-ve">4. Quem vê os seus dados</h2>
+  <ul>
+    <li><strong>O estagiário</strong> vê tudo do próprio estágio.</li>
+    <li><strong>O supervisor</strong> vê a frequência, as mensagens (menos as marcadas como “só com o orientador”) e os documentos dos estagiários que supervisiona. Um funcionário da concedente só confirma presenças no lugar dele por um período definido, com permissão registrada.</li>
+    <li><strong>O responsável pela concedente</strong> vê a frequência dos estagiários da própria concedente e cadastra a equipe.</li>
+    <li><strong>A escola</strong> (orientador, coordenação do curso e administração) vê os estágios que acompanha.</li>
+    <li><strong>Atestados:</strong> só a escola{% if atestados_supervisor %} e o supervisor{% endif %} abrem o arquivo.</li>
+  </ul>
+  <p>Para funcionar, o sistema usa a hospedagem contratada pela escola, a rede da Cloudflare, que protege o acesso, e o servidor de e-mail dos avisos. As notificações no celular passam pelos serviços de push do Google, da Apple ou da Mozilla, conforme o aparelho, sempre criptografadas. As fontes das páginas vêm do Google Fonts, que recebe o endereço IP de quem abre a página.</p>
+
+  <h2 id="tempo">5. Por quanto tempo guardamos</h2>
+  <p>Os dados do estágio ficam guardados por <strong>{{ retencao }} ano{{ retencao|pluralize }}</strong> depois do fim do ano letivo em que ele terminou, para emitir declarações e responder a dúvidas. Depois desse prazo, são <strong>anonimizados</strong>: nomes e contatos são apagados e ficam só os números, como horas e frequência, para os indicadores. Os registros de acesso ficam {{ guardar_acessos }}. O Marco Civil da Internet exige no mínimo 6 meses.</p>
+
+  <h2 id="seguranca">6. Como protegemos</h2>
+  <ul>
+    <li>Acesso só por conexão criptografada (HTTPS).</li>
+    <li>Senhas guardadas de forma irreversível: nem a escola consegue ver a sua senha.</li>
+    <li>Bloqueio depois de várias senhas erradas e aviso por e-mail, para quem tem e-mail confirmado.</li>
+    <li>Verificação em duas etapas para quem gerencia estudantes.</li>
+    <li>Arquivos nunca públicos: cada download confere se a pessoa tem permissão.</li>
+    <li>Registro das ações da gestão e dos downloads de dados pessoais.</li>
+  </ul>
+  <p>Se acontecer um incidente de segurança que possa trazer risco ou dano relevante, a escola avisará as pessoas afetadas e a Autoridade Nacional de Proteção de Dados (ANPD), como manda o art. 48 da LGPD.</p>
+
+  <h2 id="direitos">7. Seus direitos</h2>
+  <p>Você pode, a qualquer momento:</p>
+  <ul>
+    <li>confirmar se tratamos os seus dados e ter acesso a eles;</li>
+    <li>baixar uma cópia (em <a href="{% url 'perfil' %}">Meus dados</a> → <em>Baixar meus dados</em>);</li>
+    <li>pedir a correção do que estiver errado;</li>
+    <li>pedir a anonimização ou a exclusão do que não for necessário ou que a lei não obrigue a guardar;</li>
+    <li>saber com quem os dados são compartilhados;</li>
+    <li>apagar o que é opcional, como a foto e o currículo.</li>
+  </ul>
+  <p>Também pode reclamar à ANPD em <a href="https://www.gov.br/anpd" target="_blank" rel="noopener">gov.br/anpd</a>.</p>
+
+  <h2 id="contato">8. Contato</h2>
+  <p>Dúvidas e pedidos sobre os seus dados: {% if contato %}<strong>{{ contato }}</strong>{% else %}fale com a coordenação de estágio da escola{% endif %}. Se não conseguir entrar no sistema, use <a href="{% url 'pedir_ajuda' %}">Falar com o administrador</a>.</p>
+  <p class="muted">Quando este aviso mudar de forma importante, o sistema pede que você leia e aceite a nova versão no próximo acesso. Veja também os <a href="{% url 'termos' %}">Termos de Uso</a>.</p>
+</article>
+{% endblock %}

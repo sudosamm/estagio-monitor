@@ -39,6 +39,35 @@ O número de pendências (atestados para analisar, concedentes na captação) ap
 - **Avisos** antes de salvar: quando o estagiário não tem estágio no dia escolhido (fora da escala, feriado ou depois do fim), e quando você já tem outro compromisso perto daquele horário.
 - A página da visita mostra as mesmas fichas em “Dados para a visita”, para consultar no celular durante a visita.
 
+### Roteiro de visitas e busca rápida
+- **Acompanhamento → Roteiro de visitas** (ou “Roteiro de visitas do dia” no calendário do painel): para o dia escolhido, as concedentes que têm estagiário no local, com o horário, quem está lá, há quantos dias foi a última visita e se já há visita marcada.
+- Com a localização cadastrada na concedente, as mais próximas entre si ficam juntas. Marque as paradas (até 10) e toque em **Abrir o roteiro no mapa**: o Google Maps traça o caminho a partir de onde você estiver. As que nunca tiveram visita, ou estão há mais de 30 dias sem, já vêm marcadas.
+- **Agendar** em cada parada abre o agendamento com o dia, o horário de entrada e os estagiários daquela concedente.
+- **Busca rápida** (gestão): botão *Buscar* na barra, tecla `/` ou `Ctrl+K`. Acha estagiários (pelo nome, em qualquer ordem e sem acento), concedentes, supervisores e páginas do menu. ↑ ↓ e Enter abrem.
+
+### Equipe da concedente e substituições
+- Uma pessoa da concedente pode ser **responsável**: em **Concedentes → (concedente) → Equipe e substituições**, a escola marca *Tornar responsável*. Na captação, ao aprovar, dá para criar a conta de quem preencheu o cadastro como responsável; a folha com o código de acesso já sai pronta.
+- O responsável entra como supervisor e ganha o menu **Equipe**: cadastra pessoas da equipe (recebe o código de primeiro acesso para entregar), gera novo acesso para quem esqueceu a senha e desativa quem saiu. Só mexe nas contas que são apenas das concedentes que ele gere. Contas usadas em outra concedente ficam com a escola.
+- **Permissão temporária (substituição):** o responsável, a escola ou o próprio supervisor (“Vou me ausentar”, no painel dele) indica quem confirma as presenças no lugar do supervisor, de uma data a outra (até 92 dias). Durante o período, o substituto vê esses estagiários no painel e confirma, contesta ou lança os dias. Mensagens, atestados, arquivos, feedback e horários continuam só com o supervisor titular e a escola. Pode ser encerrada a qualquer momento. Todos os envolvidos e os orientadores recebem aviso.
+- O responsável vê os estagiários da própria concedente com as mesmas regras do substituto.
+
+### Supervisor: “Confirmar todas” por e-mail ou WhatsApp e resumo do mês
+- Uma vez por semana (dia escolhido em **Configurações**, a partir das 14h; padrão sexta), cada supervisor com presenças esperando recebe por e-mail a lista e um link **Confirmar todas**. O link abre a lista sem senha e confirma num botão, para que o antivírus do e-mail, que abre links sozinho, não confirme nada. Vale 7 dias e uma vez só, e só confirma o que ainda estiver pendente e ainda for daquele supervisor. Para contestar um dia, é preciso entrar no sistema.
+- No painel do orientador, **Supervisores com presenças para confirmar** tem os botões **WhatsApp** (abre a conversa com a mensagem e um link novo prontos) e **E-mail**.
+- No dia 1º de cada mês, a partir das 7h, cada supervisor recebe o **resumo do mês anterior**: presenças, horas, faltas, ausências, o que falta confirmar, total de horas e previsão de término de cada estagiário.
+- Os textos ficam em **Configurações → E-mails automáticos** e as opções em **Configurações**.
+
+### Lembrete de fim de expediente
+Quem não marcou a presença, ou marcou a entrada e esqueceu a saída, recebe um aviso no celular e no sino algum tempo depois do horário de saída da escala (padrão: 60 minutos; ajuste em **Configurações**). Feriados, ausências informadas e quem já concluiu a carga horária não recebem. É no máximo um por dia, entre 7h e 22h, e não vai por e-mail. Cada estagiário pode desligar em **Meus dados**.
+
+### Privacidade, termos e segurança da conta
+- **Termos de Uso** e **Aviso de Privacidade** (LGPD) no rodapé de todas as páginas e na tela de entrada. Eles dizem quais dados existem, para quê, a base legal (Lei do Estágio, LGPD art. 7º, II e III, art. 11 e art. 14), quem vê, por quanto tempo, como são protegidos e os direitos de cada pessoa. O texto usa o nome da escola, o prazo de guarda e o contato configurados.
+- No primeiro acesso, a pessoa marca que leu e concorda. Quem já usava o sistema vê a tela de aceite uma vez. Ao mudar algo importante no texto, troque `VERSAO` em `core/termos.py` e todos aceitam de novo.
+- **Meus dados → Segurança e privacidade:** últimos acessos (data, aparelho e IP, inclusive senhas erradas) e **Baixar meus dados** (cópia em JSON de tudo o que o sistema guarda sobre a pessoa).
+- **Verificação em duas etapas:** em **Meus dados**, para gestão e supervisores. Usa um app autenticador (Google ou Microsoft Authenticator, Authy, 2FAS…) e 8 códigos de recuperação de uso único. Dá para marcar “não pedir de novo neste aparelho por 30 dias”. Em **Configurações → Exigir verificação em duas etapas da gestão**, orientadores, coordenadores, administradores e responsáveis por concedentes precisam configurar no próximo acesso. Quem perdeu o celular pede um novo primeiro acesso, que zera a verificação. O `/admin/` entra pela mesma tela de login, com os mesmos limites.
+- **Registro de ações** (*Sistema → Registro de ações*, administrador): entradas, senhas e códigos errados, mudanças feitas pela gestão e pelas concedentes (contas, códigos, estágios, horários, feriados, configurações, equipe), confirmações pelo link e downloads de dados pessoais (planilhas, relatórios, declarações, atestados, currículos). Guarda quem, o quê, sobre quem, quando, IP e aparelho, nunca o que foi digitado. Fica 1 ano.
+- **Erros do sistema** (*Sistema → Erros do sistema*): toda página que dá erro e toda tarefa em segundo plano que falha (e-mails, resumos, lembretes) vira um aviso no sino e por e-mail ao administrador. O mesmo erro é agrupado e avisa de novo no máximo a cada 6 horas. Tem o detalhe técnico para quem cuida do código e o botão *Resolvido*.
+
 ### Período de testes: “Sua opinião”
 - Com **Configurações → Sistema em período de testes** ligado (padrão), estagiários e supervisores veem o botão **Sua opinião** no canto da tela, em todas as páginas.
 - Ele abre uma janela com uma nota (de 😍 a 😣), o assunto (sugestão, algo deu errado, elogio, dúvida) e um comentário opcional. A página onde a pessoa estava vai junto. Para mandar print, há o atalho para *Sugestões e erros*.
@@ -420,8 +449,12 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Feriados (municipais, nacionais e da escola) | ✔ | — |
 | Arquivos gerais | ✔ | — |
 | Emitir folhas em lote, enviar folhas e decidir se o estagiário emite | ✔ | — |
+| Equipe e substituições das concedentes | ✔ | ✔ |
+| Roteiro de visitas | ✔ | — |
 
 Coordenadores são criados pelo administrador em **Contas → + Coordenador**.
+
+Responsável pela concedente (conta de supervisor marcada pela escola): cadastra a equipe da própria concedente, dá e encerra permissões temporárias e confirma presenças dos estagiários dela. Substituto: confirma, contesta e lança dias só no período da permissão.
 
 ### Velocidade
 - As listas (painel, estagiários, frequências, indicadores, resumo da semana, painel do supervisor) carregam registros, escalas, feriados e totais de horas **de uma vez para todos os estagiários**, em vez de um por um. Com 120 estagiários, o painel caiu de ~760 para ~20 consultas ao banco, e os indicadores de ~1.700 para ~20.
@@ -492,6 +525,7 @@ python manage.py criar_orientador "Nome Completo"
 - `SECRET_KEY` é obrigatória fora do modo de desenvolvimento: sem ela o sistema não sobe.
 - **HTTPS obrigatório:** no Cloudflare, ligue *SSL/TLS → Edge Certificates → Always Use HTTPS*. Ou, no sistema, `FORCAR_HTTPS=1`, que redireciona `http://` para `https://` e envia HSTS (1 ano). Ligue só depois de confirmar que o site abre por `https://`. O `/saude/` do healthcheck continua liberado em http.
 - **Porta do container:** com o Cloudflare Tunnel, ninguém precisa acessar a `PORTA` direto pela internet. Deixe-a fechada no firewall da VPS (ou publique como `127.0.0.1:${PORTA}:8000`), senão dá para pular o Cloudflare e falsificar o IP de origem que os limites de tentativas usam.
+- Avisos de erro, registro de ações e verificação em duas etapas: ver *Privacidade, termos e segurança da conta*. Para o primeiro deploy com os termos, quem já usa o sistema vê a tela de aceite uma vez (`EXIGIR_ACEITE_TERMOS=0` desliga, só para emergência).
 - Arquivos enviados pelos usuários nunca são públicos. Só PDF e fotos abrem no navegador; o resto baixa, e todos vão com CSP *sandbox*, sem rodar script.
 
 ### Backup

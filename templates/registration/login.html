@@ -16,6 +16,7 @@
       <button class="btn grande bloco" type="submit">Entrar</button>
       <a class="btn sec bloco mt-1" href="{% url 'primeiro_acesso' %}">Primeiro acesso: criar minha senha</a>
       <p class="muted mt-1" style="font-size:.85rem">{% if EMAIL_ATIVO %}<a href="{% url 'esqueci_senha' %}">Esqueci minha senha</a> · {% else %}Esqueceu a senha? Peça ao seu orientador um novo primeiro acesso. {% endif %}<a href="{% url 'pedir_ajuda' %}">Falar com o administrador</a>. Outro problema? <a href="{% url 'sugestoes' %}?tipo=ERRO">Avise a equipe</a>.</p>
+      <p class="muted" style="font-size:.8rem"><a href="{% url 'termos' %}">Termos de Uso</a> · <a href="{% url 'privacidade' %}">Aviso de Privacidade</a></p>
       {% if CAPTACAO_ABERTA %}<div class="caixa-info mt-1">Sua empresa ou órgão quer receber estagiários? <a href="{% url 'candidatura_publica' %}"><strong>Cadastre-se como concedente</strong></a>.</div>{% endif %}
     </form>
   </section>

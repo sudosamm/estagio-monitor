@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Equipe · {{ local }}{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div>{% if escola %}<div class="migalha"><a href="{% url 'local_editar' local.pk %}">← {{ local }}</a></div>{% endif %}
+  <h1>Equipe da concedente</h1><p class="mb-0">{{ local }}{% if local.endereco_completo %} · {{ local.endereco_completo }}{% endif %}</p></div></div>
+
+<div class="caixa-info mb-1">Cadastre aqui quem acompanha os estagiários no dia a dia. Quando o supervisor não estiver, dê a outra pessoa da equipe uma <strong>permissão temporária</strong> para confirmar as presenças. Ela vale só no período escolhido e fica registrada.</div>
+
+<div class="grade grade-lado">
+  <div>
+    <div class="card destaque">
+      <div class="card-cab"><h2>{% icone "check" %} Permissões temporárias</h2></div>
+      {% if subs %}
+      <ul class="lista compacta membros">{% for s in subs %}
+        <li><span class="cresce"><strong>{{ s.substituto.nome_completo }}</strong> no lugar de {% if s.titular %}{{ s.titular.nome_completo }}{% else %}todos os supervisores{% endif %}
+          <small style="display:block">{{ s.inicio|date:"d/m" }} a {{ s.fim|date:"d/m/Y" }}{% if s.motivo %} · {{ s.motivo }}{% endif %} · por {{ s.criada_por.primeiro_nome|default:"—" }}</small></span>
+          <span class="selo {% if s.situacao == 'ativa' %}confirmado{% elif s.situacao == 'agendada' %}aguardando{% else %}fora{% endif %}">{{ s.situacao }}</span>
+          {% if s.situacao == "ativa" or s.situacao == "agendada" %}<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="revogar"><input type="hidden" name="id" value="{{ s.pk }}"><button class="btn perigo sm" type="submit" data-confirmar="Encerrar a permissão de {{ s.substituto.primeiro_nome }} agora?">Encerrar</button></form>{% endif %}</li>
+      {% endfor %}</ul>
+      {% else %}<p class="vazio">Nenhuma permissão temporária.</p>{% endif %}
+      <details class="mt-1"{% if form_sub.errors %} open{% endif %}><summary class="btn sec sm">{% icone "mais" %} Dar permissão temporária</summary>
+        <form method="post" class="mt-1">{% csrf_token %}<input type="hidden" name="acao" value="substituir">
+          {% with form=form_sub %}{% include "core/_form.html" %}{% endwith %}
+          <p class="muted" style="font-size:.85rem">A pessoa vê os estagiários e confirma, contesta ou lança os dias. Mensagens, atestados, arquivos e horários continuam só com o supervisor e a escola.</p>
+          <button class="btn" type="submit">Dar permissão</button>
+        </form>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="card-cab"><h2>{% icone "usuarios" %} Estagiários aqui ({{ estagios|length }})</h2></div>
+      <ul class="lista compacta">{% for e in estagios %}
+        <li><span class="cresce"><a href="{{ e.get_absolute_url }}"><strong>{{ e.estagiario.nome_completo }}</strong></a>
+          <small style="display:block">{{ e.curso }} · supervisor: {{ e.supervisor.primeiro_nome|default:"a definir" }} · hoje: {{ e.st.rotulo|default:"sem estágio" }}</small></span>
+          {% if e.n_pendentes %}<span class="selo aguardando" title="Presenças esperando confirmação">{{ e.n_pendentes }} p/ confirmar</span>{% endif %}</li>
+      {% empty %}<li class="vazio">Nenhum estagiário ativo nesta concedente.</li>{% endfor %}</ul>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-cab"><h2>{% icone "predio" %} Pessoas da equipe</h2></div>
+      <ul class="lista compacta membros">{% for m in membros %}
+        <li{% if not m.is_active %} style="opacity:.6"{% endif %}><span class="cresce"><strong>{{ m.nome_completo }}</strong>{% if m.pk in responsaveis %} <span class="etiqueta">responsável</span>{% endif %}{% if not m.is_active %} <span class="etiqueta">desativada</span>{% elif m.deve_trocar_senha %} <span class="etiqueta">ainda não entrou</span>{% endif %}
+          <small style="display:block">{{ m.cargo|default:"" }}{% if m.cargo and m.telefone %} · {% endif %}{{ m.telefone }}{% if m.n_estagios %} · supervisiona {{ m.n_estagios }}{% endif %} · usuário {{ m.username }}</small></span>
+          {% if escola %}
+            <form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ m.pk }}"><button class="btn sec sm" name="acao" value="responsavel" type="submit">{% if m.pk in responsaveis %}Tirar de responsável{% else %}Tornar responsável{% endif %}</button></form>
+            <a class="btn sec sm" href="{% url 'editar_usuario' m.pk %}">Conta</a>
+          {% elif m.pk != user.pk %}{% with pode=pode_conta|get_item:m.pk %}{% if pode %}
+            <details class="drop-acoes"><summary class="btn sec sm">Ações</summary><div class="drop-acoes-menu">
+              <form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ m.pk }}">
+                {% if m.is_active %}<button class="btn sec sm bloco" name="acao" value="codigo" type="submit" data-confirmar="Gerar um código novo para {{ m.primeiro_nome }}? A senha atual dele(a) deixa de valer.">{% if m.deve_trocar_senha %}Código de primeiro acesso{% else %}Esqueceu a senha: novo acesso{% endif %}</button>
+                <button class="btn perigo sm bloco" name="acao" value="desativar" type="submit" data-confirmar="Desativar a conta de {{ m.primeiro_nome }}? Ela não consegue mais entrar.">Desativar</button>
+                {% else %}<button class="btn sec sm bloco" name="acao" value="reativar" type="submit">Reativar</button>{% endif %}
+              </form></div></details>
+          {% endif %}{% endwith %}{% endif %}</li>
+      {% empty %}<li class="vazio">Ninguém cadastrado ainda.</li>{% endfor %}</ul>
+      <details class="mt-1"{% if form_membro.errors %} open{% endif %}><summary class="btn sm">{% icone "mais" %} Adicionar pessoa</summary>
+        <form method="post" class="mt-1">{% csrf_token %}<input type="hidden" name="acao" value="adicionar">
+          {% with form=form_membro %}{% include "core/_form.html" %}{% endwith %}
+          <p class="muted" style="font-size:.85rem">A pessoa recebe um usuário e um código de primeiro acesso, que aparece na próxima tela para você entregar a ela.{% if not escola %} Para ser a supervisora oficial de um estagiário (a do termo), peça à escola para fazer a troca.{% endif %}</p>
+          <button class="btn" type="submit">Cadastrar e gerar o acesso</button>
+        </form>
+      </details>
+    </div>
+  </div>
+</div>
+{% endblock %}

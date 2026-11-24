@@ -87,9 +87,14 @@ def _documentos_visiveis(estagio):
 
 @login_required
 def estagio_detalhe(request, pk):
-    estagio = pegar_estagio(request, pk)
+    from ..equipe import eh_apoio_do
+
+    estagio = pegar_estagio(request, pk, apoio=True)
     user = request.user
     aba = request.GET.get("aba", "visao")
+    e_apoio = not estagio.pode_ver(user) and eh_apoio_do(user, estagio)
+    if e_apoio and aba not in ("visao", "registros"):
+        aba = "visao"  # quem substitui o supervisor só confirma presenças: sem mensagens, arquivos e feedback
     ano, mes = _mes_param(request)
     preparar_lote([estagio], min(date(ano, mes, 1), timezone.localdate()))  # menos consultas no calendário e nas horas
     horas = resumo_horas(estagio)
@@ -103,8 +108,10 @@ def estagio_detalhe(request, pk):
         "e_orientador": eh_orientador_do(user, estagio),
         "e_supervisor": eh_supervisor_do(user, estagio),
         "e_estagiario": estagio.estagiario_id == user.pk,
+        "e_apoio": e_apoio,
         "nao_lidas_msg": 0,
         "pode_escalas": pode_definir_horario(user, estagio),
+        "pode_confirmar": e_apoio or eh_supervisor_do(user, estagio) or eh_orientador_do(user, estagio),
         "pode_agenda": not user.is_gestor or user.pode("agenda"),
         "emite_folha": estagio.estagiario_id != user.pk or Configuracao.atual().estagiarios_emitem_folha,
     }
@@ -318,12 +325,15 @@ def _data_ou_404(texto):
 
 @login_required
 def estagio_dia(request, pk, data):
-    estagio = pegar_estagio(request, pk)
+    from ..equipe import pode_confirmar
+
+    estagio = pegar_estagio(request, pk, apoio=True)
     dia = _data_ou_404(data)
     user = request.user
     status = status_periodo(estagio, dia, dia)[0]
     reg = status.registro
-    pode_lancar = eh_orientador_do(user, estagio) or eh_supervisor_do(user, estagio)
+    pode_lancar = pode_confirmar(user, estagio)  # inclui o substituto e o responsável pela concedente
+    titular_ou_escola = eh_orientador_do(user, estagio) or eh_supervisor_do(user, estagio)
     e_estagiario = estagio.estagiario_id == user.pk
     lancamento_form = diario_form = None
 
@@ -358,11 +368,11 @@ def estagio_dia(request, pk, data):
     # o estagiário só enquanto o supervisor não confirmou)
     revogar_form = None
     if reg and reg.situacao == Registro.Situacao.PRESENTE and (
-            pode_lancar or (e_estagiario and reg.confirmacao != Registro.Confirmacao.CONFIRMADA)):
+            titular_ou_escola or (e_estagiario and reg.confirmacao != Registro.Confirmacao.CONFIRMADA)):
         revogar_form = RevogarPresencaForm(request.POST if "r-destino" in request.POST else None, prefix="r",
-                                           so_remover=not pode_lancar)
+                                           so_remover=not titular_ou_escola)
         if request.method == "POST" and "r-destino" in request.POST and revogar_form.is_valid():
-            return _revogar_presenca(request, estagio, reg, revogar_form.cleaned_data, pode_lancar)
+            return _revogar_presenca(request, estagio, reg, revogar_form.cleaned_data, titular_ou_escola)
 
     # ---- o estagiário informa os horários do dia (como na folha de papel); o supervisor confirma
     hoje = timezone.localdate()
@@ -398,7 +408,7 @@ def estagio_dia(request, pk, data):
             return redirect(request.path)
 
     # ---- planejamento de dias de hoje em diante (entra na previsão de término)
-    pode_planejar = (e_estagiario or pode_lancar) and dia >= hoje and dia >= estagio.data_inicio and estagio.ativo
+    pode_planejar = (e_estagiario or titular_ou_escola) and dia >= hoje and dia >= estagio.data_inicio and estagio.ativo
     plano_form = None
     if pode_planejar:
         resposta = _planejar_dia(request, estagio, dia, status, reg)
@@ -504,9 +514,11 @@ def _planejar_dia(request, estagio, dia, status, reg):
 @require_POST
 def validar_registro(request, pk):
     """Ação rápida do supervisor/orientador: confirmar ou contestar um registro."""
-    reg = get_object_or_404(Registro.objects.select_related("estagio__estagiario"), pk=pk)
+    from ..equipe import pode_confirmar
+
+    reg = get_object_or_404(Registro.objects.select_related("estagio__estagiario", "estagio__local"), pk=pk)
     estagio = reg.estagio
-    if not (eh_supervisor_do(request.user, estagio) or eh_orientador_do(request.user, estagio)):
+    if not pode_confirmar(request.user, estagio):
         raise PermissionDenied
     acao = request.POST.get("acao")
     status = {"confirmar": Registro.Confirmacao.CONFIRMADA, "contestar": Registro.Confirmacao.CONTESTADA}.get(acao)

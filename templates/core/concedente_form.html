@@ -4,7 +4,7 @@
 {% block conteudo %}
 <div class="titulo-pagina">
   <div><div class="migalha"><a href="{% url 'locais' %}">← Concedentes</a></div><h1>{% if obj %}{{ obj }}{% if not obj.ativa %} <span class="etiqueta">desativada</span>{% endif %}{% else %}Cadastro de concedente{% endif %}</h1></div>
-  {% if obj %}<div class="acoes"><a class="btn sec" href="{% url 'ativacao_local' obj.pk %}">{% if obj.ativa %}Desativar concedente{% else %}Reativar concedente{% endif %}</a></div>{% endif %}
+  {% if obj %}<div class="acoes"><a class="btn" href="{% url 'equipe_concedente' obj.pk %}">{% icone "usuarios" %} Equipe e substituições</a><a class="btn sec" href="{% url 'ativacao_local' obj.pk %}">{% if obj.ativa %}Desativar concedente{% else %}Reativar concedente{% endif %}</a></div>{% endif %}
 </div>
 <div class="grade grade-lado">
   <form class="card destaque" method="post" novalidate>{% csrf_token %}

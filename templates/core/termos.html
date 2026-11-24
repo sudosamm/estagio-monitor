@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block titulo %}Termos de Uso{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Termos de Uso</h1><p class="muted mb-0">Regras para usar o {{ NOME_SISTEMA }} · versão {{ versao }}, atualizada em {{ atualizado_em }}</p></div></div>
+<article class="card texto-legal">
+  <h2>1. O que é o sistema</h2>
+  <p>O {{ NOME_SISTEMA }} é uma ferramenta de apoio de {{ escola }} para acompanhar o estágio supervisionado: frequência, horas, folha de frequência, visitas, mensagens, documentos e avaliações. Os registros oficiais continuam no SICE. Em caso de diferença, vale o que a escola confirmar.</p>
+
+  <h2>2. Quem pode usar</h2>
+  <p>Estagiários da escola, supervisores e funcionários das concedentes, responsáveis pelas concedentes e a equipe da escola, cada um com a conta criada ou liberada pela escola. A conta é <strong>pessoal</strong>: não empreste a senha, o código de primeiro acesso nem o link de confirmação a outra pessoa. Se suspeitar que alguém usou a sua conta, troque a senha e avise a escola.</p>
+
+  <h2>3. Compromissos de cada um</h2>
+  <ul>
+    <li><strong>Estagiário:</strong> marcar os horários de verdade, no dia, e informar as ausências. Marcar presença sem estar no estágio, ou pedir que alguém marque por você, é falta grave e pode ser comunicado à escola e à concedente.</li>
+    <li><strong>Supervisor e funcionário que o substitui:</strong> confirmar só as presenças que realmente aconteceram e contestar o que estiver errado. A confirmação vale como o visto do supervisor no acompanhamento do estágio.</li>
+    <li><strong>Responsável pela concedente:</strong> cadastrar só pessoas da própria equipe e dar permissão temporária apenas a quem acompanha os estagiários no local.</li>
+    <li><strong>Escola:</strong> usar os dados só para o acompanhamento do estágio, como descreve o <a href="{% url 'privacidade' %}">Aviso de Privacidade</a>.</li>
+  </ul>
+
+  <h2>4. Uso correto</h2>
+  <p>Não é permitido tentar entrar na conta de outra pessoa, contornar as permissões ou os limites de segurança, enviar arquivos com vírus ou conteúdo ofensivo, nem usar mensagens para assédio, discriminação ou assuntos fora do estágio. A escola pode suspender a conta de quem descumprir estes termos.</p>
+
+  <h2>5. Período de testes e disponibilidade</h2>
+  <p>O sistema está em melhoria contínua{% if periodo_testes %} e em <strong>período de testes</strong>: use o botão “Sua opinião” para contar o que funcionou ou deu errado{% endif %}. Podem acontecer interrupções. Se o sistema estiver fora do ar, anote os horários e lance depois, ou avise o supervisor e o orientador.</p>
+
+  <h2>6. Registros e privacidade</h2>
+  <p>Para proteger todos, o sistema guarda quem fez cada ação, quando e de onde (IP e tipo de aparelho). Os detalhes estão no <a href="{% url 'privacidade' %}">Aviso de Privacidade</a>.</p>
+
+  <h2>7. Mudanças nestes termos</h2>
+  <p>Quando os termos mudarem de forma importante, o sistema mostra a nova versão no próximo acesso e pede o aceite. Dúvidas: {% if contato %}<strong>{{ contato }}</strong>{% else %}coordenação de estágio da escola{% endif %}.</p>
+</article>
+{% endblock %}

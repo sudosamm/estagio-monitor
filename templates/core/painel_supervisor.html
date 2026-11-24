@@ -3,10 +3,11 @@
 {% block titulo %}Meus estagiários{% endblock %}
 {% block conteudo %}
 <div class="titulo-pagina"><div><h1>Olá, {{ user.primeiro_nome }}</h1><p>{% now "l, d \d\e F" %} · {{ user.concedentes_txt }}</p></div>
-  <div class="acoes"><a class="btn" href="{% url 'qr_supervisor' %}">{% icone "check" %} QR code de presença</a><a class="btn sec" href="{% url 'escala_lote' %}">{% icone "relogio" %} Dias e horários</a><a class="btn" href="{% url 'novo_agendamento' %}">{% icone "mensagem" %} Pedir visita ou conversa</a></div></div>
+  <div class="acoes">{% if user.gere_concedente %}<a class="btn sec" href="{% url 'minha_equipe' %}">{% icone "predio" %} Equipe da concedente</a>{% endif %}<a class="btn" href="{% url 'qr_supervisor' %}">{% icone "check" %} QR code de presença</a><a class="btn sec" href="{% url 'escala_lote' %}">{% icone "relogio" %} Dias e horários</a><a class="btn" href="{% url 'novo_agendamento' %}">{% icone "mensagem" %} Pedir visita ou conversa</a></div></div>
 {% if sem_horario %}
 <a class="faixa-aviso" href="{% url 'escala_lote' %}">{% icone "relogio" %}<span><strong>{{ sem_horario|length }} estagiário{{ sem_horario|pluralize }} sem horário definido:</strong> {% for e in sem_horario %}{{ e.estagiario.primeiro_nome }}{% if not forloop.last %}, {% endif %}{% endfor %}. Os horários são definidos por você, supervisor.</span><span class="btn sm">Definir</span></a>
 {% endif %}
+{% for s in substituo %}<div class="faixa-aviso">{% icone "check" %}<span><strong>Você está confirmando presenças no lugar de {% if s.titular %}{{ s.titular.nome_completo }}{% else %}todos os supervisores{% endif %}</strong> ({{ s.concedente }}) até {{ s.fim|date:"d/m" }}.{% if s.motivo %} {{ s.motivo }}.{% endif %}</span></div>{% endfor %}
 {% include "core/_push.html" with lembrete=True %}
 {% if feedback_itens %}
 <div class="card" id="feedback">
@@ -26,8 +27,28 @@
         {% avatar e.estagiario "sm verde" %}
         <span class="cresce"><strong>{{ e.estagiario }}</strong><small>{% if e.st.registro.hora_chegada %}chegou {{ e.st.registro.hora_chegada|time:"H:i" }} · {% endif %}{{ e.st.rotulo|default:"sem estágio hoje" }}</small></span>
       </a>
-    {% empty %}<p class="vazio">Nenhum estagiário vinculado a você ainda.</p>{% endfor %}
+    {% empty %}{% if not apoio %}<p class="vazio">Nenhum estagiário vinculado a você ainda.</p>{% else %}<p class="vazio">Você não é supervisor(a) titular de nenhum estagiário.</p>{% endif %}{% endfor %}
     </div>
+    {% if apoio %}
+    <h3 class="mt-1">{% if user.gere_concedente %}Da concedente{% else %}Substituindo o supervisor{% endif %} ({{ apoio|length }})</h3>
+    <div class="quadro">{% for e in apoio %}
+      <a class="aluno-card {{ e.st.codigo }}" href="{{ e.get_absolute_url }}">{% avatar e.estagiario "sm" %}
+        <span class="cresce"><strong>{{ e.estagiario }}</strong><small>{{ e.st.rotulo|default:"sem estágio hoje" }} · sup. {{ e.supervisor.primeiro_nome|default:"—" }}</small></span></a>
+    {% endfor %}</div>
+    {% endif %}
+    {% if form_ausencia or me_substituem %}
+    <div class="ausencia-sup mt-1">
+      {% for s in me_substituem %}<p class="mb-0"><span class="selo {% if s.situacao == 'ativa' %}confirmado{% else %}aguardando{% endif %}">{{ s.situacao }}</span> <strong>{{ s.substituto.nome_completo }}</strong> confirma por você de {{ s.inicio|date:"d/m" }} a {{ s.fim|date:"d/m" }}.
+        <form method="post" action="{% url 'encerrar_substituicao' s.pk %}" style="display:inline">{% csrf_token %}<button class="btn sec sm" type="submit">Encerrar</button></form></p>{% endfor %}
+      {% if form_ausencia %}<details{% if not me_substituem %} class="mt-1"{% endif %}><summary class="btn sec sm">{% icone "calendario" %} Vou me ausentar: indicar quem confirma</summary>
+        <form method="post" action="{% url 'indicar_substituto' %}" class="mt-1">{% csrf_token %}
+          {% if locais_ausencia|length > 1 %}<div class="campo"><label>Concedente</label><select name="concedente">{% for l in locais_ausencia %}<option value="{{ l.pk }}">{{ l }}</option>{% endfor %}</select></div>{% else %}<input type="hidden" name="concedente" value="{{ locais_ausencia.0.pk }}">{% endif %}
+          {% with form=form_ausencia %}{% include "core/_form.html" %}{% endwith %}
+          <p class="muted" style="font-size:.82rem">A pessoa precisa ter conta no sistema como alguém da concedente. Se não aparecer na lista, peça ao responsável pela concedente ou à escola para cadastrá-la.</p>
+          <button class="btn sm" type="submit">Dar permissão</button>
+        </form></details>{% endif %}
+    </div>
+    {% endif %}
   </div>
   <div class="card laranja">
     <h2>Para confirmar</h2>
@@ -41,7 +62,7 @@
       <ul class="lista">
       {% for r in pendentes %}
         <li><input type="checkbox" class="chk-reg" name="registros" value="{{ r.pk }}" id="r{{ r.pk }}">
-          <label for="r{{ r.pk }}" class="cresce"><strong>{{ r.estagio.estagiario.primeiro_nome }}</strong> · {{ r.data|date:"d/m" }}<small style="display:block">{{ r.get_situacao_display }}{% if r.situacao == "PRESENTE" %}{% if r.horario_display %} · {{ r.horario_display }}{% endif %} · {{ r.horas|horas }}{% endif %}{% if r.motivo %} — {{ r.motivo|truncatechars:50 }}{% endif %}</small>{% with reg=r %}{% include "core/_geo.html" %}{% endwith %}</label>
+          <label for="r{{ r.pk }}" class="cresce"><strong>{{ r.estagio.estagiario.primeiro_nome }}</strong>{% if r.estagio.supervisor_id != user.pk %} <span class="etiqueta" title="Você confirma no lugar do supervisor">substituindo</span>{% endif %} · {{ r.data|date:"d/m" }}<small style="display:block">{{ r.get_situacao_display }}{% if r.situacao == "PRESENTE" %}{% if r.horario_display %} · {{ r.horario_display }}{% endif %} · {{ r.horas|horas }}{% endif %}{% if r.motivo %} — {{ r.motivo|truncatechars:50 }}{% endif %}</small>{% with reg=r %}{% include "core/_geo.html" %}{% endwith %}</label>
           <a class="btn sec sm" href="{% url 'estagio_dia' r.estagio_id r.data|date:'Y-m-d' %}">Ver</a></li>
       {% endfor %}
       </ul>

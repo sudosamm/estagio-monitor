@@ -107,10 +107,15 @@ def captacao_detalhe(request, pk):
             if aprovar.is_valid():
                 d = aprovar.cleaned_data
                 local, supervisor, _ = aprovar_candidatura(cand, request.user, d["destino"], d.get("criar_supervisor"),
-                                                           d["parecer"], endereco)
+                                                           d["parecer"], endereco, d.get("criar_responsavel"))
                 messages.success(request, f"{cand.nome} aprovada e cadastrada como concedente."
                                  + (f" Conta do supervisor: {supervisor.username}." if supervisor else ""))
-                messages.info(request, "Agora avise a concedente: a mensagem está pronta logo abaixo.")
+                messages.info(request, "Agora avise a concedente: a mensagem está pronta na página da candidatura.")
+                novos = [u for u in dict.fromkeys([supervisor, cand._responsavel]) if u]
+                if cand._responsavel:  # os códigos só aparecem agora: a folha já sai pronta para entregar
+                    from .orientador import folha_primeiro_acesso
+
+                    return folha_primeiro_acesso(request, novos, f"Acesso da concedente {local}")
                 return redirect(cand)
         elif request.POST.get("acao") == "recusar":
             recusar = RecusarCandidaturaForm(request.POST, prefix="r")

@@ -65,6 +65,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.TrocaSenhaObrigatoriaMiddleware",
+    "core.auditoria.AuditoriaMiddleware",
     "core.middleware.ResumoSemanalMiddleware",
 ]
 
@@ -186,9 +187,21 @@ VAPID_ARQUIVO = Path(os.environ.get("VAPID_ARQUIVO", DATA_DIR / "vapid_privada.p
 VAPID_CONTATO = os.environ.get("VAPID_CONTATO") or (
     SITE_URL if SITE_URL.startswith("https://") else f"mailto:{DEFAULT_FROM_EMAIL.split('<')[-1].strip('> ')}")
 
+# Termos de Uso e Aviso de Privacidade: quem ainda não aceitou a versão atual é levado à tela de aceite.
+# Nos testes fica desligado (cada teste que precisa liga com override_settings).
+EXIGIR_ACEITE_TERMOS = env_bool("EXIGIR_ACEITE_TERMOS", "test" not in sys.argv)
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+        # erros de página (500) e das tarefas em segundo plano viram aviso para os administradores (core/alertas.py)
+        "alerta": {"class": "core.alertas.AlertaErroHandler", "level": "ERROR"},
+    },
     "root": {"handlers": ["console"], "level": "INFO"},
+    "loggers": {
+        "django.request": {"handlers": ["alerta"], "level": "WARNING"},
+        "core": {"handlers": ["alerta"], "level": "INFO"},
+    },
 }

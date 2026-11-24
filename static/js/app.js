@@ -350,10 +350,96 @@ document.querySelectorAll("textarea[maxlength]").forEach((t) => {
     if (a.pathname === location.pathname && a.search === location.search && a.hash) return;
     comecar();
   });
-  document.addEventListener("submit", (ev) => { setTimeout(() => { if (!ev.defaultPrevented && !ev.target.closest("dialog")) comecar(); }, 0); });
+  document.addEventListener("submit", (ev) => {
+    const alvo = (ev.submitter && ev.submitter.getAttribute("formtarget")) || ev.target.getAttribute("target");
+    if (alvo === "_blank") return;  // abre em outra aba (ex.: WhatsApp): esta página não muda
+    setTimeout(() => { if (!ev.defaultPrevented && !ev.target.closest("dialog")) comecar(); }, 0);
+  });
   window.addEventListener("pageshow", () => html.classList.remove("navegando"));
 })();
 // mensagens de sucesso e informação somem sozinhas (os erros ficam)
 document.querySelectorAll(".avisos .aviso.success, .avisos .aviso.info").forEach((m) => {
   setTimeout(() => { m.classList.add("saindo"); setTimeout(() => m.remove(), 400); }, 7000);
 });
+
+// busca rápida da gestão: botão “Buscar”, tecla “/” ou Ctrl+K
+(() => {
+  const dlg = document.getElementById("busca-dialogo");
+  if (!dlg) return;
+  const campo = dlg.querySelector("[data-busca-campo]");
+  const caixa = dlg.querySelector("[data-busca-resultados]");
+  const dica = caixa.innerHTML;
+  let itens = [], atual = -1, timer = null, ultimo = "";
+  const abrir = () => { if (!dlg.open) { dlg.showModal(); campo.select(); } };
+  document.querySelectorAll("[data-busca-abrir]").forEach((b) => b.addEventListener("click", abrir));
+  document.addEventListener("keydown", (ev) => {
+    const digitando = ev.target.closest && ev.target.closest("input, textarea, select, [contenteditable]");
+    if (document.querySelector("dialog[open]:not(#busca-dialogo)")) return;  // outra janela aberta na frente
+    if ((ev.key === "/" && !digitando) || (ev.key.toLowerCase() === "k" && (ev.ctrlKey || ev.metaKey))) {
+      ev.preventDefault(); abrir();
+    }
+  });
+  dlg.addEventListener("click", (ev) => { if (ev.target === dlg) dlg.close(); });
+  function marcar(i) {
+    itens.forEach((a, n) => a.classList.toggle("ativo", n === i));
+    atual = i;
+    if (itens[i]) itens[i].scrollIntoView({ block: "nearest" });
+  }
+  function mostrar(grupos) {
+    caixa.replaceChildren();
+    itens = [];
+    if (!grupos.length) { const p = document.createElement("p"); p.className = "busca-dica"; p.textContent = "Nada encontrado."; caixa.append(p); return; }
+    grupos.forEach((g) => {
+      const h = document.createElement("div"); h.className = "busca-grupo"; h.textContent = g.nome; caixa.append(h);
+      g.itens.forEach((it) => {
+        const a = document.createElement("a"); a.href = it.url; a.className = "busca-item"; a.setAttribute("role", "option");
+        const t = document.createElement("strong"); t.textContent = it.titulo; a.append(t);
+        if (it.detalhe) { const d = document.createElement("small"); d.textContent = it.detalhe; a.append(d); }
+        a.addEventListener("mousemove", () => marcar(itens.indexOf(a)));
+        caixa.append(a); itens.push(a);
+      });
+    });
+    marcar(0);
+  }
+  async function buscar() {
+    const q = campo.value.trim();
+    if (q === ultimo) return;
+    ultimo = q;
+    if (q.length < 2) { caixa.innerHTML = dica; itens = []; return; }
+    try {
+      const r = await fetch(`${dlg.dataset.url}?q=${encodeURIComponent(q)}`, { headers: { Accept: "application/json" }, credentials: "same-origin" });
+      if (r.ok && campo.value.trim() === q) mostrar((await r.json()).grupos);
+    } catch (e) { /* sem conexão: tenta de novo na próxima tecla */ }
+  }
+  campo.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(buscar, 150); });
+  campo.addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowDown") { ev.preventDefault(); marcar(Math.min(atual + 1, itens.length - 1)); }
+    else if (ev.key === "ArrowUp") { ev.preventDefault(); marcar(Math.max(atual - 1, 0)); }
+    else if (ev.key === "Enter" && itens[atual]) { ev.preventDefault(); itens[atual].click(); }
+  });
+})();
+// roteiro de visitas: monta o link do Google Maps com as concedentes marcadas, na ordem da lista
+(() => {
+  const lista = document.querySelector("[data-roteiro]");
+  if (!lista) return;
+  const botao = document.querySelector("[data-roteiro-abrir]");
+  const contagem = document.querySelector("[data-roteiro-contagem]");
+  const MAX = 10;
+  function atualizar() {
+    const marcadas = [...lista.querySelectorAll("[data-parada]:checked")].map((c) => c.value);
+    lista.querySelectorAll("[data-parada]").forEach((c) => { c.disabled = !c.checked && marcadas.length >= MAX; });
+    contagem.textContent = marcadas.length ? `${marcadas.length} parada${marcadas.length > 1 ? "s" : ""}${marcadas.length >= MAX ? " (máximo do mapa)" : ""}` : "Marque as concedentes do roteiro";
+    botao.classList.toggle("desativado", !marcadas.length);
+    if (!marcadas.length) { botao.removeAttribute("href"); return; }
+    const destino = marcadas[marcadas.length - 1];
+    const paradas = marcadas.slice(0, -1);
+    const url = new URL("https://www.google.com/maps/dir/");
+    url.searchParams.set("api", "1");
+    url.searchParams.set("destination", destino);
+    if (paradas.length) url.searchParams.set("waypoints", paradas.join("|"));
+    url.searchParams.set("travelmode", "driving");
+    botao.href = url.toString();
+  }
+  lista.addEventListener("change", atualizar);
+  atualizar();
+})();

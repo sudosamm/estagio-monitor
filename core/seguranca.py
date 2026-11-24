@@ -185,7 +185,10 @@ def liberar_primeiro_acesso(user):
     (estagiários com data de nascimento também podem usar nome + nascimento)."""
     user.set_unusable_password()
     user.deve_trocar_senha = True
-    user.save(update_fields=["password", "deve_trocar_senha"])
+    # quem perdeu o celular pede um novo primeiro acesso: a verificação em duas etapas recomeça do zero
+    user.totp_segredo, user.totp_ativo_em, user.totp_ultimo_passo, user.codigos_recuperacao = "", None, 0, []
+    user.save(update_fields=["password", "deve_trocar_senha", "totp_segredo", "totp_ativo_em", "totp_ultimo_passo",
+                             "codigos_recuperacao"])
     return gerar_codigo(user)
 
 

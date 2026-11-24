@@ -102,8 +102,11 @@ def painel(request):
         orientador=request.user, status=Agendamento.Status.AGENDADO, data_hora__gte=timezone.now() - timedelta(hours=2)
     ).prefetch_related("estagios__estagiario").select_related("local").order_by("data_hora")[:8]
 
+    from ..confirmacao import pendencias_por_supervisor
+
     return render(request, "core/painel_orientador.html", {
         **contexto_ano(request, ano), "outros_anos": todos_ativos.count() - len(estagios),
+        "por_supervisor": pendencias_por_supervisor(estagios)[:8],
         "grupos": grupos, "total": len(estagios), "alertas": alertas,
         "previstos_hoje": len(estagios) - len(grupos["nao_previstos"]),
         "pendentes_validacao": pendentes_validacao, "solicitacoes": solicitacoes, "proximas": proximas,
@@ -234,10 +237,11 @@ def folha_primeiro_acesso(request, usuarios, titulo, aviso=""):
     return _folha(request, linhas, titulo, aviso)
 
 
-def _folha(request, linhas, titulo, aviso=""):
+def _folha(request, linhas, titulo, aviso="", voltar=""):
+    request._acao_concluida = True  # para o registro de ações: a tela de códigos é o sucesso (não redireciona)
     resposta = render(request, "core/contas_criadas.html", {
         "linhas": linhas, "titulo": titulo, "aviso": aviso, "tem_codigo": any(c for _, c in linhas),
-        "endereco": request.build_absolute_uri(reverse("primeiro_acesso")),
+        "endereco": request.build_absolute_uri(reverse("primeiro_acesso")), "voltar": voltar,
     })
     add_never_cache_headers(resposta)  # o código não pode reaparecer no “voltar” do navegador
     return resposta

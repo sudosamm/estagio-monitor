@@ -12,6 +12,7 @@ from django.contrib.auth.forms import SetPasswordForm
 from django.shortcuts import redirect, render
 from django.views.decorators.cache import never_cache
 
+from .. import termos
 from ..forms import PrimeiroAcessoCodigoForm, PrimeiroAcessoNascimentoForm
 from ..models import Usuario
 from ..seguranca import (
@@ -80,11 +81,14 @@ def primeiro_acesso_senha(request):
     form = SetPasswordForm(user, request.POST or None)
     for f in form.fields.values():
         f.help_text = ""
-    if request.method == "POST" and form.is_valid():
+    erro_termos = request.method == "POST" and request.POST.get("aceito") != "1"
+    if request.method == "POST" and form.is_valid() and not erro_termos:
         concluir_primeiro_acesso(user, form.cleaned_data["new_password1"])
+        termos.registrar_aceite(user, request)
         limpar(user.username)
         request.session.pop(CHAVE_SESSAO, None)
         login(request, user, backend="core.seguranca.BackendComLimite")
         messages.success(request, f"Pronto! Seu usuário é {user.username}. Nas próximas vezes, entre com ele e a senha que você criou.")
         return redirect("inicio")
-    return render(request, "registration/primeiro_acesso_senha.html", {"form": form, "alvo": user})
+    return render(request, "registration/primeiro_acesso_senha.html", {"form": form, "alvo": user,
+                                                                       "erro_termos": erro_termos})

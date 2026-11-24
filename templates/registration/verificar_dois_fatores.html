@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}Código de verificação{% endblock %}
+{% block corpo %}
+<div class="login-wrap">
+  {% include "registration/_login_lado.html" %}
+  <section class="login-form">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <h2>Verificação em duas etapas</h2>
+      <p class="muted">Olá, {{ alvo.primeiro_nome }}. Abra o app autenticador do seu celular e digite o código de 6 números do {{ NOME_SISTEMA }}.</p>
+      {% if messages %}{% for m in messages %}<div class="aviso {{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+      {% if erro %}<div class="aviso error">{{ erro }}</div>{% endif %}
+      <div class="campo"><label for="id_codigo">Código</label>
+        <input type="text" name="codigo" id="id_codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="11" required autofocus class="codigo-2fa" placeholder="000000"></div>
+      <label class="flex" style="font-size:.9rem"><input type="checkbox" name="confiar" value="1"> Não pedir de novo neste aparelho por 30 dias</label>
+      <button class="btn grande bloco mt-1" type="submit">Entrar</button>
+      <details class="mt-1"><summary class="muted" style="font-size:.88rem">Perdi o celular</summary>
+        <p class="muted" style="font-size:.88rem">Digite no campo acima um dos <strong>códigos de recuperação</strong> que você guardou ao ligar a verificação (ex.: ABCD-2345). Cada um funciona uma vez. Sem eles, peça à escola um novo primeiro acesso: a verificação é desligada e você configura de novo.</p>
+      </details>
+      <p class="muted mt-1" style="font-size:.85rem"><a href="{% url 'login' %}">Voltar</a> · <a href="{% url 'pedir_ajuda' %}?usuario={{ alvo.username|urlencode }}">Falar com o administrador</a></p>
+    </form>
+  </section>
+</div>
+{% endblock %}

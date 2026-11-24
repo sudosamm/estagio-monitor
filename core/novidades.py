@@ -24,6 +24,22 @@ def _p(*publico):
 
 
 VERSOES = (
+    Versao("2026.11.24.1", "Privacidade, segurança e a equipe das concedentes", (
+        (_p("todos"), "Termos de Uso e Aviso de Privacidade (LGPD): leia no rodapé de qualquer página. Em Meus dados, "
+                      "veja os últimos acessos à sua conta e baixe uma cópia dos seus dados."),
+        (_p("estagiario"), "Esqueceu de marcar a presença ou a saída? Uma hora depois do horário de saída, o celular "
+                           "avisa. Dá para desligar em Meus dados."),
+        (_p("supervisor"), "Confirmar todas sem senha: toda semana chega por e-mail a lista de presenças com um botão "
+                           "para confirmar de uma vez. No dia 1º, o resumo do mês de cada estagiário."),
+        (_p("supervisor"), "Vai se ausentar? No seu painel, indique um colega da concedente para confirmar as presenças "
+                           "no seu lugar por um período."),
+        (GESTAO, "Verificação em duas etapas (código do celular) em Meus dados, recomendada para quem gerencia "
+                 "estudantes. Painel: peça a confirmação a um supervisor pelo WhatsApp ou e-mail com um toque."),
+        (("orientador",), "Roteiro de visitas: escolha um dia, veja as concedentes com estagiário no local e abra o "
+                          "caminho no Google Maps. Busca rápida: aperte / (ou o botão Buscar) e digite um nome."),
+        (GESTAO, "Concedentes com conta de responsável: cadastram a própria equipe e dão permissões temporárias para "
+                 "confirmar presenças. Veja em Concedentes → Equipe e substituições."),
+    )),
     Versao("2026.11.24", "Painel com calendário e agendamento mais fácil", (
         (GESTAO, "Painel: calendário do mês com visitas, feriados, fim de termos, previsões de conclusão, aniversários e "
                  "quantos ficaram sem registro em cada dia. Clique num dia para ver tudo e agendar nele."),
