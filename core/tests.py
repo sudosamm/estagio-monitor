@@ -4295,3 +4295,68 @@ class EquipeContatoEFolhaTests(Base):
         cfg.mostrar_codigo_folha = False
         cfg.save()
         self.assertNotContains(self.client.get(url), "Emitida em")
+
+
+class DiasDaImportacaoTests(Base):
+    """Turma que ia só segunda e terça e passou a ir de segunda a sexta: a importação lança as presenças pela escala de
+    cada dia, e o que já foi lançado errado pode ser conferido e retirado."""
+
+    def setUp(self):
+        super().setUp()
+        self.ori.is_superuser = True
+        self.ori.save()
+        self.entrar(self.ori)
+
+    def _importar(self, **extra):
+        csv_ = ("estagiario_nome;curso;data_inicio;horas_anteriores;presencas_desde;concedente_nome;supervisor_nome\n"
+                "Lara Nunes Viana;Informática;24/08/2026;96;03/11/2026;Empresa X;Sérgio Supervisor\n")
+        dados = {"etapa": "previa", "arquivo": SimpleUploadedFile("f.csv", csv_.encode(), "text/csv"),
+                 "orientador": self.ori.pk, "dias": ["0", "1"], "horas_por_dia": "8",
+                 "acompanhamento_desde": "2026-11-11", "carga_cursos_novos": "300", **extra}
+        r = self.client.post(reverse("importar_csv"), dados)
+        self.client.post(reverse("importar_csv"), {"etapa": "confirmar"})
+        return r, Estagio.objects.get(estagiario__nome_completo="Lara Nunes Viana")
+
+    def test_mudanca_de_dias_na_importacao(self):
+        r, est = self._importar(mudanca_desde="2026-11-09", dias_depois=["0", "1", "2", "3", "4"])
+        self.assertContains(r, "Seg, Ter; a partir de 09/11/2026: Segunda a sexta")
+        self.assertContains(r, "de 03/11/2026 até 10/11/2026")
+        self.assertEqual([(e.vigente_desde, e.dias) for e in est.escalas.order_by("vigente_desde")],
+                         [(date(2026, 8, 24), "0,1"), (date(2026, 11, 9), "0,1,2,3,4")])
+        # hoje (mock) é qua 11/11: ter 03 (seg/ter); qua 04 a sex 06 ficam de fora; seg 09 e ter 10 (nova escala)
+        self.assertEqual([x.data.day for x in est.registros.order_by("data")], [3, 9, 10])
+
+    def test_mudanca_sem_os_dias_novos_e_recusada(self):
+        dados = {"etapa": "previa", "arquivo": SimpleUploadedFile("f.csv", b"estagiario_nome;curso;data_inicio\n", "text/csv"),
+                 "orientador": self.ori.pk, "dias": ["0"], "horas_por_dia": "8", "carga_cursos_novos": "300",
+                 "mudanca_desde": "2026-11-09"}
+        self.assertContains(self.client.post(reverse("importar_csv"), dados), "Escolha os dias de estágio a partir da mudança")
+
+    def test_conferir_e_retirar_presencas_importadas_fora_da_escala(self):
+        from .models import Escala, HistoricoRegistro
+
+        _, est = self._importar(dias=["0", "1", "2", "3", "4"])  # importada como segunda a sexta (o engano)
+        self.assertEqual([x.data.day for x in est.registros.order_by("data")], [3, 4, 5, 6, 9, 10])
+        # corrige os dias: seg/ter desde o início (data anterior ao início ajusta a primeira escala) e seg-sex de 09/11
+        for dias, desde in ((["0", "1"], "2026-08-01"), (["0", "1", "2", "3", "4"], "2026-11-09")):
+            self.client.post(reverse("escala_lote"), {"vigente_desde": desde, "dias": dias, "estagios": [est.pk]})
+        self.assertEqual([(e.vigente_desde, e.dias) for e in Escala.objects.filter(estagio=est).order_by("vigente_desde")],
+                         [(date(2026, 8, 24), "0,1"), (date(2026, 11, 9), "0,1,2,3,4")])
+        r = self.client.get(reverse("escala_lote"))
+        self.assertContains(r, "Presenças da importação fora dos dias de estágio")
+        self.assertEqual([x.data.day for x in r.context["fora"][0][1]], [4, 5, 6])
+        # presença que alguém já ajustou não entra na conferência
+        ajustada = est.registros.get(data=date(2026, 11, 6))
+        ajustada.obs_supervisor = "Veio para repor."
+        ajustada.save()
+        ids = [x.pk for x in est.registros.filter(data__in=[date(2026, 11, 4), date(2026, 11, 5), date(2026, 11, 6)])]
+        r = self.client.post(reverse("remover_importadas_fora"), {"registros": ids}, follow=True)
+        self.assertContains(r, "2 presença(s) retirada(s) de 1 estagiário(s)")
+        self.assertEqual([x.data.day for x in est.registros.order_by("data")], [3, 6, 9, 10])
+        self.assertEqual(HistoricoRegistro.objects.filter(estagio=est, acao=HistoricoRegistro.Acao.REVOGOU).count(), 2)
+        self.assertTrue(Notificacao.objects.filter(usuario=est.estagiario, texto__contains="04/11, 05/11").exists())
+        self.assertNotContains(self.client.get(reverse("escala_lote")), "Retirar")
+
+    def test_supervisor_nao_retira(self):
+        self.entrar(self.sup)
+        self.assertEqual(self.client.post(reverse("remover_importadas_fora"), {"registros": [1]}).status_code, 403)

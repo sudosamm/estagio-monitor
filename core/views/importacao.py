@@ -27,11 +27,24 @@ def _opcoes_de(dados):
         saida=time.fromisoformat(dados["saida"]) if dados["saida"] else None,
         acompanhamento_desde=date.fromisoformat(dados["acompanhamento_desde"]) if dados["acompanhamento_desde"] else None,
         carga_cursos_novos=dados["carga_cursos_novos"], completar_concedentes=dados["completar_concedentes"],
+        mudanca_desde=date.fromisoformat(dados["mudanca_desde"]) if dados.get("mudanca_desde") else None,
+        dias_depois=dados.get("dias_depois") or None,
     )
 
 
 def _iso(v):
     return v.isoformat() if v else ""
+
+
+def _escala_tela(opcoes):
+    """“Seg, Ter; a partir de 15/11: Segunda a sexta” — para conferir na prévia os dias usados nas linhas sem a coluna."""
+    from ..models import Escala
+
+    texto = Escala(dias=",".join(map(str, opcoes["dias"]))).dias_display
+    if opcoes.get("mudanca_desde") and opcoes.get("dias_depois"):
+        texto += (f"; a partir de {date.fromisoformat(opcoes['mudanca_desde']):%d/%m/%Y}: "
+                  f"{Escala(dias=','.join(map(str, opcoes['dias_depois']))).dias_display}")
+    return texto
 
 
 @orientador_requerido
@@ -99,10 +112,12 @@ def importar_csv(request):
                 "volta_intervalo": _iso(d.get("volta_intervalo")), "saida": _iso(d.get("horario_saida")),
                 "acompanhamento_desde": _iso(d.get("acompanhamento_desde")),
                 "carga_cursos_novos": d["carga_cursos_novos"], "completar_concedentes": d["completar_concedentes"],
+                "mudanca_desde": _iso(d.get("mudanca_desde")), "dias_depois": sorted(d.get("dias_depois") or []),
             }
             resultado = importar(linhas, _opcoes_de(opcoes), request.user, confirmar=False,
                                  concedentes_extra=concedentes, supervisores_extra=supervisores)
             request.session[CHAVE_SESSAO] = {"linhas": linhas, "concedentes": concedentes, "supervisores": supervisores,
                                              "opcoes": opcoes, "nome": nome}
-            return render(request, "core/importar.html", {"resultado": resultado, "nome_arquivo": d["arquivo"].name})
+            return render(request, "core/importar.html", {"resultado": resultado, "nome_arquivo": d["arquivo"].name,
+                                                          "escala_tela": _escala_tela(opcoes)})
     return render(request, "core/importar.html", {"form": form, "colunas": COLUNAS})

@@ -106,6 +106,7 @@ urlpatterns = [
     path("estagios/", orientador.estagios_lista, name="estagios_lista"),
     path("estagios/novos/", orientador.criar_estagiarios, name="criar_estagiarios"),
     path("escalas/alterar/", orientador.escala_lote, name="escala_lote"),
+    path("escalas/alterar/importadas-fora/", orientador.remover_importadas_fora, name="remover_importadas_fora"),
     path("contas/", orientador.usuarios, name="usuarios"),
     path("contas/supervisores/novos/", orientador.criar_supervisores, name="criar_supervisores"),
     path("contas/orientadores/novo/", orientador.criar_orientador, name="criar_orientador"),

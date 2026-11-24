@@ -189,6 +189,8 @@ class Opcoes:
     acompanhamento_desde: date = None
     carga_cursos_novos: int = 300
     completar_concedentes: bool = True
+    mudanca_desde: date = None   # os dias de estágio mudam a partir desta data…
+    dias_depois: list = None     # …para estes (ex.: seg e ter até 14/11, segunda a sexta a partir de 15/11)
 
 
 @dataclass
@@ -205,6 +207,8 @@ class Resultado:
     cursos_novos: list = field(default_factory=list)
     completados: list = field(default_factory=list)        # (n, estagiário já com estágio ativo, campos preenchidos)
     presencas: int = 0                                      # dias já cumpridos lançados como presença confirmada
+    presencas_de: date = None                               # período em que esses dias foram lançados
+    presencas_ate: date = None
     confirmado: bool = False
 
     @property
@@ -361,27 +365,43 @@ def _linha(n, d, op, usuario, r, senha_hash, concedentes, supervisores, cursos, 
         local=local, data_inicio=inicio, data_fim=fim, horas_anteriores=horas_ant,
         acompanhamento_desde=desde if desde and desde > inicio else None,
     )
-    Escala.objects.create(
-        estagio=estagio, vigente_desde=inicio, dias=",".join(map(str, dias)), horas_por_dia=horas, criado_por=usuario,
-        horario_entrada=turnos[0], saida_intervalo=turnos[1], volta_intervalo=turnos[2], horario_saida=turnos[3],
-    )
+    horario = {"horas_por_dia": horas, "criado_por": usuario, "horario_entrada": turnos[0], "saida_intervalo": turnos[1],
+               "volta_intervalo": turnos[2], "horario_saida": turnos[3]}
+    escalas = [Escala.objects.create(estagio=estagio, vigente_desde=inicio, dias=",".join(map(str, dias)), **horario)]
+    if op.mudanca_desde and op.dias_depois and op.mudanca_desde > inicio:
+        escalas.append(Escala.objects.create(estagio=estagio, vigente_desde=op.mudanca_desde,
+                                             dias=",".join(map(str, sorted(op.dias_depois))), **horario))
     if presencas_desde:
-        r.presencas += _lancar_presencas(estagio, presencas_desde, dias, horas, turnos, usuario)
+        r.presencas += _lancar_presencas(estagio, presencas_desde, escalas, usuario)
+        ontem = timezone.localdate() - timedelta(days=1)
+        r.presencas_de = min(filter(None, [r.presencas_de, presencas_desde]))
+        r.presencas_ate = ontem
     r.linhas_ok.append((n, aluno, local, supervisor))
 
 
-def _lancar_presencas(estagio, desde, dias, horas, turnos, usuario):
-    """Dias da escala de `desde` até ontem, fora feriados e recessos, como presença já confirmada pela gestão."""
+OBS_IMPORTACAO = "Lançado na importação (dia já cumprido)."
+
+
+def _escala_do_dia(escalas, dia):
+    vigentes = [e for e in escalas if e.vigente_desde <= dia]
+    return max(vigentes, key=lambda e: e.vigente_desde) if vigentes else None
+
+
+def _lancar_presencas(estagio, desde, escalas, usuario):
+    """Dias de estágio de `desde` até ontem (pela escala vigente em cada dia), fora feriados e recessos, como presença
+    já confirmada pela gestão."""
     ontem = timezone.localdate() - timedelta(days=1)
     feriados = dias_sem_estagio(estagio, desde, ontem)
     agora, registros, dia = timezone.now(), [], desde
     while dia <= ontem:
-        if dia.weekday() in dias and dia not in feriados:
+        esc = _escala_do_dia(escalas, dia)
+        if esc and dia.weekday() in esc.dias_lista and dia not in feriados:
             registros.append(Registro(
-                estagio=estagio, data=dia, situacao=Registro.Situacao.PRESENTE, horas=horas,
-                hora_chegada=turnos[0], saida_intervalo=turnos[1], volta_intervalo=turnos[2], hora_saida=turnos[3],
+                estagio=estagio, data=dia, situacao=Registro.Situacao.PRESENTE, horas=esc.horas_por_dia,
+                hora_chegada=esc.horario_entrada, saida_intervalo=esc.saida_intervalo,
+                volta_intervalo=esc.volta_intervalo, hora_saida=esc.horario_saida,
                 confirmacao=Registro.Confirmacao.CONFIRMADA, confirmado_por=usuario, confirmado_em=agora,
-                registrado_por=usuario, obs_supervisor="Lançado na importação (dia já cumprido).",
+                registrado_por=usuario, obs_supervisor=OBS_IMPORTACAO,
             ))
         dia += timedelta(days=1)
     Registro.objects.bulk_create(registros)
@@ -495,3 +515,28 @@ def modelo_csv():
     }
     w.writerow([exemplo.get(c, "") for c in NOMES_COLUNAS])
     return saida.getvalue()
+
+
+# ---------------------------------------------------------------- conferência das presenças lançadas na importação
+
+
+def importadas_fora_da_escala(estagios):
+    """Presenças que a importação lançou (coluna presencas_desde) em dias que hoje não são de estágio pela escala:
+    por exemplo, depois de corrigir os dias de uma turma. Ficam de fora as que alguém já mexeu (a observação muda) e
+    os dias extras planejados."""
+    from .models import DiaPlanejado
+
+    regs = list(Registro.objects.filter(estagio__in=estagios, situacao=Registro.Situacao.PRESENTE,
+                                        obs_supervisor=OBS_IMPORTACAO)
+                .select_related("estagio__estagiario").prefetch_related("estagio__escalas")
+                .order_by("estagio__estagiario__nome_completo", "data"))
+    extras = set(DiaPlanejado.objects.filter(estagio__in={r.estagio_id for r in regs})
+                 .values_list("estagio_id", "data"))
+    fora = []
+    for reg in regs:
+        esc = reg.estagio.escala_em(reg.data)
+        if (reg.estagio_id, reg.data) in extras:
+            continue
+        if esc is None or reg.data.weekday() not in esc.dias_lista:
+            fora.append(reg)
+    return fora

@@ -18,6 +18,7 @@ from ..forms import (
     EstagiariosLoteForm, LocalForm, OrientadorForm, SubstitutosForm, SupervisoresLoteForm, TurmaForm, UsuarioEditForm,
 )
 from ..models import (
+    HistoricoRegistro,
     DIAS_ABREV, Agendamento, Configuracao, Curso, DiaSemEstagio, Documento, Escala, Estagio, LocalEstagio, Registro, Turma, Usuario,
     chave_municipio,
 )
@@ -915,8 +916,10 @@ def escala_lote(request):
                         "saida_intervalo": atual.saida_intervalo, "volta_intervalo": atual.volta_intervalo,
                         "horario_saida": atual.horario_saida,
                     } if atual else {"horas_por_dia": e.curso.horas_por_dia_padrao})}
+                # data antes do início do estágio = desde o início (ajusta a primeira escala em vez de criar
+                # uma que nunca valeria)
                 Escala.objects.update_or_create(
-                    estagio=e, vigente_desde=d["vigente_desde"], defaults={**dados, "criado_por": user},
+                    estagio=e, vigente_desde=max(d["vigente_desde"], e.data_inicio), defaults={**dados, "criado_por": user},
                 )
         exemplo = Escala(**{k: v for k, v in dados.items() if k != "horas_por_dia"})
         o_que = f"{exemplo.dias_display}" + (f" · {exemplo.horario_display}" if supervisor and exemplo.horario_display else "")
@@ -928,11 +931,59 @@ def escala_lote(request):
     turmas = Turma.objects.filter(pk__in=estagios_visiveis(user).filter(ativo=True).values("turma")).select_related("curso")
     if ano is not None:
         turmas = turmas.filter(ano_estagio=ano)
+    fora = []
+    if not supervisor:
+        from ..importacao import importadas_fora_da_escala
+
+        fora = importadas_fora_da_escala(qs)
     return render(request, "core/escala_lote.html", {
         **(contexto_ano(request, ano) if not supervisor else {}),
         "form": form, "cursos": Curso.objects.all(), "turmas": turmas, "supervisor": supervisor,
-        "filtro_curso": filtro_curso, "filtro_turma": filtro_turma,
+        "filtro_curso": filtro_curso, "filtro_turma": filtro_turma, "fora": _agrupar_fora(fora),
+        "fora_ids": [r.pk for r in fora],
     })
+
+
+def _agrupar_fora(registros):
+    grupos = {}
+    for r in registros:
+        grupos.setdefault(r.estagio, []).append(r)
+    return list(grupos.items())
+
+
+@permissao("escalas")
+@require_POST
+def remover_importadas_fora(request):
+    """Tira as presenças lançadas na importação em dias que não são de estágio pela escala atual (as que apareceram na
+    conferência). Cada uma fica no histórico do dia, com o motivo."""
+    from ..importacao import importadas_fora_da_escala
+
+    pedidas = {int(i) for i in request.POST.getlist("registros") if i.isdigit()}
+    fora = [r for r in importadas_fora_da_escala(estagios_visiveis(request.user).filter(ativo=True)) if r.pk in pedidas]
+    por_estagio = {}
+    with transaction.atomic():
+        for reg in fora:
+            reg._motivo_exclusao = "Dia fora da escala (presença lançada na importação)"
+            reg.anotar(request.user, HistoricoRegistro.Acao.REVOGOU, request).delete()
+            por_estagio.setdefault(reg.estagio, []).append(reg.data)
+    for e, datas in por_estagio.items():
+        lista = ", ".join(f"{d:%d/%m}" for d in sorted(datas))
+        notificar([e.estagiario], f"A escola corrigiu seus dias de estágio: {len(datas)} presença(s) lançada(s) na "
+                                  f"importação em dias fora da escala foram retiradas ({lista})."[:255],
+                  e.get_absolute_url(), exceto=request.user, email=False)
+    from .. import auditoria
+
+    auditoria.registrar(request, "GESTAO", f"Retirou {len(fora)} presença(s) importada(s) fora da escala de "
+                                           f"{len(por_estagio)} estagiário(s)")
+    messages.success(request, f"{len(fora)} presença(s) retirada(s) de {len(por_estagio)} estagiário(s). Cada dia ficou "
+                              "no histórico do estágio." if fora else "Nada para retirar.")
+    voltar = reverse("escala_lote")
+    filtros = {k: request.POST.get(k) for k in ("curso", "turma") if request.POST.get(k)}
+    if filtros:
+        from django.utils.http import urlencode
+
+        voltar += "?" + urlencode(filtros)
+    return redirect(voltar)
 
 
 @permissao("arquivos")

@@ -35,4 +35,21 @@
   </div>
   <button class="btn grande" type="submit">{% if supervisor %}Salvar dias e horários{% else %}Aplicar novos dias e avisar{% endif %}</button>
 </form>
+{% if not supervisor %}
+<div class="card {% if fora %}laranja{% endif %}" id="importadas">
+  <h2>{% icone "alerta" %} Presenças da importação fora dos dias de estágio</h2>
+  {% if fora %}
+  <p>Estas presenças foram lançadas pela importação (coluna <em>presencas_desde</em>) em dias que, pela escala atual, não são de estágio. Elas contam horas a mais. Corrija primeiro os dias acima (por exemplo, segunda e terça desde o início e segunda a sexta a partir de 15/11) e depois retire as que sobrarem. Presenças que alguém já ajustou e dias extras planejados não entram aqui.</p>
+  <form method="post" action="{% url 'remover_importadas_fora' %}" data-confirmar="Retirar {{ fora_ids|length }} presença(s) lançada(s) na importação? Cada dia fica sem registro e vai para o histórico do estágio.">{% csrf_token %}
+    <input type="hidden" name="curso" value="{{ filtro_curso }}"><input type="hidden" name="turma" value="{{ filtro_turma }}">
+    {% for pk in fora_ids %}<input type="hidden" name="registros" value="{{ pk }}">{% endfor %}
+    <ul class="lista compacta">{% for e, regs in fora %}
+      <li><span class="cresce"><strong>{{ e.estagiario.nome_completo }}</strong>
+        <small style="display:block">{{ regs|length }} dia{{ regs|length|pluralize }}: {% for r in regs %}{{ r.data|date:"D d/m" }}{% if not forloop.last %}, {% endif %}{% endfor %}</small></span></li>
+    {% endfor %}</ul>
+    <button class="btn perigo mt-1" type="submit">Retirar {{ fora_ids|length }} presença{{ fora_ids|length|pluralize }}</button>
+  </form>
+  {% else %}<p class="vazio mb-0">Nenhuma presença lançada na importação fora dos dias de estágio{% if filtro_curso or filtro_turma %} nesta lista{% endif %}.</p>{% endif %}
+</div>
+{% endif %}
 {% endblock %}

@@ -322,7 +322,9 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .hoje-card .btn:hover { background: var(--amarelo); color: var(--cinza-900); }
 .hoje-card .btn.sec { background: transparent; color: #fff; border-color: rgba(255,255,255,.6); }
 .hoje-card .btn.sec:hover { background: rgba(255,255,255,.12); }
-.hoje-card.hoje { background: linear-gradient(135deg, var(--verde-escuro), var(--verde)); }
+/* cores fixas: no tema escuro --verde e --verde-escuro ficam claros (para texto) e o texto branco sumia */
+.hoje-card.hoje { background: linear-gradient(135deg, #005a2b, #00843d); }
+:root[data-tema="escuro"] .hoje-card.hoje { background: linear-gradient(135deg, #0b3a21, #0d6b35); }
 .hoje-card.aguardando { background: linear-gradient(135deg, #0f4f9c, #1667c7); }
 .hoje-card.confirmado { background: linear-gradient(135deg, #136b2e, #1e8e3e); }
 .hoje-card.ausencia, .hoje-card.ausencia_ok { background: linear-gradient(135deg, #a85f00, #f39200); }
@@ -729,7 +731,7 @@ fieldset.pergunta-av[hidden] { display: none; }
 .ag-dia:hover { border-color: var(--cinza-300); }
 .ag-dia.fora { opacity: .45; }
 .ag-dia.feriado { background: repeating-linear-gradient(45deg, var(--cinza-100), var(--cinza-100) 6px, var(--cinza-200) 6px, var(--cinza-200) 12px); }
-.ag-dia.e-hoje .n { background: var(--verde); color: #fff; border-radius: 999px; padding: 0 .4rem; }
+.ag-dia.e-hoje .n { background: var(--btn-fundo); color: #fff; border-radius: 999px; padding: 0 .4rem; }
 .ag-dia.sel { border-color: var(--verde); box-shadow: 0 0 0 2px color-mix(in srgb, var(--verde) 25%, transparent); }
 .ag-dia .n { font-weight: 700; font-size: .82rem; align-self: flex-start; }
 .ag-alerta { position: absolute; top: 4px; right: 4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: var(--st-falta);
@@ -782,7 +784,7 @@ fieldset.pergunta-av[hidden] { display: none; }
 
 /* ------------------------------------------------ período de testes: “Sua opinião” */
 .botao-opiniao { position: fixed; right: 16px; bottom: 16px; z-index: 40; display: inline-flex; align-items: center; gap: .4rem;
-  padding: .6rem .95rem; border-radius: 999px; border: 0; background: var(--verde); color: #fff; font: inherit; font-weight: 700;
+  padding: .6rem .95rem; border-radius: 999px; border: 0; background: var(--btn-fundo); color: #fff; font: inherit; font-weight: 700;
   font-size: .88rem; box-shadow: 0 6px 20px rgba(0, 0, 0, .22); cursor: pointer; }
 .botao-opiniao svg { width: 18px; height: 18px; }
 .botao-opiniao:hover { filter: brightness(1.08); }
@@ -802,7 +804,7 @@ fieldset.pergunta-av[hidden] { display: none; }
 .notas-opiniao label:has(input:focus-visible), .tipos-opiniao label:has(input:focus-visible) { outline: 2px solid var(--verde); outline-offset: 2px; }
 .tipos-opiniao { display: flex; flex-wrap: wrap; gap: .35rem; }
 .tipos-opiniao label { padding: .3rem .7rem; border-radius: 999px; border: 1px solid var(--cinza-300); cursor: pointer; font-size: .85rem; }
-.tipos-opiniao label:has(input:checked) { border-color: var(--verde); background: var(--verde); color: #fff; }
+.tipos-opiniao label:has(input:checked) { border-color: var(--btn-fundo); background: var(--btn-fundo); color: #fff; }
 .opiniao-ok { text-align: center; padding: 1rem 0; }
 .opinioes li { align-items: flex-start; }
 .opinioes li.resolvida { opacity: .55; }
@@ -899,7 +901,7 @@ kbd { font: 600 .72rem/1 ui-monospace, monospace; padding: .18rem .35rem; border
 .parada.agendada { opacity: .75; }
 .parada-num { flex: none; width: 1.7rem; height: 1.7rem; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: .85rem;
   background: var(--cinza-100); color: var(--cinza-700); }
-.parada:has(input:checked) .parada-num { background: var(--verde); color: #fff; }
+.parada:has(input:checked) .parada-num { background: var(--btn-fundo); color: #fff; }
 .parada .ic { width: .9rem; height: .9rem; vertical-align: -2px; }
 .parada-acoes { display: flex; gap: .35rem; flex-wrap: wrap; justify-content: flex-end; }
 .roteiro-barra { position: sticky; bottom: .8rem; display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; box-shadow: var(--sombra); z-index: 5; }

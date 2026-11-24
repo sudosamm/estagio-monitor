@@ -1380,9 +1380,15 @@ class ImportarCSVForm(CamposEscalaMixin, Formulario):
                                             help_text="Só usada se a planilha trouxer um curso que ainda não existe.")
     completar_concedentes = forms.BooleanField(label="Completar campos vazios de concedentes já cadastradas",
                                                required=False, initial=True)
+    mudanca_desde = forms.DateField(
+        label="Os dias mudam a partir de", widget=DataInput(), required=False,
+        help_text="Opcional. Ex.: segunda e terça até 14/11 e segunda a sexta a partir de 15/11. Vale para todas as "
+                  "linhas; as horas e os horários continuam os mesmos.",
+    )
+    dias_depois = DiasField(label="Dias de estágio a partir dessa data", required=False)
 
-    field_order = ["arquivo", "orientador", "acompanhamento_desde", *CAMPOS_ESCALA, "carga_cursos_novos",
-                   "completar_concedentes"]
+    field_order = ["arquivo", "orientador", "acompanhamento_desde", *CAMPOS_ESCALA, "mudanca_desde", "dias_depois",
+                   "carga_cursos_novos", "completar_concedentes"]
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
@@ -1397,6 +1403,14 @@ class ImportarCSVForm(CamposEscalaMixin, Formulario):
         if arq.size > 5 * 1024 * 1024:
             raise forms.ValidationError("O arquivo deve ter no máximo 5 MB.")
         return arq
+
+    def clean(self):
+        d = super().clean()
+        if d.get("mudanca_desde") and not d.get("dias_depois"):
+            self.add_error("dias_depois", "Escolha os dias de estágio a partir da mudança.")
+        elif d.get("dias_depois") and not d.get("mudanca_desde"):
+            self.add_error("mudanca_desde", "Informe a partir de quando os dias mudam.")
+        return d
 
 
 # ------------------------------------------------------------------ folhas de frequência enviadas pelo orientador
@@ -1500,6 +1514,14 @@ class ImportarCalendarioForm(Formulario):
         if arq.size > 5 * 1024 * 1024:
             raise forms.ValidationError("O arquivo deve ter no máximo 5 MB.")
         return arq
+
+    def clean(self):
+        d = super().clean()
+        if d.get("mudanca_desde") and not d.get("dias_depois"):
+            self.add_error("dias_depois", "Escolha os dias de estágio a partir da mudança.")
+        elif d.get("dias_depois") and not d.get("mudanca_desde"):
+            self.add_error("mudanca_desde", "Informe a partir de quando os dias mudam.")
+        return d
 
 
 # ------------------------------------------------------------------ primeiro acesso

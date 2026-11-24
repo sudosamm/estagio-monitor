@@ -23,7 +23,8 @@
   {% else %}
     <form method="post" class="card destaque">{% csrf_token %}<input type="hidden" name="etapa" value="confirmar">
       <p class="mb-0">Tudo certo. Confira o resumo abaixo e confirme. As contas novas não têm senha: cada pessoa cria a sua em “Primeiro acesso”.</p>
-      {% if resultado.presencas %}<p class="mb-0 mt-1"><strong>{{ resultado.presencas }}</strong> dia{{ resultado.presencas|pluralize }} já cumprido{{ resultado.presencas|pluralize }} (coluna presencas_desde) entra{{ resultado.presencas|pluralize:"m" }} como presença confirmada, pela escala de cada um.</p>{% endif %}
+      {% if escala_tela %}<p class="mb-0 mt-1">Dias de estágio das linhas sem a coluna “dias”: <strong>{{ escala_tela }}</strong>.</p>{% endif %}
+      {% if resultado.presencas %}<div class="caixa-alerta mt-1"><strong>{{ resultado.presencas }}</strong> dia{{ resultado.presencas|pluralize }} já cumprido{{ resultado.presencas|pluralize }} (coluna presencas_desde) entra{{ resultado.presencas|pluralize:"m" }} como presença confirmada, de {{ resultado.presencas_de|date:"d/m/Y" }} até {{ resultado.presencas_ate|date:"d/m/Y" }} (ontem), nos dias de estágio acima. Confira se os dias estão certos: dias errados contam horas a mais. Se a turma mudou de dias no período, preencha “Os dias mudam a partir de”.</div>{% endif %}
       <div class="acoes mt-1"><button class="btn grande" type="submit">{% icone "check" %} Confirmar importação</button><a class="btn sec" href="{% url 'importar_csv' %}">Cancelar</a></div>
     </form>
   {% endif %}
