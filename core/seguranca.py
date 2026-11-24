@@ -70,10 +70,22 @@ def senha_inicial_antiga(user, password):
     return not user.is_superuser or password == settings.SENHA_PADRAO
 
 
+def usuario_do_identificador(texto):
+    """Entrar com o e-mail: vale quando um único cadastro ativo usa aquele e-mail. Senão, o texto segue como usuário."""
+    texto = (texto or "").strip()
+    if "@" not in texto:
+        return texto
+    from .models import Usuario
+
+    achados = list(Usuario.objects.filter(email__iexact=texto, is_active=True).values_list("username", flat=True)[:2])
+    return achados[0] if len(achados) == 1 else texto
+
+
 class BackendComLimite(ModelBackend):
     """O login normal do Django, recusando enquanto o usuário/IP estiver com tentativas demais (vale também no /admin/)."""
 
     def authenticate(self, request, username=None, password=None, **kwargs):
+        username = usuario_do_identificador(username)  # usuário ou e-mail contam no mesmo limite
         if username and bloqueado(username, ip_de(request)):
             raise PermissionDenied(MENSAGEM_BLOQUEIO)
         user = super().authenticate(request, username=username, password=password, **kwargs)
@@ -92,7 +104,7 @@ class LoginForm(AuthenticationForm):
     }
 
     def clean(self):
-        if bloqueado(self.data.get("username"), ip_de(self.request)):
+        if bloqueado(usuario_do_identificador(self.data.get("username")), ip_de(self.request)):
             self.bloqueado = True
             raise ValidationError(MENSAGEM_BLOQUEIO, code="bloqueado")
         try:
@@ -189,6 +201,9 @@ def liberar_primeiro_acesso(user):
     user.totp_segredo, user.totp_ativo_em, user.totp_ultimo_passo, user.codigos_recuperacao = "", None, 0, []
     user.save(update_fields=["password", "deve_trocar_senha", "totp_segredo", "totp_ativo_em", "totp_ultimo_passo",
                              "codigos_recuperacao"])
+    from .sessoes import desconectar_todas
+
+    desconectar_todas(user)  # quem estava conectado com a senha antiga sai de todos os aparelhos
     return gerar_codigo(user)
 
 
@@ -201,8 +216,9 @@ def concluir_primeiro_acesso(user, senha):
 
 def ao_falhar(sender, credentials, request=None, **kw):
     ip = ip_de(request)
-    registrar_falha(credentials.get("username"), ip)
-    avisar_tentativas(credentials.get("username"), ip, request)
+    username = usuario_do_identificador(credentials.get("username"))
+    registrar_falha(username, ip)
+    avisar_tentativas(username, ip, request)
 
 
 def avisar_tentativas(username, ip, request=None):

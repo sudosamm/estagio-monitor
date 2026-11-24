@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .. import auditoria, equipe as eq
+from .. import auditoria, emails, equipe as eq
 from ..forms import MembroEquipeForm, SubstituicaoForm
 from ..models import Estagio, Justificativa, LocalEstagio, Registro, Substituicao, Usuario
 from ..seguranca import gerar_codigo, liberar_primeiro_acesso
@@ -53,6 +53,10 @@ def equipe_concedente(request, pk):
                 novo = criar_usuario(d["nome_completo"], Usuario.Papel.SUPERVISOR, user, concedente=local,
                                      cargo=d["cargo"], telefone=d["telefone"], email=d["email"])
                 auditoria.registrar(request, "EQUIPE", f"Cadastrou {novo.nome_completo} na equipe", alvo=local)
+                if novo.email and emails.enviar_confirmacao(request, novo, pela_escola=True):
+                    messages.info(request, f"Também enviamos para {novo.email} um link para {novo.primeiro_nome} "
+                                           "confirmar o e-mail e criar a senha (vale 3 dias). O código abaixo serve se o "
+                                           "e-mail não chegar.")
                 return _folha(request, [(novo, gerar_codigo(novo))], f"Acesso de {novo.nome_completo}", voltar)
         elif acao == "substituir":
             form_sub = SubstituicaoForm(request.POST, prefix="s", equipe=membros)
@@ -73,7 +77,7 @@ def equipe_concedente(request, pk):
             eq.revogar(s, user, request)
             messages.success(request, "Permissão encerrada.")
             return redirect(voltar)
-        elif acao in ("codigo", "desativar", "reativar", "responsavel"):
+        elif acao in ("codigo", "desativar", "reativar", "responsavel", "contato"):
             alvo = get_object_or_404(membros, pk=request.POST.get("id"))
             return _acao_conta(request, local, alvo, acao, escola, voltar)
 
@@ -122,6 +126,8 @@ def _acao_conta(request, local, alvo, acao, escola, voltar):
     if not eq.pode_mexer_na_conta(user, alvo, local):
         messages.error(request, "Essa conta também é usada em outra concedente: peça à escola.")
         return redirect(voltar)
+    if acao == "contato":
+        return _contato(request, local, alvo, voltar)
     if acao == "codigo":
         codigo = liberar_primeiro_acesso(alvo)
         auditoria.registrar(request, "EQUIPE", f"Gerou novo acesso para {alvo.nome_completo}", alvo=local)
@@ -180,3 +186,28 @@ def encerrar_substituicao(request, pk):
     eq.revogar(s, user, request)
     messages.success(request, "Permissão encerrada.")
     return redirect(destino_seguro(request, reverse("painel_supervisor")))
+
+
+def _contato(request, local, alvo, voltar):
+    """O responsável corrige telefone, e-mail e cargo de quem é da equipe. Vale na hora no sistema e nas folhas de
+    frequência (que sempre saem com os dados atuais). E-mail trocado precisa ser confirmado de novo."""
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+
+    telefone = " ".join(request.POST.get("telefone", "").split())[:30]
+    email = request.POST.get("email", "").strip()[:254]
+    cargo = " ".join(request.POST.get("cargo", "").split())[:80]
+    if email:
+        try:
+            validate_email(email)
+        except ValidationError:
+            messages.error(request, f"E-mail inválido: {email}")
+            return redirect(voltar)
+    mudou = [c for c, v in (("telefone", telefone), ("email", email), ("cargo", cargo)) if getattr(alvo, c) != v]
+    if mudou:
+        alvo.telefone, alvo.email, alvo.cargo = telefone, email, cargo
+        alvo.save(update_fields=mudou)
+        auditoria.registrar(request, "EQUIPE", f"Atualizou o contato de {alvo.nome_completo}", alvo=local)
+        messages.success(request, f"Contato de {alvo.primeiro_nome} atualizado. As próximas folhas de frequência já "
+                                  "saem com os dados novos.")
+    return redirect(voltar)

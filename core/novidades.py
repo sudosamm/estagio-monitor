@@ -24,6 +24,20 @@ def _p(*publico):
 
 
 VERSOES = (
+    Versao("2026.11.24.2", "Aparelhos conectados, conta da concedente e agendamento rápido", (
+        (_p("todos"), "Meus dados → Acessos e aparelhos: veja onde sua conta está conectada e desconecte qualquer "
+                      "aparelho. Se alguém tentar usar o seu acesso em outro aparelho, a sessão é encerrada e você é "
+                      "avisado. Agora dá para entrar também com o e-mail."),
+        (_p("supervisor"), "Seus dados na folha: confira no painel o telefone e o cargo que saem na folha de frequência "
+                           "e corrija em Meus dados. O responsável pela concedente corrige os da equipe."),
+        (GESTAO, "Captação: a escola escolhe os cursos com vagas, a concedente marca os cursos e informa as vagas de "
+                 "cada um e quem preenche ganha uma conta para acompanhar a decisão. As vagas não mudam depois de "
+                 "aprovadas. Também dá para cadastrar pela concedente."),
+        (GESTAO, "Contas → E-mail não confirmado: envie o pedido de confirmação de cadastro. Quem ainda não entrou "
+                 "cria a senha pelo próprio link."),
+        (("orientador",), "Roteiro de visitas → Agendamento rápido: marque as concedentes (ou um município), escolha o "
+                          "tempo de cada visita e o sistema monta a rota e os horários, sem nada entre 12h e 13h."),
+    )),
     Versao("2026.11.24.1", "Privacidade, segurança e a equipe das concedentes", (
         (_p("todos"), "Termos de Uso e Aviso de Privacidade (LGPD): leia no rodapé de qualquer página. Em Meus dados, "
                       "veja os últimos acessos à sua conta e baixe uma cópia dos seus dados."),

@@ -6,7 +6,7 @@ from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import path, reverse
 
-from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, confirmacao, conta, dois_fatores, encerramento, equipe, estagio, feedback, frequencia, importacao, legal, novidades, opinioes, roteiro, sistema, visitas, modelos_email, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
+from core.views import acessos, agenda, atestados, avaliacoes, avisos, captacao, comum, confirmacao, conta, dois_fatores, encerramento, equipe, estagio, feedback, frequencia, importacao, legal, novidades, opinioes, roteiro, sistema, visitas, modelos_email, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
 
 
 def _login_do_admin(request):
@@ -35,6 +35,7 @@ urlpatterns = [
     path("senha/", comum.trocar_senha, name="trocar_senha"),
     path("perfil/", comum.perfil, name="perfil"),
     path("perfil/email/reenviar/", comum.reenviar_confirmacao, name="reenviar_confirmacao"),
+    path("perfil/acessos/", acessos.acessos, name="acessos"),
     path("email/confirmar/<str:token>/", comum.confirmar_email, name="confirmar_email"),
     path("tema/", comum.trocar_tema, name="trocar_tema"),
     path("novidades/", novidades.novidades, name="novidades"),
@@ -113,6 +114,9 @@ urlpatterns = [
     path("contas/<int:pk>/", orientador.editar_usuario, name="editar_usuario"),
     path("contas/<int:pk>/senha-padrao/", orientador.redefinir_senha, name="redefinir_senha"),
     path("contas/codigos/", orientador.codigos_lote, name="codigos_lote"),
+    path("contas/<int:pk>/desconectar/", acessos.desconectar_usuario, name="desconectar_usuario"),
+    path("contas/<int:pk>/confirmar-email/", orientador.pedir_confirmacao_email, name="pedir_confirmacao_email"),
+    path("contas/confirmar-emails/", orientador.confirmacao_lote, name="confirmacao_lote"),
     path("contas/<int:pk>/ativacao/", orientador.ativacao_usuario, name="ativacao_usuario"),
     path("cursos/", orientador.cursos, name="cursos"),
     path("cursos/<int:pk>/", orientador.cursos, name="curso_editar"),
@@ -139,6 +143,9 @@ urlpatterns = [
     path("seja-concedente/", captacao.candidatura_publica, name="candidatura_publica"),
     path("captacao/", captacao.captacao_lista, name="captacao"),
     path("captacao/<int:pk>/", captacao.captacao_detalhe, name="captacao_detalhe"),
+    path("captacao/<int:pk>/alterar/", captacao.editar_candidatura, name="editar_candidatura"),
+    path("cadastro-concedente/", captacao.minhas_candidaturas, name="minhas_candidaturas"),
+    path("cadastro-concedente/<int:pk>/", captacao.minha_candidatura, name="minha_candidatura"),
     path("avisos/<int:pk>/enviado/", captacao.aviso_enviado, name="aviso_enviado"),
     path("dias-sem-estagio/", orientador.dias_sem_estagio, name="dias_sem_estagio"),
     path("dias-sem-estagio/importar/", orientador.importar_feriados, name="importar_feriados"),
@@ -168,6 +175,7 @@ urlpatterns = [
     path("agenda/", agenda.agendamentos, name="agendamentos"),
     path("agenda/novo/", agenda.novo_agendamento, name="novo_agendamento"),
     path("agenda/roteiro/", roteiro.roteiro, name="roteiro"),
+    path("agenda/roteiro/agendar/", roteiro.agendamento_rapido, name="agendamento_rapido"),
     path("agenda/ficha/<int:pk>/", agenda.ficha_estagio, name="ficha_estagio"),
     path("agenda/<int:pk>/", agenda.agendamento_detalhe, name="agendamento_detalhe"),
     path("agenda/<int:pk>/cancelar/", agenda.cancelar_agendamento, name="cancelar_agendamento"),

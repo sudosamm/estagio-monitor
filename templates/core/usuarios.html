@@ -10,7 +10,7 @@
   </div></div>
 <form class="filtros card" method="get">
   <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ q }}" placeholder="Nome ou usuário"></div>
-  <div><label class="rotulo">Situação</label><select name="situacao"><option value="">Ativas</option><option value="inativas"{% if situacao == "inativas" %} selected{% endif %}>Desativadas</option><option value="pendentes"{% if situacao == "pendentes" %} selected{% endif %}>Ainda não entraram</option><option value="todas"{% if situacao == "todas" %} selected{% endif %}>Todas</option></select></div>
+  <div><label class="rotulo">Situação</label><select name="situacao"><option value="">Ativas</option><option value="inativas"{% if situacao == "inativas" %} selected{% endif %}>Desativadas</option><option value="pendentes"{% if situacao == "pendentes" %} selected{% endif %}>Ainda não entraram</option><option value="email"{% if situacao == "email" %} selected{% endif %}>E-mail não confirmado</option><option value="todas"{% if situacao == "todas" %} selected{% endif %}>Todas</option></select></div>
   <div><label class="rotulo">Perfil</label><select name="papel"><option value="">Todos</option>{% for v, r in papeis %}<option value="{{ v }}"{% if papel == v %} selected{% endif %}>{{ r }}</option>{% endfor %}</select></div>
   <button class="btn" type="submit">Filtrar</button>
 </form>
@@ -22,6 +22,14 @@
   <button class="btn" type="submit" style="white-space:normal">Folha de primeiro acesso (com códigos)</button>
 </form>
 {% endif %}
+{% if situacao == "email" and usuarios %}
+<form method="post" action="{% url 'confirmacao_lote' %}" class="card flex" style="justify-content:space-between;flex-wrap:wrap;gap:.5rem"
+      data-confirmar="Enviar o pedido de confirmação de cadastro para as contas desta lista? Quem recebeu nas últimas 24 horas fica de fora.">
+  {% csrf_token %}<input type="hidden" name="papel" value="{{ papel }}"><input type="hidden" name="q" value="{{ q }}">
+  <span class="muted">Cada pessoa recebe um link para confirmar o e-mail. Quem ainda não entrou no sistema cria a senha pelo mesmo link, sem precisar do código no papel.</span>
+  <button class="btn" type="submit" style="white-space:normal">{% icone "email" %} Enviar pedido de confirmação</button>
+</form>
+{% endif %}
 <div class="card"><div class="tabela-wrap"><table class="tabela">
   <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Concedente</th><th>Acesso</th><th></th></tr></thead>
   <tbody>{% for u in usuarios %}
@@ -30,7 +38,7 @@
       <td>{{ u.username }}</td>
       <td>{{ u.get_papel_display }}{% if u.is_coordenador %}<br><small>{{ u.cursos_coordenados.all|join:", "|default:"todos os cursos" }}</small>{% endif %}{% if u.is_supervisor %}<br><small>{{ u.n_supervisionados }} estagiário(s) ativo(s)</small>{% endif %}</td>
       <td>{% for c in u.concedentes.all %}{{ c }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
-      <td>{% if u.deve_trocar_senha %}<span class="selo ausencia">não entrou</span>{% if u.is_estagiario and not u.data_nascimento %}<br><small class="muted">sem nascimento</small>{% endif %}{% else %}<span class="selo confirmado">ativo</span>{% endif %}</td>
+      <td>{% if u.deve_trocar_senha %}<span class="selo ausencia">não entrou</span>{% if u.is_estagiario and not u.data_nascimento %}<br><small class="muted">sem nascimento</small>{% endif %}{% else %}<span class="selo confirmado">ativo</span>{% endif %}{% if u.email %}<br><small class="muted" title="{{ u.email }}">{% if u.email_confirmado_em %}e-mail confirmado{% elif u.confirmacao_enviada_em %}confirmação enviada {{ u.confirmacao_enviada_em|date:"d/m" }}{% else %}e-mail não confirmado{% endif %}</small>{% endif %}</td>
       <td class="nowrap"><a class="btn sec sm" href="{% url 'editar_usuario' u.pk %}">Editar</a>{% if u != user and not u.is_superuser %} <a class="btn sec sm" href="{% url 'ativacao_usuario' u.pk %}?next={{ request.get_full_path|urlencode }}">{% if u.is_active %}Desativar{% else %}Reativar{% endif %}</a>{% endif %}</td>
     </tr>
   {% empty %}<tr><td colspan="6" class="vazio">Nenhuma conta.</td></tr>{% endfor %}</tbody>

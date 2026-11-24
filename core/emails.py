@@ -36,6 +36,16 @@ TIPOS = {
         "abaixo:\n\n{link}\n\nO link vale por {validade}. Com o e-mail confirmado, você consegue criar uma senha nova "
         "sozinho se esquecer a sua.\n\nSe não foi você, ignore esta mensagem.\n\n— {escola}",
     ),
+    "CONFIRMAR_CADASTRO": Tipo(
+        "Confirmação de cadastro (enviada pela escola)", "Quando a escola envia, em Contas, o pedido de confirmação "
+        "para quem já tem e-mail cadastrado. Também para a conta criada na candidatura da concedente e para quem o "
+        "responsável cadastra na equipe.",
+        ("nome", "usuario", "papel", "link", "validade", "proximo_passo"),
+        "[{sistema}] Confirme seu cadastro",
+        "Olá, {nome}.\n\nVocê tem uma conta no {sistema} da {escola} como {papel} (usuário {usuario}). Para "
+        "confirmar que este e-mail é seu, abra o link:\n\n{link}\n\n{proximo_passo}\n\nO link vale por {validade}. "
+        "Se você não conhece esta escola, ignore esta mensagem.\n\n— {escola}",
+    ),
     "EMAIL_CONFIRMADO": Tipo(
         "E-mail cadastrado", "Logo depois que a pessoa confirma o e-mail pelo link.",
         ("nome", "usuario"),
@@ -118,6 +128,7 @@ NOMES_VARIAVEIS = {
     "site": "endereço do sistema", "quantidade": "número de presenças", "lista": "lista (dias ou estagiários)",
     "mes": "mês do resumo", "erro": "tipo do erro", "pagina": "página onde aconteceu",
     "origem": "arquivo e linha do código", "ocorrencias": "quantas vezes aconteceu",
+    "papel": "perfil da conta (supervisor(a), orientador(a)…)", "proximo_passo": "o que fazer depois de confirmar",
 }
 
 
@@ -192,10 +203,28 @@ def usuario_do_token(token):
     return None
 
 
-def enviar_confirmacao(request, user):
+PROXIMO_SENHA = ("Como você ainda não entrou no sistema, o link também leva direto para você criar a sua senha. "
+                 "Depois, entre com o seu usuário ou com este e-mail.")
+PROXIMO_ENTRAR = ("Com o e-mail confirmado, se um dia esquecer a senha, você mesmo cria outra pelo “Esqueci minha "
+                  "senha”. Também dá para entrar com este e-mail no lugar do usuário.")
+
+
+def enviar_confirmacao(request, user, pela_escola=False):
+    """Link de confirmação do e-mail. `pela_escola`: texto de “confirme seu cadastro” (enviado pela gestão)."""
     link = endereco(request, reverse("confirmar_email", args=[token_confirmacao(user)]))
-    return enviar("CONFIRMAR_EMAIL", [user.email], nome=user.primeiro_nome, usuario=user.username, link=link,
-                  validade="3 dias")
+    if pela_escola:
+        enviado = enviar("CONFIRMAR_CADASTRO", [user.email], nome=user.primeiro_nome, usuario=user.username,
+                         papel=user.get_papel_display().lower(), link=link, validade="3 dias",
+                         proximo_passo=PROXIMO_SENHA if user.deve_trocar_senha else PROXIMO_ENTRAR)
+    else:
+        enviado = enviar("CONFIRMAR_EMAIL", [user.email], nome=user.primeiro_nome, usuario=user.username, link=link,
+                         validade="3 dias")
+    if enviado and user.pk:
+        from .models import Usuario
+
+        user.confirmacao_enviada_em = timezone.now()
+        Usuario.objects.filter(pk=user.pk).update(confirmacao_enviada_em=user.confirmacao_enviada_em)
+    return enviado
 
 
 def avisar_senha_alterada(request, user):

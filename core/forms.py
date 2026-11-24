@@ -457,6 +457,57 @@ class ConfiguracaoForm(FormularioModelo):
         widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(), "avaliacoes_prazo": DataInput(),
                    "texto_captacao": forms.Textarea(attrs={"rows": 3})}
 
+    SECOES = [
+        ("Escola e folha de frequência", "folha", ["nome_escola", "municipio_escola", "ano_referencia", "cabecalho_folha",
+                                                   "logo_folha", "mostrar_codigo_folha", "estagiarios_emitem_folha"]),
+        ("Presenças e lembretes", "presencas", ["checkin_localizacao", "lembrete_expediente", "lembrete_minutos",
+                                                "atestados_supervisor", "feedback_mensal"]),
+        ("Supervisores", "supervisores", ["confirmacao_por_email", "dia_confirmacao", "resumo_mensal_supervisor"]),
+        ("Avisos e e-mails", "avisos", ["avisos_email", "resumo_semanal", "email_sugestoes"]),
+        ("Segurança e privacidade", "seguranca", ["exigir_dois_fatores", "retencao_anos", "contato_privacidade"]),
+        ("Captação de concedentes", "captacao", ["captacao_aberta", "ano_captacao", "captacao_prazo", "cursos_captacao",
+                                                 "texto_captacao"]),
+        ("Avaliações e SICE", "avaliacoes", ["avaliacoes_abertas", "avaliacoes_prazo", "sice_url"]),
+        ("Perfil profissional e aparência", "perfil", ["curriculos_habilitados", "banco_talentos_habilitado",
+                                                       "tema_escuro", "periodo_testes"]),
+    ]
+    cursos_captacao = forms.ModelMultipleChoiceField(
+        queryset=Curso.objects.none(), required=False, widget=forms.CheckboxSelectMultiple,
+        label="Cursos com vagas na captação",
+        help_text="As concedentes marcam só estes cursos e informam as vagas de cada um.",
+    )
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.fields["cursos_captacao"].queryset = Curso.objects.order_by("nome")
+        self.fields["cursos_captacao"].initial = list(Curso.objects.filter(na_captacao=True).values_list("pk", flat=True))
+
+    def secoes(self):
+        vistos = set()
+        resultado = []
+        for titulo, ancora, campos in self.SECOES:
+            itens = [self[n] for n in campos if n in self.fields]
+            vistos.update(campos)
+            resultado.append((titulo, ancora, itens))
+        sobra = [self[n] for n in self.fields if n not in vistos]
+        if sobra:
+            resultado.append(("Outras opções", "outras", sobra))
+        return resultado
+
+    def save(self, commit=True):
+        config = super().save(commit)
+        if commit and "cursos_captacao" in self.cleaned_data:
+            ids = {c.pk for c in self.cleaned_data["cursos_captacao"]}
+            Curso.objects.filter(pk__in=ids).update(na_captacao=True)
+            Curso.objects.exclude(pk__in=ids).update(na_captacao=False)
+        return config
+
+    def clean(self):
+        dados = super().clean()
+        if dados.get("captacao_aberta") and not dados.get("cursos_captacao"):
+            self.add_error("cursos_captacao", "Escolha pelo menos um curso para abrir a captação.")
+        return dados
+
     def clean_logo_folha(self):
         logo = self.cleaned_data.get("logo_folha")
         if logo and hasattr(logo, "content_type") and logo.size > 2 * 1024 * 1024:
@@ -553,7 +604,7 @@ class LocalForm(FormularioModelo):
             self.fields["raio_checkin"].required = False
         if "vincular_supervisores" in self.fields:
             qs = supervisores_qs()
-            if self.instance.pk:
+            if self.instance.pk and isinstance(self.instance, LocalEstagio):
                 qs = qs.exclude(concedentes=self.instance)
             self.fields["vincular_supervisores"].queryset = qs
             self.fields["vincular_supervisores"].label_from_instance = lambda u: f"{u} ({u.concedentes_txt or 'sem concedente'})"
@@ -1082,7 +1133,7 @@ class AgendamentoForm(FormularioModelo):
 
     class Meta:
         model = Agendamento
-        fields = ["tipo", "modalidade", "status", "data_hora", "local", "estagios", "assunto", "detalhes", "relato"]
+        fields = ["tipo", "modalidade", "status", "data_hora", "duracao", "local", "estagios", "assunto", "detalhes", "relato"]
         widgets = {"estagios": forms.CheckboxSelectMultiple, "data_hora": DataHoraInput()}
 
     def __init__(self, *a, estagios_qs=None, **kw):
@@ -1104,21 +1155,36 @@ class AgendamentoForm(FormularioModelo):
 
 
 class CandidaturaForm(LocalForm):
-    """Formulário público: a concedente se candidata a receber estagiários num ano letivo."""
+    """Cadastro da concedente na captação. Três jeitos de usar:
+
+    - `modo="publico"`: sem login. Quem preenche (representante legal ou pessoa autorizada por ele) cria a própria
+      conta junto, para entrar depois e acompanhar a decisão da escola;
+    - `modo="conta"`: quem já tem conta (supervisor/responsável) manda outra candidatura, sem criar conta;
+    - `modo="escola"`: orientador/coordenador preenche a pedido da concedente;
+    - `modo="editar"`: muda os dados e as vagas enquanto a escola não decidiu.
+    """
 
     SECOES = [
+        ("Quem está preenchendo", ["preenchido_por", "contato_nome", "contato_cargo", "contato_telefone",
+                                   "contato_whatsapp", "contato_email"]),
         ("Dados gerais", ["tipo_concedente", "razao_social", "nome", "tipo_instituicao", "atividade", "cnpj", "matriz_filial"]),
         ("Endereço", ["endereco", "numero", "bairro", "complemento", "cidade", "uf", "cep", "telefone"]),
         ("Representante legal", ["representante_nome", "representante_email", "representante_cpf", "representante_documento"]),
-        ("Quem está preenchendo (vamos falar com esta pessoa)", ["contato_nome", "contato_cargo", "contato_telefone",
-                                                                  "contato_whatsapp", "contato_email"]),
-        ("Vagas", ["VAGAS"]),
+        ("Cursos e vagas", ["VAGAS"]),
         ("Proposta de estágio", ["atividades", "turnos", "horario", "beneficios"]),
         ("Supervisor(a) dos estagiários", ["supervisor_nome", "supervisor_cargo", "supervisor_telefone", "supervisor_email"]),
+        ("Seu acesso ao sistema", ["senha1", "senha2", "aceite_termos"]),
         ("Outras informações", ["observacoes", "consentimento"]),
     ]
     turnos = forms.MultipleChoiceField(choices=Candidatura.TURNOS, widget=forms.CheckboxSelectMultiple, required=False,
                                        label="Turnos disponíveis")
+    senha1 = forms.CharField(label="Crie uma senha", strip=False,
+                             widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+                             help_text="Com ela você entra no sistema para acompanhar a análise e, depois de aprovado, "
+                                       "cadastrar a equipe da concedente.")
+    senha2 = forms.CharField(label="Repita a senha", strip=False,
+                             widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}))
+    aceite_termos = forms.BooleanField(label="Li e aceito os Termos de Uso e o Aviso de Privacidade do sistema.")
     consentimento = forms.BooleanField(
         label="Declaro que as informações são verdadeiras e autorizo a escola a usá-las para organizar o estágio.",
     )
@@ -1127,34 +1193,64 @@ class CandidaturaForm(LocalForm):
 
     class Meta(LocalForm.Meta):
         model = Candidatura
-        fields = [*LocalForm.Meta.fields, "contato_nome", "contato_cargo", "contato_telefone", "contato_whatsapp",
-                  "contato_email", "atividades", "horario", "beneficios", "supervisor_nome", "supervisor_cargo",
-                  "supervisor_telefone", "supervisor_email"]
+        fields = [*LocalForm.Meta.fields, "preenchido_por", "contato_nome", "contato_cargo", "contato_telefone",
+                  "contato_whatsapp", "contato_email", "atividades", "horario", "beneficios", "supervisor_nome",
+                  "supervisor_cargo", "supervisor_telefone", "supervisor_email"]
         for _f in ("link_mapa", "latitude", "longitude", "raio_checkin"):
             fields.remove(_f)
         labels = {**LocalForm.Meta.labels, "observacoes": "Algo mais que a escola deva saber?"}
         help_texts = {}
-        widgets = {**LocalForm.Meta.widgets, "atividades": forms.Textarea(attrs={"rows": 4})}
+        widgets = {**LocalForm.Meta.widgets, "atividades": forms.Textarea(attrs={"rows": 4}),
+                   "preenchido_por": forms.RadioSelect}
 
-    def __init__(self, *a, **kw):
+    def __init__(self, *a, modo="publico", **kw):
         super().__init__(*a, **kw)
+        self.modo = modo
         del self.fields["novos_supervisores"], self.fields["vincular_supervisores"]
         self.fields["razao_social"].required = True
         self.fields["razao_social"].help_text = ""
         self.fields["atividades"].widget.attrs["placeholder"] = "Ex.: apoio no atendimento ao público, organização de arquivos, suporte de informática…"
-        self.cursos = list(Curso.objects.all())
+        escolhas = Candidatura.PreenchidoPor
+        if modo == "escola":
+            del self.fields["preenchido_por"]
+        else:
+            campo = self.fields["preenchido_por"]
+            campo.required = True
+            campo.choices = [(escolhas.REPRESENTANTE, escolhas.REPRESENTANTE.label),
+                             (escolhas.AUTORIZADO, f"{escolhas.AUTORIZADO.label} (você declara que tem a autorização)")]
+            if modo == "editar" and self.instance.preenchido_por == escolhas.ESCOLA:
+                del self.fields["preenchido_por"]
+        if modo != "publico":
+            for nome in ("senha1", "senha2", "aceite_termos"):
+                del self.fields[nome]
+        else:
+            self.fields["contato_email"].required = True
+            self.fields["contato_email"].help_text = "Você recebe aqui a confirmação e a decisão da escola, e pode usá-lo para entrar."
+        if modo == "editar":
+            del self.fields["consentimento"], self.fields["site"]
+        # cursos que a escola abriu para a captação (e, na edição, os que já tinham vaga)
+        ja = {v.curso_id: v.quantidade for v in self.instance.vagas.all()} if self.instance.pk else {}
+        self.cursos = list(Curso.objects.filter(Q(na_captacao=True) | Q(pk__in=ja)).order_by("nome"))
         for c in self.cursos:
+            self.fields[f"curso_{c.pk}"] = forms.BooleanField(label=c.nome, required=False, initial=c.pk in ja)
             self.fields[f"vaga_{c.pk}"] = forms.IntegerField(
-                label=c.nome, min_value=0, max_value=99, required=False,
-                widget=forms.NumberInput(attrs={"placeholder": "0", "inputmode": "numeric"}),
+                label="Vagas", min_value=1, max_value=99, required=False, initial=ja.get(c.pk),
+                widget=forms.NumberInput(attrs={"placeholder": "Quantas?", "inputmode": "numeric"}),
             )
 
     def secoes(self):
         resultado = []
         for titulo, campos in self.SECOES:
-            nomes = [f"vaga_{c.pk}" for c in self.cursos] if campos == ["VAGAS"] else campos
-            resultado.append((titulo, [self[n] for n in nomes if n in self.fields]))
+            if campos == ["VAGAS"]:
+                resultado.append((titulo, []))
+                continue
+            itens = [self[n] for n in campos if n in self.fields]
+            if itens:
+                resultado.append((titulo, itens))
         return resultado
+
+    def cursos_campos(self):
+        return [(c, self[f"curso_{c.pk}"], self[f"vaga_{c.pk}"]) for c in self.cursos]
 
     def clean_turnos(self):
         return ",".join(self.cleaned_data.get("turnos") or [])
@@ -1165,25 +1261,55 @@ class CandidaturaForm(LocalForm):
             raise forms.ValidationError("Informe nome e sobrenome.")
         return nome
 
+    def clean_contato_nome(self):
+        nome = " ".join((self.cleaned_data.get("contato_nome") or "").split())
+        if self.modo == "publico" and len(nome.split()) < 2:
+            raise forms.ValidationError("Informe nome e sobrenome: é o nome da sua conta.")
+        return nome
+
     def clean(self):
         dados = super().clean()
         if dados.get("site"):
             raise forms.ValidationError("Não foi possível enviar o cadastro.")
-        self.vagas = {c: dados.get(f"vaga_{c.pk}") or 0 for c in self.cursos}
-        if not any(self.vagas.values()):
-            raise forms.ValidationError("Informe quantos estagiários deseja em pelo menos um curso.")
+        self.vagas = {}
+        for c in self.cursos:
+            marcado, qtd = dados.get(f"curso_{c.pk}"), dados.get(f"vaga_{c.pk}")
+            if marcado and not qtd and f"vaga_{c.pk}" not in self.errors:
+                self.add_error(f"vaga_{c.pk}", "Informe quantas vagas para este curso.")
+            elif qtd:  # número preenchido conta como curso escolhido (mesmo sem a caixa, se o navegador não tiver JS)
+                self.vagas[c] = qtd
+        if not self.vagas and not any(k.startswith("vaga_") for k in self.errors):
+            raise forms.ValidationError("Escolha pelo menos um curso e informe quantas vagas.")
+        if "senha1" in self.fields and dados.get("senha1"):
+            if dados["senha1"] != dados.get("senha2"):
+                self.add_error("senha2", "As duas senhas não são iguais.")
+            else:
+                from django.contrib.auth.password_validation import validate_password
+
+                provisoria = Usuario(username="concedente", nome_completo=dados.get("contato_nome", ""),
+                                     email=dados.get("contato_email", ""))
+                try:
+                    validate_password(dados["senha1"], provisoria)
+                except forms.ValidationError as exc:
+                    self.add_error("senha1", exc)
         return dados
 
     def save(self, commit=True):
         cand = forms.ModelForm.save(self, commit=False)
         cand.turnos = self.cleaned_data["turnos"]
         if commit:
-            cand.save()
             from .models import VagaCandidatura
 
-            VagaCandidatura.objects.bulk_create(
-                [VagaCandidatura(candidatura=cand, curso=c, quantidade=q) for c, q in self.vagas.items() if q]
-            )
+            cand.save()
+            atuais = {v.curso_id: v for v in cand.vagas.all()}
+            for c, q in self.vagas.items():
+                v = atuais.pop(c.pk, None)
+                if v is None:
+                    VagaCandidatura.objects.create(candidatura=cand, curso=c, quantidade=q)
+                elif v.quantidade != q:
+                    v.quantidade = q
+                    v.save(update_fields=["quantidade"])
+            VagaCandidatura.objects.filter(pk__in=[v.pk for v in atuais.values()]).delete()
         return cand
 
 
@@ -1208,9 +1334,21 @@ class AprovarCandidaturaForm(Formulario):
         else:
             self.fields["criar_supervisor"].label = f"Criar a conta do supervisor indicado ({candidatura.supervisor_nome})"
         mesmo = candidatura.supervisor_nome and chave_nome(candidatura.supervisor_nome) == chave_nome(candidatura.contato_nome)
-        self.fields["criar_responsavel"].label = (
-            f"{'Tornar o supervisor também' if mesmo else 'Criar a conta de'} responsável pela concedente "
-            f"({candidatura.contato_nome})")
+        if candidatura.conta_id:
+            conta = candidatura.conta
+            self.fields["criar_responsavel"].initial = True
+            self.fields["criar_responsavel"].label = (
+                f"Tornar {conta.nome_completo} (usuário {conta.username}) responsável pela concedente")
+            self.fields["criar_responsavel"].help_text = (
+                "É a conta de quem preencheu o cadastro: passa a cadastrar a equipe e dar permissões temporárias. "
+                "Desmarcado, a pessoa só continua vendo a candidatura.")
+            if mesmo and "criar_supervisor" in self.fields:
+                self.fields["criar_supervisor"].label = (
+                    f"{conta.nome_completo} também é o(a) supervisor(a) dos estagiários (usa a mesma conta)")
+        else:
+            self.fields["criar_responsavel"].label = (
+                f"{'Tornar o supervisor também' if mesmo else 'Criar a conta de'} responsável pela concedente "
+                f"({candidatura.contato_nome})")
 
 
 def chave_nome(nome):

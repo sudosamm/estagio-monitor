@@ -21,7 +21,7 @@ class CoreConfig(AppConfig):
 
         from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
 
-        from . import auditoria
+        from . import auditoria, sessoes
         from .seguranca import ao_entrar, ao_falhar
 
         user_login_failed.connect(ao_falhar, dispatch_uid="limite_login_falha")
@@ -29,3 +29,5 @@ class CoreConfig(AppConfig):
         user_logged_in.connect(auditoria.ao_entrar, dispatch_uid="auditoria_login")
         user_login_failed.connect(auditoria.ao_falhar, dispatch_uid="auditoria_login_falha")
         user_logged_out.connect(auditoria.ao_sair, dispatch_uid="auditoria_logout")
+        user_logged_in.connect(sessoes.ao_entrar, dispatch_uid="sessao_aparelho_login")
+        user_logged_out.connect(sessoes.ao_sair, dispatch_uid="sessao_aparelho_logout")

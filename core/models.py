@@ -1,5 +1,5 @@
 import contextvars
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -104,6 +104,8 @@ class Usuario(AbstractUser):
     deve_trocar_senha = models.BooleanField(default=True, help_text="Ainda não criou a própria senha (primeiro acesso)")
     email_confirmado_em = models.DateTimeField(null=True, blank=True, editable=False,
                                                help_text="Quando a pessoa confirmou o e-mail pelo link (vale para recuperar a senha)")
+    confirmacao_enviada_em = models.DateTimeField(null=True, blank=True, editable=False,
+                                                  help_text="Último e-mail de confirmação enviado (evita mandar repetido)")
     # código de uso único do primeiro acesso (guardado só o resumo HMAC; o código aparece uma vez para a gestão)
     codigo_acesso = models.CharField(max_length=64, blank=True, editable=False)
     codigo_acesso_validade = models.DateTimeField(null=True, blank=True, editable=False)
@@ -150,6 +152,7 @@ class Usuario(AbstractUser):
     def from_db(cls, db, field_names, values):
         obj = super().from_db(db, field_names, values)
         obj._email_original = obj.__dict__.get("email")
+        obj._ativo_original = obj.__dict__.get("is_active")
         return obj
 
     def save(self, *args, **kwargs):
@@ -167,6 +170,11 @@ class Usuario(AbstractUser):
             self.nome_completo = f"{self.first_name} {self.last_name}".strip() or self.username
         super().save(*args, **kwargs)
         self._email_original = self.email
+        if getattr(self, "_ativo_original", None) and not self.is_active and (campos is None or "is_active" in campos):
+            from .sessoes import desconectar_todas
+
+            desconectar_todas(self)  # conta desativada sai de todos os aparelhos (não volta sozinha se reativar)
+        self._ativo_original = self.is_active
 
     @property
     def is_orientador(self):
@@ -213,6 +221,17 @@ class Usuario(AbstractUser):
         return bool(self.ids_geridas())
 
     @property
+    def vinculado_a_concedente(self):
+        """Supervisor que já faz parte de uma concedente ativa. A conta criada na candidatura só passa a ser
+        vinculada quando a escola aprova o cadastro: antes disso a pessoa só vê o andamento da candidatura."""
+        if not self.is_supervisor:
+            return False
+        if not hasattr(self, "_vinculado"):
+            self._vinculado = (self.concedentes.filter(ativa=True).exists() or self.concedentes_geridas.exists()
+                               or self.estagios_supervisionados.filter(ativo=True).exists())
+        return self._vinculado
+
+    @property
     def dois_fatores_ativo(self):
         return bool(self.totp_ativo_em and self.totp_segredo)
 
@@ -249,6 +268,8 @@ class Curso(models.Model):
     nome = models.CharField(max_length=120, unique=True)
     carga_horaria = models.PositiveIntegerField("Carga horária total (h)", default=300)
     horas_por_dia_padrao = models.DecimalField("Horas por dia (padrão)", max_digits=4, decimal_places=2, default=Decimal("4"))
+    na_captacao = models.BooleanField("Aparece na captação de concedentes", default=True,
+                                      help_text="As concedentes só escolhem vagas dos cursos marcados.")
 
     class Meta:
         ordering = ["nome"]
@@ -943,6 +964,8 @@ class Agendamento(models.Model):
     local = models.ForeignKey(LocalEstagio, null=True, blank=True, on_delete=models.SET_NULL)
     solicitante = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="agendamentos_solicitados")
     data_hora = models.DateTimeField("Data e hora", null=True, blank=True)
+    duracao = models.PositiveSmallIntegerField("Duração (min)", null=True, blank=True,
+                                               help_text="Vazio = duração padrão do tipo (visita: 90 min).")
     data_sugerida = models.CharField("Sugestão de data/horário", max_length=120, blank=True)
     assunto = models.CharField(max_length=160)
     detalhes = models.TextField(blank=True)
@@ -958,6 +981,16 @@ class Agendamento(models.Model):
 
     def get_absolute_url(self):
         return reverse("agendamento_detalhe", args=[self.pk])
+
+    DURACAO_PADRAO = {"VISITA": 90, "CONVERSA": 30, "REUNIAO": 60}
+
+    @property
+    def duracao_min(self):
+        return self.duracao or self.DURACAO_PADRAO.get(self.tipo, 60)
+
+    @property
+    def fim(self):
+        return self.data_hora + timedelta(minutes=self.duracao_min) if self.data_hora else None
 
     def pode_ver(self, usuario):
         if usuario.is_superuser or usuario.pk in (self.orientador_id, self.solicitante_id):
@@ -1503,8 +1536,9 @@ class Configuracao(models.Model):
         help_text="Desligado: o estagiário só baixa a folha que o orientador enviar para o mês.",
     )
     mostrar_codigo_folha = models.BooleanField(
-        "Imprimir código de controle no rodapé da folha", default=True,
-        help_text="Linha discreta “Emitida em … · cód. XXXX” que permite saber quem emitiu cada folha impressa.",
+        "Imprimir a data de emissão e o código no rodapé da folha", default=True,
+        help_text="Linha “Emitida em … · cód. XXXX” no canto de baixo. Desligada, a folha sai sem nada fora do modelo "
+                  "oficial. O sistema continua registrando quem abriu e imprimiu cada folha.",
     )
     captacao_aberta = models.BooleanField(
         "Captação de concedentes aberta", default=False,
@@ -1606,6 +1640,11 @@ class Candidatura(DadosConcedente):
         APROVADA = "APROVADA", "Aprovada"
         RECUSADA = "RECUSADA", "Recusada"
 
+    class PreenchidoPor(models.TextChoices):
+        REPRESENTANTE = "REPRESENTANTE", "O(a) representante legal da concedente"
+        AUTORIZADO = "AUTORIZADO", "Pessoa autorizada pelo(a) representante legal"
+        ESCOLA = "ESCOLA", "A escola (orientador ou coordenador), a pedido da concedente"
+
     TURNOS = [("MANHA", "Manhã"), ("TARDE", "Tarde"), ("NOITE", "Noite")]
 
     ano = models.PositiveIntegerField("Ano letivo")
@@ -1616,6 +1655,12 @@ class Candidatura(DadosConcedente):
     contato_email = models.EmailField("E-mail", blank=True)
     contato_telefone = models.CharField("Telefone", max_length=30)
     contato_whatsapp = models.BooleanField("Este telefone tem WhatsApp", default=True)
+    preenchido_por = models.CharField("Quem está preenchendo", max_length=13, choices=PreenchidoPor.choices, blank=True)
+    conta = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                              related_name="candidaturas_feitas",
+                              help_text="Conta de quem preencheu: acompanha a análise e, aprovada, vira responsável")
+    cadastrada_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                       related_name="+", help_text="Orientador/coordenador que preencheu pela concedente")
     # supervisor proposto
     supervisor_nome = models.CharField("Nome completo", max_length=150, blank=True)
     supervisor_cargo = models.CharField("Cargo", max_length=80, blank=True)
@@ -1637,6 +1682,7 @@ class Candidatura(DadosConcedente):
     local = models.ForeignKey(LocalEstagio, null=True, blank=True, on_delete=models.SET_NULL, related_name="candidaturas",
                               verbose_name="Concedente cadastrada")
     criado_em = models.DateTimeField(auto_now_add=True)
+    alterada_em = models.DateTimeField(null=True, blank=True, help_text="Última alteração antes da análise")
     ip = models.GenericIPAddressField(null=True, blank=True)
 
     class Meta:
@@ -1661,6 +1707,15 @@ class Candidatura(DadosConcedente):
             return False
         ids = usuario.cursos_ids() if usuario.is_coordenador else None
         return ids is None or self.vagas.filter(curso_id__in=ids).exists()
+
+    @property
+    def pendente(self):
+        return self.status == self.Status.PENDENTE
+
+    def pode_alterar(self, usuario):
+        """Os dados e as vagas mudam só enquanto a escola não decidiu: depois de aprovada, as vagas ficam como
+        foram aceitas."""
+        return self.pendente and usuario.is_authenticated and (usuario.pk == self.conta_id or self.pode_ver(usuario))
 
 
 class VagaCandidatura(models.Model):
@@ -1867,6 +1922,27 @@ class RegistroAcao(models.Model):
 
     def __str__(self):
         return f"{self.quando:%d/%m/%Y %H:%M} {self.quem}: {self.descricao}"
+
+
+class SessaoAparelho(models.Model):
+    """Cada aparelho em que a pessoa está conectada. A sessão fica presa ao aparelho em que começou (navegador e
+    sistema, mais um cookie próprio): usada em outro aparelho, é encerrada. Ver core/sessoes.py."""
+
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sessoes")
+    chave = models.CharField(max_length=40, unique=True, help_text="Chave da sessão do Django")
+    aparelho = models.CharField(max_length=80, blank=True)
+    assinatura = models.CharField(max_length=64, blank=True, help_text="Resumo do navegador e do sistema do aparelho")
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    criada_em = models.DateTimeField(default=timezone.now)
+    ultimo_uso = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-ultimo_uso"]
+        verbose_name = "aparelho conectado"
+        verbose_name_plural = "aparelhos conectados"
+
+    def __str__(self):
+        return f"{self.usuario} — {self.aparelho or 'aparelho'}"
 
 
 class Substituicao(models.Model):

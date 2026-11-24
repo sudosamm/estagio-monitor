@@ -115,7 +115,7 @@ def _agenda_proxima(user):
     if user.is_superuser:
         qs = qs.filter(orientador=user)
     return [{"inicio": timezone.localtime(a.data_hora).strftime("%Y-%m-%dT%H:%M"), "assunto": a.assunto,
-             "duracao": DURACAO_PADRAO.get(a.tipo, 60)} for a in qs]
+             "duracao": a.duracao_min} for a in qs]
 
 
 def ficha_contexto(estagio, user, hoje=None):
@@ -215,9 +215,6 @@ def cancelar_agendamento(request, pk):
 
 # ---------------------------------------------------------------- calendário (Google Agenda, celular)
 
-DURACAO_PADRAO = {Agendamento.Tipo.VISITA: 90, Agendamento.Tipo.CONVERSA: 30, Agendamento.Tipo.REUNIAO: 60}
-
-
 @login_required
 def assinar_agenda(request):
     """Mostra o link secreto da agenda e permite gerar um novo (o antigo para de funcionar)."""
@@ -276,7 +273,7 @@ def agenda_ics(request, token):
               "X-PUBLISHED-TTL:PT1H"]
     for a in qs:
         inicio = a.data_hora.astimezone(dt_timezone.utc)
-        fim = inicio + timedelta(minutes=DURACAO_PADRAO.get(a.tipo, 60))
+        fim = inicio + timedelta(minutes=a.duracao_min)
         nomes = ", ".join(e.estagiario.nome_completo for e in a.estagios.all())
         descricao = [f"{a.get_tipo_display()} ({a.get_modalidade_display().lower()})"]
         if nomes:

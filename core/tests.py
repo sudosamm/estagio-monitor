@@ -352,7 +352,8 @@ class ConcedenteEPerfilTests(Base):
         self.assertContains(r, "CPF inválido")
 
     def test_banco_de_talentos_liga_e_desliga(self):
-        outro_sup = _ativo(criar_usuario("Selma Duarte", Usuario.Papel.SUPERVISOR))
+        outro_sup = _ativo(criar_usuario("Selma Duarte", Usuario.Papel.SUPERVISOR,
+                                         concedente=LocalEstagio.objects.create(nome="Outra Empresa")))
         self.entrar(outro_sup)
         self.assertEqual(self.client.get(reverse("banco_talentos")).status_code, 404)
         cfg = Configuracao.atual()
@@ -423,8 +424,10 @@ class CaptacaoTests(Base):
         d = {"tipo_concedente": "PJ", "razao_social": "Padaria Pão Quente LTDA", "nome": "Pão Quente", "uf": "CE",
              "cnpj": "11.222.333/0001-81", "contato_nome": "Jorge Amaral", "contato_telefone": "(85) 99876-5432",
              "contato_whatsapp": "on", "atividades": "Atendimento e caixa", "turnos": ["MANHA"],
-             f"vaga_{self.curso.pk}": "2", "supervisor_nome": "Marta Amaral", "supervisor_telefone": "(85) 98888-7777",
-             "consentimento": "on"}
+             f"curso_{self.curso.pk}": "on", f"vaga_{self.curso.pk}": "2", "supervisor_nome": "Marta Amaral",
+             "supervisor_telefone": "(85) 98888-7777", "consentimento": "on", "preenchido_por": "REPRESENTANTE",
+             "contato_email": "jorge@paoquente.test", "senha1": "Girassol#Azul27", "senha2": "Girassol#Azul27",
+             "aceite_termos": "on"}
         d.update(kw)
         return d
 
@@ -437,7 +440,8 @@ class CaptacaoTests(Base):
         r = self.client.get(reverse("candidatura_publica"))
         self.assertContains(r, "não estão abertas")
         self.abrir()
-        r = self.client.post(reverse("candidatura_publica"), self._dados(**{f"vaga_{self.curso.pk}": ""}))
+        r = self.client.post(reverse("candidatura_publica"), self._dados(**{f"vaga_{self.curso.pk}": "",
+                                                                            f"curso_{self.curso.pk}": ""}))
         self.assertContains(r, "pelo menos um curso")
         r = self.client.post(reverse("candidatura_publica"), self._dados())
         cand = Candidatura.objects.get()
@@ -3896,3 +3900,398 @@ class RoteiroBuscaTests(Base):
         self.assertFalse(any(g["nome"] == "Estagiários" for g in grupos))
         self.entrar(self.sup)
         self.assertEqual(self.client.get(reverse("buscar") + "?q=maria").status_code, 403)
+
+
+class SessaoAparelhoTests(Base):
+    SENHA = "Senha#Forte9"
+    UA_CHROME = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36"
+    UA_FIREFOX = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"
+
+    def setUp(self):
+        super().setUp()
+        self.ori.set_password(self.SENHA)
+        self.ori.save()
+
+    def _cliente(self, ua=UA_CHROME):
+        from django.test import Client
+
+        c = Client(HTTP_USER_AGENT=ua)
+        r = c.post(reverse("login"), {"username": self.ori.username, "password": self.SENHA})
+        self.assertEqual(r.status_code, 302)
+        c.get(reverse("perfil"))  # o navegador devolve o cookie do aparelho: a sessão fica presa a ele
+        return c
+
+    def test_login_registra_aparelho_e_lista(self):
+        from .models import SessaoAparelho
+
+        c = self._cliente()
+        rec = SessaoAparelho.objects.get(usuario=self.ori)
+        self.assertEqual(rec.aparelho, "Chrome no Android")
+        self.assertIn("aparelho", c.cookies)
+        r = c.get(reverse("acessos"))
+        self.assertContains(r, "Chrome no Android")
+        self.assertContains(r, "este aparelho")
+        self.assertContains(r, "Entrou no sistema")
+
+    def test_cookie_copiado_para_outro_navegador_encerra_a_sessao(self):
+        from django.test import Client
+
+        from .models import RegistroAcao, SessaoAparelho
+
+        c = self._cliente()
+        ladrao = Client(HTTP_USER_AGENT=self.UA_FIREFOX)
+        for nome in ("sessionid", "aparelho"):
+            ladrao.cookies[nome] = c.cookies[nome].value
+        r = ladrao.get(reverse("painel"))
+        self.assertRedirects(r, reverse("login"), fetch_redirect_response=False)
+        self.assertFalse(SessaoAparelho.objects.filter(usuario=self.ori).exists())
+        self.assertTrue(RegistroAcao.objects.filter(usuario=self.ori, tipo="SESSAO_RECUSADA").exists())
+        self.assertTrue(Notificacao.objects.filter(usuario=self.ori, texto__contains="outro").exists())
+        # a sessão acabou no servidor: o aparelho original também precisa entrar de novo
+        self.assertEqual(c.get(reverse("painel")).status_code, 302)
+
+    def test_versao_para_computador_do_celular_nao_desconecta(self):
+        c = self._cliente()
+        desktop = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
+        self.assertEqual(c.get(reverse("painel"), HTTP_USER_AGENT=desktop).status_code, 200)
+        iphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/131.0 Mobile/15E148 Safari/604.1"
+        mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+        i = self._cliente(iphone)
+        self.assertEqual(i.get(reverse("painel"), HTTP_USER_AGENT=mac).status_code, 200)
+        self.assertEqual(c.get(reverse("painel"), HTTP_USER_AGENT=self.UA_FIREFOX).status_code, 302)
+
+    def test_sem_o_cookie_do_aparelho_encerra(self):
+        c = self._cliente()
+        del c.cookies["aparelho"]
+        self.assertEqual(c.get(reverse("painel")).status_code, 302)
+        self.assertEqual(c.get(reverse("painel")).status_code, 302)
+
+    def test_sair_com_o_cookie_copiado_desconecta_o_original(self):
+        from django.test import Client
+
+        c = self._cliente()
+        copia = Client(HTTP_USER_AGENT=self.UA_CHROME)
+        for nome in ("sessionid", "aparelho"):
+            copia.cookies[nome] = c.cookies[nome].value
+        copia.post(reverse("logout"))
+        self.assertEqual(c.get(reverse("painel")).status_code, 302)
+
+    def test_desconectar_outro_aparelho_e_todos(self):
+        from .models import SessaoAparelho
+
+        a = self._cliente()
+        b = self._cliente(self.UA_FIREFOX)
+        self.assertEqual(SessaoAparelho.objects.filter(usuario=self.ori).count(), 2)
+        rec_b = SessaoAparelho.objects.get(usuario=self.ori, aparelho__startswith="Firefox")
+        a.post(reverse("acessos"), {"acao": "desconectar", "id": rec_b.pk})
+        self.assertEqual(b.get(reverse("painel")).status_code, 302)
+        self.assertEqual(a.get(reverse("painel")).status_code, 200)
+        b = self._cliente(self.UA_FIREFOX)
+        a.post(reverse("acessos"), {"acao": "outros"})
+        self.assertEqual(b.get(reverse("painel")).status_code, 302)
+        self.assertEqual(SessaoAparelho.objects.filter(usuario=self.ori).count(), 1)
+
+    def test_trocar_senha_desconecta_os_outros(self):
+        a = self._cliente()
+        b = self._cliente(self.UA_FIREFOX)
+        r = a.post(reverse("trocar_senha"), {"old_password": self.SENHA, "new_password1": "Outra#Senha77",
+                                             "new_password2": "Outra#Senha77"}, follow=True)
+        self.assertContains(r, "1 outro(s) aparelho(s)")
+        self.assertEqual(a.get(reverse("painel")).status_code, 200)
+        self.assertEqual(b.get(reverse("painel")).status_code, 302)
+
+    def test_sessao_antiga_e_adotada_e_presa_ao_navegador(self):
+        from django.test import Client
+
+        from .models import SessaoAparelho
+
+        c = self._cliente()
+        s = c.session
+        for k in ("_ap_id", "_ap_chave", "_ap_ass", "_ap_cookie", "_ap_visto"):
+            s.pop(k, None)
+        s.save()
+        SessaoAparelho.objects.all().delete()
+        del c.cookies["aparelho"]
+        self.assertEqual(c.get(reverse("painel")).status_code, 200)  # adotada, sem desconectar
+        self.assertEqual(SessaoAparelho.objects.filter(usuario=self.ori).count(), 1)
+        outro = Client(HTTP_USER_AGENT=self.UA_FIREFOX)
+        outro.cookies["sessionid"] = c.cookies["sessionid"].value
+        self.assertEqual(outro.get(reverse("painel")).status_code, 302)
+
+    def test_desativar_a_conta_desconecta(self):
+        from django.test import Client
+
+        c = Client(HTTP_USER_AGENT=self.UA_CHROME)
+        self.sup.set_password(self.SENHA)
+        self.sup.save()
+        c.post(reverse("login"), {"username": self.sup.username, "password": self.SENHA})
+        self.assertEqual(c.get(reverse("painel_supervisor")).status_code, 200)
+        self.est.supervisor = None
+        self.est.save()
+        self.sup.is_active = False
+        self.sup.save()
+        self.sup.is_active = True
+        self.sup.save()
+        self.assertEqual(c.get(reverse("painel_supervisor")).status_code, 302)  # reativada não volta sozinha
+
+    def test_gestao_desconecta_de_todos_os_aparelhos(self):
+        from .models import SessaoAparelho
+
+        self.sup.set_password(self.SENHA)
+        self.sup.save()
+        from django.test import Client
+
+        c = Client(HTTP_USER_AGENT=self.UA_CHROME)
+        c.post(reverse("login"), {"username": self.sup.username, "password": self.SENHA})
+        self.entrar(self.ori)
+        self.client.post(reverse("desconectar_usuario", args=[self.sup.pk]))
+        self.assertEqual(c.get(reverse("painel_supervisor")).status_code, 302)
+        self.assertFalse(SessaoAparelho.objects.filter(usuario=self.sup).exists())
+
+    def test_entrar_com_email(self):
+        self.ori.email = "paula@escola.test"
+        self.ori.save()
+        r = self.client.post(reverse("login"), {"username": "Paula@Escola.test", "password": self.SENHA})
+        self.assertEqual(r.status_code, 302)
+        self.client.logout()
+        _ativo(criar_usuario("Paula Outra", Usuario.Papel.ORIENTADOR, email="paula@escola.test"))
+        r = self.client.post(reverse("login"), {"username": "paula@escola.test", "password": self.SENHA})
+        self.assertEqual(r.status_code, 200)  # e-mail de duas contas: não adivinha qual
+
+
+@override_settings(EMAIL_ATIVO=True, SITE_URL="https://estagio.exemplo.br")
+class ConfirmacaoCadastroTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.ori.is_superuser = True
+        self.ori.save()
+        self.novo = criar_usuario("Carla Mendes", Usuario.Papel.SUPERVISOR, self.ori, concedente=self.local,
+                                  email="carla@empresa.test")
+
+    def _link(self, msg):
+        import re
+
+        return re.search(r"https?://[^/\s]+(/email/confirmar/\S+/)", msg.body).group(1)
+
+    def test_link_confirma_e_leva_a_criar_a_senha(self):
+        from django.core import mail
+
+        self.entrar(self.ori)
+        r = self.client.post(reverse("pedir_confirmacao_email", args=[self.novo.pk]), follow=True)
+        self.assertContains(r, "Pedido de confirmação enviado")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("criar a sua senha", mail.outbox[0].body)
+        self.assertIn("carla.mendes", mail.outbox[0].body)
+        self.client.logout()
+        r = self.client.get(self._link(mail.outbox[0]), follow=True)
+        self.assertContains(r, "Agora crie a sua senha")
+        self.novo.refresh_from_db()
+        self.assertIsNotNone(self.novo.email_confirmado_em)
+        url = r.redirect_chain[-1][0]
+        r = self.client.post(url, {"new_password1": "Ipe#Amarelo33", "new_password2": "Ipe#Amarelo33"})
+        self.novo.refresh_from_db()
+        self.assertFalse(self.novo.deve_trocar_senha)
+        self.assertEqual(self.client.post(reverse("login"), {"username": "carla@empresa.test",
+                                                             "password": "Ipe#Amarelo33"}).status_code, 302)
+
+    def test_em_lote_pula_quem_recebeu_ha_pouco(self):
+        from django.core import mail
+
+        outro = criar_usuario("Davi Lopes", Usuario.Papel.SUPERVISOR, self.ori, concedente=self.local,
+                              email="davi@empresa.test")
+        outro.confirmacao_enviada_em = timezone.now()
+        outro.save()
+        self.entrar(self.ori)
+        r = self.client.get(reverse("usuarios") + "?situacao=email")
+        self.assertContains(r, "Carla Mendes")
+        self.assertNotContains(r, "Sérgio Supervisor")  # sem e-mail
+        r = self.client.post(reverse("confirmacao_lote"), {"papel": "", "q": ""}, follow=True)
+        self.assertContains(r, "enviado para 1 conta")
+        self.assertEqual([m.to for m in mail.outbox], [["carla@empresa.test"]])
+
+    def test_orientador_sem_vinculo_nao_libera_o_acesso_de_quem_nao_entrou(self):
+        orientadora = _ativo(criar_usuario("Rosa Lima", Usuario.Papel.ORIENTADOR))
+        self.entrar(orientadora)
+        self.assertEqual(self.client.post(reverse("pedir_confirmacao_email", args=[self.novo.pk])).status_code, 403)
+
+
+class CandidaturaComContaTests(Base):
+    def setUp(self):
+        super().setUp()
+        cfg = Configuracao.atual()
+        cfg.captacao_aberta, cfg.ano_captacao = True, 2027
+        cfg.save()
+        self.fechado = Curso.objects.create(nome="Enfermagem", na_captacao=False)
+
+    def _dados(self, **kw):
+        d = {"tipo_concedente": "PJ", "razao_social": "Loja Bela Vista LTDA", "nome": "Bela Vista", "uf": "CE",
+             "contato_nome": "Helena Prado", "contato_telefone": "(85) 99876-0000", "contato_email": "helena@bela.test",
+             "preenchido_por": "AUTORIZADO", "atividades": "Atendimento", f"curso_{self.curso.pk}": "on",
+             f"vaga_{self.curso.pk}": "3", "senha1": "Cajueiro#Doce42", "senha2": "Cajueiro#Doce42",
+             "aceite_termos": "on", "consentimento": "on"}
+        d.update(kw)
+        return d
+
+    def test_cria_conta_que_so_ve_a_candidatura(self):
+        r = self.client.post(reverse("candidatura_publica"), self._dados())
+        cand = Candidatura.objects.get()
+        conta = cand.conta
+        self.assertContains(r, conta.username)
+        self.assertEqual((conta.papel, conta.deve_trocar_senha, conta.email), (Usuario.Papel.SUPERVISOR, False,
+                                                                              "helena@bela.test"))
+        self.assertTrue(conta.check_password("Cajueiro#Doce42"))
+        self.assertTrue(conta.termos_versao)
+        self.assertEqual(cand.preenchido_por, "AUTORIZADO")
+        self.assertFalse(conta.vinculado_a_concedente)
+        r = self.client.get(reverse("inicio"), follow=True)
+        self.assertContains(r, "Aguardando a análise")
+        self.assertRedirects(self.client.get(reverse("painel_supervisor")), reverse("minhas_candidaturas"),
+                             fetch_redirect_response=False)
+        cfg = Configuracao.atual()
+        cfg.banco_talentos_habilitado = True
+        cfg.save()
+        self.assertEqual(self.client.get(reverse("banco_talentos")).status_code, 403)
+
+    def test_cursos_por_caixa_de_selecao(self):
+        r = self.client.get(reverse("candidatura_publica"))
+        self.assertContains(r, self.curso.nome)
+        self.assertNotContains(r, "Enfermagem")
+        r = self.client.post(reverse("candidatura_publica"), self._dados(**{f"vaga_{self.curso.pk}": ""}))
+        self.assertContains(r, "Informe quantas vagas")
+        self.client.post(reverse("candidatura_publica"), self._dados(**{f"vaga_{self.fechado.pk}": "5"}))
+        self.assertEqual([(v.curso, v.quantidade) for v in VagaCandidatura.objects.all()], [(self.curso, 3)])
+
+    def test_altera_enquanto_pendente_e_trava_depois_de_aprovada(self):
+        self.client.post(reverse("candidatura_publica"), self._dados())
+        cand = Candidatura.objects.get()
+        dados = self._dados(**{f"vaga_{self.curso.pk}": "5"})
+        r = self.client.post(reverse("editar_candidatura", args=[cand.pk]), dados, follow=True)
+        self.assertContains(r, "Cadastro atualizado")
+        cand.refresh_from_db()
+        self.assertEqual(cand.total_vagas, 5)
+        self.assertIsNotNone(cand.alterada_em)
+        conta = cand.conta
+        self.entrar(self.ori)
+        self.client.post(cand.get_absolute_url(), {"acao": "aprovar", "a-destino": "nova", "a-criar_responsavel": "on"})
+        cand.refresh_from_db()
+        conta = Usuario.objects.get(pk=conta.pk)
+        self.assertEqual(list(conta.concedentes_geridas.all()), [cand.local])
+        self.assertTrue(conta.vinculado_a_concedente)
+        self.assertTrue(Notificacao.objects.filter(usuario=conta, texto__contains="aprovado").exists())
+        self.entrar(conta)
+        r = self.client.post(reverse("editar_candidatura", args=[cand.pk]), self._dados(**{f"vaga_{self.curso.pk}": "9"}),
+                             follow=True)
+        self.assertContains(r, "não mudam mais")
+        self.assertEqual(Candidatura.objects.get().total_vagas, 5)
+        r = self.client.get(reverse("minha_candidatura", args=[cand.pk]))
+        self.assertContains(r, "Cadastro aprovado")
+        self.assertContains(r, "Cadastrar a equipe")
+
+    def test_escola_preenche_pela_concedente_mesmo_fechada(self):
+        cfg = Configuracao.atual()
+        cfg.captacao_aberta = False
+        cfg.save()
+        self.entrar(self.ori)
+        dados = self._dados()
+        for k in ("senha1", "senha2", "aceite_termos", "preenchido_por"):
+            dados.pop(k)
+        r = self.client.post(reverse("candidatura_publica"), dados)
+        cand = Candidatura.objects.get()
+        self.assertRedirects(r, cand.get_absolute_url(), fetch_redirect_response=False)
+        self.assertEqual((cand.preenchido_por, cand.cadastrada_por, cand.conta), ("ESCOLA", self.ori, None))
+        self.assertFalse(Usuario.objects.filter(email="helena@bela.test").exists())
+
+    def test_supervisor_com_conta_manda_pela_conta_e_estagiario_nao(self):
+        self.entrar(self.sup)
+        dados = self._dados()
+        for k in ("senha1", "senha2", "aceite_termos"):
+            dados.pop(k)
+        self.client.post(reverse("candidatura_publica"), dados)
+        self.assertEqual(Candidatura.objects.get().conta, self.sup)
+        self.entrar(self.aluno)
+        self.assertContains(self.client.get(reverse("candidatura_publica")), "conectado como estagiário")
+
+    def test_configuracoes_escolhem_os_cursos(self):
+        self.ori.is_superuser = True
+        self.ori.save()
+        self.entrar(self.ori)
+        from .forms import ConfiguracaoForm
+
+        form = ConfiguracaoForm(instance=Configuracao.atual())
+        dados = {k: v for k, v in form.initial.items() if v is not None and k not in ("logo_folha", "cursos_captacao")}
+        for k, v in list(dados.items()):
+            if v is True:
+                dados[k] = "on"
+            elif v is False:
+                dados.pop(k)
+            elif hasattr(v, "isoformat"):
+                dados[k] = v.isoformat()
+        dados["cursos_captacao"] = [self.fechado.pk]
+        r = self.client.post(reverse("configuracoes"), dados)
+        self.assertEqual(r.status_code, 302, getattr(r, "context", {}) and r.context["form"].errors)
+        self.assertEqual(list(Curso.objects.filter(na_captacao=True)), [self.fechado])
+
+
+class AgendamentoRapidoTests(Base):
+    SEGUNDA = date(2026, 11, 16)
+
+    def test_planejar_pula_almoco_e_compromissos(self):
+        from datetime import time as hora
+
+        from .views.roteiro import paradas_do_dia, planejar
+
+        local2 = LocalEstagio.objects.create(nome="Empresa Y")
+        aluna = _ativo(criar_usuario("Joana Prado", Usuario.Papel.ESTAGIARIO))
+        e2 = Estagio.objects.create(estagiario=aluna, orientador=self.ori, curso=self.curso, local=local2,
+                                    data_inicio=date(2026, 11, 2))
+        Escala.objects.create(estagio=e2, vigente_desde=date(2026, 11, 2), dias="0,1", horas_por_dia=4)
+        paradas = paradas_do_dia(self.ori, self.SEGUNDA)
+        self.assertEqual(len(paradas), 2)
+        tz = timezone.get_current_timezone()
+        ocupado = (timezone.make_aware(datetime(2026, 11, 16, 13, 0), tz),
+                   timezone.make_aware(datetime(2026, 11, 16, 13, 30), tz))
+        plano = planejar(paradas, self.SEGUNDA, hora(11, 0), 45, 20, [ocupado],
+                         agora=timezone.make_aware(datetime(2026, 11, 10, 9, 0), tz))
+        horarios = [(timezone.localtime(i["inicio"]).strftime("%H:%M"), timezone.localtime(i["fim"]).strftime("%H:%M"))
+                    for i in plano]
+        # 11:00–11:45; a segunda cairia 12:05 (almoço) → 13:00, que está ocupado → 13:30
+        self.assertEqual(horarios, [("11:00", "11:45"), ("13:30", "14:15")])
+
+    def test_previa_e_criacao(self):
+        self.entrar(self.ori)
+        dados = {"data": self.SEGUNDA.isoformat(), "inicio": "08:00", "duracao": "30", "deslocamento": "15",
+                 "locais": [self.local.pk]}
+        r = self.client.post(reverse("agendamento_rapido"), {**dados, "acao": "previa"})
+        self.assertContains(r, "Agenda proposta")
+        self.assertContains(r, "08:00")
+        self.assertFalse(Agendamento.objects.exists())
+        r = self.client.post(reverse("agendamento_rapido"), {**dados, "acao": "criar"})
+        ag = Agendamento.objects.get()
+        self.assertEqual((ag.status, ag.duracao, ag.local, list(ag.estagios.all())),
+                         (Agendamento.Status.AGENDADO, 30, self.local, [self.est]))
+        self.assertEqual(timezone.localtime(ag.data_hora).strftime("%d/%m %H:%M"), "16/11 08:00")
+        self.assertTrue(Notificacao.objects.filter(usuario=self.aluno, texto__contains="Visita agendada").exists())
+        r = self.client.get(reverse("roteiro") + f"?data={self.SEGUNDA.isoformat()}")
+        self.assertContains(r, "visita marcada 08:00")
+
+
+class EquipeContatoEFolhaTests(Base):
+    def test_responsavel_atualiza_contato_da_equipe(self):
+        chefe = _ativo(criar_usuario("Lara Chefe", Usuario.Papel.SUPERVISOR, concedente=self.local))
+        chefe.concedentes_geridas.add(self.local)
+        self.entrar(chefe)
+        self.client.post(reverse("equipe_concedente", args=[self.local.pk]),
+                         {"acao": "contato", "id": self.sup.pk, "telefone": "(85) 91234-5678",
+                          "email": "sergio@empresa.test", "cargo": "Gerente"})
+        self.sup.refresh_from_db()
+        self.assertEqual((self.sup.telefone, self.sup.email, self.sup.cargo),
+                         ("(85) 91234-5678", "sergio@empresa.test", "Gerente"))
+
+    def test_rodape_da_folha_liga_e_desliga(self):
+        self.entrar(self.ori)
+        url = reverse("folha_frequencia", args=[self.est.pk]) + "?mes=2026-11"
+        self.assertContains(self.client.get(url), "Emitida em")
+        cfg = Configuracao.atual()
+        cfg.mostrar_codigo_folha = False
+        cfg.save()
+        self.assertNotContains(self.client.get(url), "Emitida em")

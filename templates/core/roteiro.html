@@ -4,14 +4,15 @@
 {% block conteudo %}
 <div class="titulo-pagina"><div><div class="migalha"><a href="{% url 'agendamentos' %}">← Agenda de visitas</a></div>
   <h1>Roteiro de visitas</h1><p class="mb-0">Concedentes com estagiário no local em <strong>{{ dia|date:"l, d/m/Y" }}</strong>{% if paradas %} · {{ paradas|length }} concedente{{ paradas|length|pluralize }}, {{ total }} estagiário{{ total|pluralize }}{% endif %}</p></div>
-  <form class="roteiro-dia" method="get"><a class="btn sec sm" href="?data={{ anterior }}" aria-label="Dia anterior">{% icone "esq" %}</a><input type="date" name="data" value="{{ dia|date:'Y-m-d' }}" onchange="this.form.submit()" aria-label="Dia"><a class="btn sec sm" href="?data={{ proximo }}" aria-label="Próximo dia">{% icone "dir" %}</a></form></div>
+  <form class="roteiro-dia" method="get"><a class="btn sec sm" href="?data={{ anterior }}{% if cidade %}&cidade={{ cidade|urlencode }}{% endif %}" aria-label="Dia anterior">{% icone "esq" %}</a><input type="date" name="data" value="{{ dia|date:'Y-m-d' }}" onchange="this.form.submit()" aria-label="Dia"><a class="btn sec sm" href="?data={{ proximo }}{% if cidade %}&cidade={{ cidade|urlencode }}{% endif %}" aria-label="Próximo dia">{% icone "dir" %}</a>
+    {% if cidades|length > 1 or cidade %}<select name="cidade" onchange="this.form.submit()" aria-label="Município"><option value="">Todos os municípios</option>{% for c, n in cidades %}<option value="{{ c }}"{% if c == cidade %} selected{% endif %}>{{ c }} ({{ n }})</option>{% endfor %}</select>{% endif %}</form></div>
 
 {% if paradas %}
 <div class="caixa-info mb-1">Marque as concedentes que quer visitar e toque em <strong>Abrir o roteiro no mapa</strong>: o Google Maps traça o caminho a partir de onde você estiver, na ordem da lista (até 10 paradas). As mais próximas entre si aparecem juntas{% if sem_visita %}; {{ sem_visita }} ainda não {{ sem_visita|pluralize:"teve,tiveram" }} nenhuma visita registrada{% endif %}.</div>
 <div class="roteiro" data-roteiro>
   {% for p in paradas %}
   <label class="card parada{% if p.agendada %} agendada{% endif %}">
-    <input type="checkbox" value="{{ p.destino }}" data-parada{% if p.sugerida %} checked{% endif %}>
+    <input type="checkbox" name="locais" value="{{ p.local.pk }}" form="agenda-rapida" data-destino="{{ p.destino }}" data-parada{% if p.sugerida %} checked{% endif %}>
     <span class="parada-num" aria-hidden="true">{{ forloop.counter }}</span>
     <span class="cresce">
       <strong>{{ p.local.nome }}</strong>
@@ -29,8 +30,21 @@
 </div>
 <div class="roteiro-barra card">
   <span class="cresce" data-roteiro-contagem></span>
-  <a class="btn" href="#" target="_blank" rel="noopener" data-roteiro-abrir>{% icone "rota" %} Abrir o roteiro no mapa</a>
+  <a class="btn sec" href="#" target="_blank" rel="noopener" data-roteiro-abrir>{% icone "rota" %} Abrir o roteiro no mapa</a>
 </div>
+{% if dia >= hoje %}
+<form class="card destaque agenda-rapida" id="agenda-rapida" method="post" action="{% url 'agendamento_rapido' %}">{% csrf_token %}
+  <input type="hidden" name="data" value="{{ dia|date:'Y-m-d' }}"><input type="hidden" name="acao" value="previa">
+  <h2>{% icone "calendario" %} Agendamento rápido</h2>
+  <p class="muted" style="font-size:.88rem">O sistema monta a rota entre as concedentes marcadas acima (manhã antes da tarde, as mais próximas em seguida), cria uma visita para cada uma e avisa estagiários e supervisores. Nenhuma visita fica entre 12h e 13h, e os compromissos que você já tem no dia são respeitados. Antes de criar, você vê a agenda proposta.</p>
+  <div class="form-linha">
+    <div class="campo"><label for="ar-inicio">Começar às</label><input type="time" id="ar-inicio" name="inicio" value="{{ rapido.inicio }}" step="300"></div>
+    <div class="campo"><label for="ar-duracao">Tempo de cada visita (min)</label><input type="number" id="ar-duracao" name="duracao" value="{{ rapido.duracao }}" min="10" max="240" step="5" inputmode="numeric"></div>
+    <div class="campo"><label for="ar-desloc">Deslocamento entre visitas (min)</label><input type="number" id="ar-desloc" name="deslocamento" value="{{ rapido.deslocamento }}" min="0" max="180" step="5" inputmode="numeric"><div class="ajuda">Mínimo. Com a localização das concedentes, o sistema estima pela distância.</div></div>
+  </div>
+  <button class="btn" type="submit" data-agenda-rapida-botao>Ver a agenda proposta</button>
+</form>
+{% endif %}
 {% else %}
 <div class="card"><p class="vazio">Nenhum estagiário seu tem estágio neste dia (fim de semana, feriado ou fora da escala). Escolha outro dia.</p></div>
 {% endif %}

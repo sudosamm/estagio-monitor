@@ -46,7 +46,9 @@ DESCRICOES = {
     "conferir_documento": "Conferiu documento da pasta",
     "folhas_lote": "Emitiu/enviou folhas de frequência",
     "excluir_folha": "Excluiu folha enviada",
-    "novo_agendamento": "Agendou visita/conversa", "agendamento_detalhe": "Atualizou um agendamento",
+    "novo_agendamento": "Agendou visita/conversa", "agendamento_rapido": "Agendamento rápido de visitas",
+    "editar_candidatura": "Alterou candidatura de concedente", "pedir_confirmacao_email": "Pediu confirmação de e-mail",
+    "confirmacao_lote": "Pediu confirmação de e-mail em lote", "agendamento_detalhe": "Atualizou um agendamento",
     "cancelar_agendamento": "Cancelou um agendamento",
     "acompanhamento_novo": "Registrou acompanhamento de visita", "acompanhamento_editar": "Editou acompanhamento",
     "equipe": "Equipe da concedente", "equipe_concedente": "Equipe da concedente",
@@ -74,7 +76,7 @@ IGNORAR = {
     "dois_fatores", "aceitar_termos", "perfil", "trocar_senha", "reenviar_confirmacao", "sugestoes",
     "primeiro_acesso", "primeiro_acesso_senha", "esqueci_senha", "redefinir_senha_email", "pedir_ajuda",
     "confirmar_por_link", "candidatura_publica", "checkin_qr", "checkin_qr_confirmar", "qr_novo", "buscar",
-    "marcar_presenca", "registrar_saida", "informar_ausencia", "enviar_mensagem",
+    "marcar_presenca", "registrar_saida", "informar_ausencia", "enviar_mensagem", "acessos", "desconectar_usuario",
 }
 # tela -> modelo do pk da URL, para dizer “sobre quem”
 ALVOS = {
@@ -85,6 +87,7 @@ ALVOS = {
     "curso_editar": "Curso", "relatorio_turma": "Turma", "atestado_arquivo": "Justificativa",
     "decidir_atestado": "Justificativa", "validar_registro": "Registro", "captacao_detalhe": "Candidatura",
     "agendamento_detalhe": "Agendamento", "cancelar_agendamento": "Agendamento",
+    "editar_candidatura": "Candidatura", "pedir_confirmacao_email": "Usuario",
 }
 
 log = logging.getLogger("core.auditoria")
@@ -197,8 +200,9 @@ def ao_entrar(sender, request, user, **kw):
 def ao_falhar(sender, credentials, request=None, **kw):
     """Só para usuários que existem (quem digita a senha no campo do usuário não deixa a senha guardada aqui)."""
     from .models import Usuario
+    from .seguranca import usuario_do_identificador
 
-    user = Usuario.objects.filter(username__iexact=(credentials.get("username") or "").strip()).first()
+    user = Usuario.objects.filter(username__iexact=usuario_do_identificador(credentials.get("username"))).first()
     if user:
         registrar(request, "LOGIN_FALHOU", "Senha errada ao entrar", usuario=user)
 

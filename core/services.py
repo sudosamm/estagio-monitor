@@ -767,6 +767,7 @@ def aprovar_candidatura(cand, usuario, destino="nova", criar_supervisor=False, p
     """Cadastra (ou atualiza) a concedente, cria o supervisor indicado (e, se pedido, o responsável pela concedente)
     e prepara o aviso para a concedente. O responsável fica em `cand._responsavel`."""
     from django.db import transaction
+    from django.urls import reverse
     from django.utils import timezone
 
     from .models import CAMPOS_CONCEDENTE, AvisoExterno, LocalEstagio, Usuario
@@ -781,15 +782,25 @@ def aprovar_candidatura(cand, usuario, destino="nova", criar_supervisor=False, p
                 if not getattr(local, campo) and getattr(cand, campo):
                     setattr(local, campo, getattr(cand, campo))
             local.save()
-        supervisor = None
-        if criar_supervisor and cand.supervisor_nome:
-            supervisor = criar_usuario(cand.supervisor_nome, Usuario.Papel.SUPERVISOR, usuario, concedente=local,
-                                       telefone=cand.supervisor_telefone, email=cand.supervisor_email,
-                                       cargo=cand.supervisor_cargo)
-        cand._responsavel = None
-        if criar_responsavel:
-            from .seguranca import chave_texto
+        from .seguranca import chave_texto
 
+        supervisor = None
+        conta = cand.conta if cand.conta_id and cand.conta.is_active else None
+        if criar_supervisor and cand.supervisor_nome:
+            if conta and chave_texto(conta.nome_completo) == chave_texto(cand.supervisor_nome):
+                supervisor = conta  # quem preencheu é o próprio supervisor: usa a conta que já existe
+                conta.concedentes.add(local)
+            else:
+                supervisor = criar_usuario(cand.supervisor_nome, Usuario.Papel.SUPERVISOR, usuario, concedente=local,
+                                           telefone=cand.supervisor_telefone, email=cand.supervisor_email,
+                                           cargo=cand.supervisor_cargo)
+        cand._responsavel = None
+        cand._conta_vinculada = None
+        if criar_responsavel and conta:  # a conta criada na candidatura vira responsável
+            conta.concedentes.add(local)
+            conta.concedentes_geridas.add(local)
+            cand._conta_vinculada = conta
+        elif criar_responsavel:
             if supervisor and chave_texto(supervisor.nome_completo) == chave_texto(cand.contato_nome):
                 responsavel = supervisor
             else:
@@ -812,7 +823,11 @@ def aprovar_candidatura(cand, usuario, destino="nova", criar_supervisor=False, p
             linhas.append(f"Vagas informadas: {vagas}.")
         if parecer:
             linhas += ["", parecer]
-        if supervisor:
+        if cand._conta_vinculada:
+            linhas += ["", f"A sua conta no sistema ({cand._conta_vinculada.username}) já foi ligada à concedente como "
+                           "responsável: entre para cadastrar a equipe e acompanhar os estagiários"
+                           f"{f' ({endereco})' if endereco else ''}."]
+        if supervisor and supervisor != cand._conta_vinculada:
             linhas += ["", f"O(a) supervisor(a) {supervisor.nome_completo} já tem acesso ao sistema de acompanhamento "
                            f"de estágio{f' ({endereco})' if endereco else ''}, com o usuário {supervisor.username}. "
                            "A escola vai repassar um código de primeiro acesso, com o qual ele(a) cria a própria senha."]
@@ -828,6 +843,9 @@ def aprovar_candidatura(cand, usuario, destino="nova", criar_supervisor=False, p
             telefone=cand.contato_telefone, assunto=f"Cadastro de concedente aprovado — {_nome_escola()}",
             mensagem="\n".join(linhas), criado_por=usuario,
         )
+        if conta:  # quem tem conta vê a decisão ao entrar (sino e e-mail)
+            notificar([conta], f"O cadastro de {cand.nome} foi aprovado pela escola.", reverse("minha_candidatura",
+                      args=[cand.pk]), detalhe="\n".join(linhas))
     return local, supervisor, aviso
 
 
@@ -845,6 +863,11 @@ def recusar_candidatura(cand, usuario, parecer):
         "Neste momento não foi possível aprovar o cadastro.", "", parecer, "",
         f"{usuario.nome_completo} — {_nome_escola()}", f"Protocolo {cand.protocolo}",
     ])
+    if cand.conta_id and cand.conta.is_active:
+        from django.urls import reverse
+
+        notificar([cand.conta], f"A escola analisou o cadastro de {cand.nome}: não foi aprovado desta vez.",
+                  reverse("minha_candidatura", args=[cand.pk]), detalhe=mensagem)
     return AvisoExterno.objects.create(
         candidatura=cand, destinatario=cand.contato_nome, email=cand.contato_email or cand.representante_email,
         telefone=cand.contato_telefone, assunto=f"Cadastro de concedente — {_nome_escola()}", mensagem=mensagem,

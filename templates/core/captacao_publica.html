@@ -1,51 +1,83 @@
 {% extends "base.html" %}
 {% load ui %}
-{% block titulo %}Seja uma concedente de estágio{% endblock %}
+{% block titulo %}{% if modo == "editar" %}Alterar cadastro · {{ c.nome }}{% else %}Seja uma concedente de estágio{% endif %}{% endblock %}
 {% block conteudo %}
-{% if fechada %}
+{% if sem_acesso %}
+  <div class="card destaque" style="max-width:640px;margin:2rem auto">
+    <h1>Cadastro de concedentes</h1>
+    <p class="mb-0">Este cadastro é para empresas e órgãos que querem receber estagiários. Você está conectado como estagiário(a): para cadastrar uma concedente, saia da sua conta ou peça a quem representa a empresa.</p>
+  </div>
+{% elif fechada %}
   <div class="card destaque" style="max-width:640px;margin:2rem auto">
     <h1>Cadastro de concedentes</h1>
     <p>As inscrições para receber estagiários {% if config.captacao_prazo and config.captacao_aberta %}terminaram em {{ config.captacao_prazo|date:"d/m/Y" }}{% else %}não estão abertas no momento{% endif %}.</p>
-    <p class="mb-0">Se a sua empresa ou órgão tiver interesse, entre em contato com a {{ config.nome_escola|default:NOME_INSTITUICAO }}.</p>
+    <p class="mb-0">Se a sua empresa ou órgão tiver interesse, entre em contato com a {{ config.nome_escola|default:NOME_INSTITUICAO }}.{% if user.is_authenticated and user.candidaturas_feitas.exists %} Para ver os cadastros que você já mandou, abra <a href="{% url 'minhas_candidaturas' %}">Cadastro da concedente</a>.{% endif %}</p>
   </div>
 {% elif enviada %}
-  <div class="card destaque" style="max-width:640px;margin:2rem auto">
+  <div class="card destaque" style="max-width:680px;margin:2rem auto">
     <h1>{% icone "check" %} Cadastro enviado!</h1>
     <p>Obrigado, {{ enviada.contato_nome.split.0 }}. Recebemos o cadastro de <strong>{{ enviada.nome }}</strong> para o ano letivo de <strong>{{ enviada.ano }}</strong>.</p>
-    <p>O orientador de estágio vai analisar as informações e avisar pelo {% if enviada.contato_whatsapp %}WhatsApp{% else %}telefone{% endif %}{% if enviada.contato_email %} ou e-mail{% endif %} informado.</p>
     <div class="caixa-info">Protocolo: <strong style="font-size:1.2rem;letter-spacing:1px">{{ enviada.protocolo }}</strong><br><small>Guarde este número caso precise falar com a escola.</small></div>
+    {% if conta %}
+    <h2 class="mt-1">{% icone "chave" %} Sua conta no sistema</h2>
+    <p>Você já está conectado. Para entrar de outro aparelho, use o usuário <strong style="font-size:1.1rem">{{ conta.username }}</strong>{% if conta.email %} ou o e-mail <strong>{{ conta.email }}</strong>{% endif %} e a senha que você criou.</p>
+    {% if conta.email and EMAIL_ATIVO %}<p class="muted">Enviamos um link para {{ conta.email }}: abra para confirmar o e-mail (veja também o spam). Com ele confirmado, você recupera a senha sozinho se esquecer.</p>{% endif %}
+    {% endif %}
+    <p>O orientador ou o coordenador do curso vai analisar as informações. A decisão aparece no sistema{% if enviada.contato_email %}, chega por e-mail{% endif %} e a escola também avisa pelo {% if enviada.contato_whatsapp %}WhatsApp{% else %}telefone{% endif %}.</p>
+    {% if user.is_authenticated %}<a class="btn" href="{% url 'minha_candidatura' enviada.pk %}">Acompanhar o cadastro</a>{% endif %}
   </div>
 {% else %}
   <div class="titulo-pagina">
+    {% if modo == "editar" %}
+    <div><div class="migalha"><a href="{{ voltar }}">← Voltar</a></div><h1>Alterar o cadastro</h1><p>{{ c.nome }} · protocolo {{ c.protocolo }} · as mudanças valem enquanto a escola não analisar o cadastro.</p></div>
+    {% else %}
     <div><h1>Seja uma concedente de estágio</h1><p>Captação de vagas para o ano letivo de <strong>{{ config.ano_captacao_efetivo }}</strong>{% if config.nome_escola %} · {{ config.nome_escola }}{% endif %}{% if config.captacao_prazo %} · inscrições até {{ config.captacao_prazo|date:"d/m/Y" }}{% endif %}</p></div>
+    {% endif %}
   </div>
+  {% if modo == "escola" %}<div class="caixa-info mb-1">Você está preenchendo <strong>em nome da concedente</strong>, a pedido dela. O cadastro entra na lista da captação como os outros, marcado como preenchido pela escola.{% if not config.captacao_disponivel %} A página pública está fechada, mas a escola pode cadastrar.{% endif %}</div>
+  {% elif modo == "publico" %}<div class="caixa-info mb-1">O cadastro deve ser feito pelo(a) <strong>representante legal</strong> da concedente ou por alguém que <strong>ele(a) autorizou</strong>. Quem preenche ganha uma conta para acompanhar a análise e, depois de aprovado, cadastrar a equipe. Já tem conta? <a href="{% url 'login' %}?next={% url 'candidatura_publica' %}">Entre primeiro</a>.</div>
+  {% elif modo == "conta" %}<div class="caixa-info mb-1">Você está enviando pela sua conta ({{ user.username }}). A decisão da escola aparece em <a href="{% url 'minhas_candidaturas' %}">Cadastro da concedente</a>.</div>{% endif %}
   <div class="grade grade-lado">
-    <form class="card destaque" method="post" novalidate>{% csrf_token %}
+    <form class="card destaque" method="post" novalidate data-candidatura>{% csrf_token %}
       {% if form.non_field_errors %}<div class="aviso error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
-      <div class="campo-oculto" aria-hidden="true">{{ form.site }}</div>
+      {% if form.site %}<div class="campo-oculto" aria-hidden="true">{{ form.site }}</div>{% endif %}
       {% for titulo, campos in form.secoes %}
         <fieldset class="secao">
           <legend>{{ titulo }}</legend>
-          {% if titulo == "Vagas" %}<p class="muted" style="font-size:.88rem">Quantos estagiários deseja receber de cada curso? Deixe em branco os cursos que não interessam.</p>
-            <div class="vagas-grade">{% for campo in campos %}{% include "core/_campo.html" %}{% endfor %}</div>
-          {% elif titulo == "Supervisor(a) dos estagiários" %}<p class="muted" style="font-size:.88rem">Pessoa da concedente que vai acompanhar os estagiários no dia a dia. Ela receberá acesso ao sistema para confirmar as presenças.</p>
+          {% if titulo == "Cursos e vagas" %}
+            <p class="muted" style="font-size:.88rem">Marque os cursos de que deseja receber estagiários e informe quantas vagas para cada um.{% if c and not c.pendente %} As vagas não mudam depois da aprovação.{% endif %}</p>
+            <div class="cursos-vagas">{% for curso, marcar, vaga in form.cursos_campos %}
+              <div class="curso-vaga{% if vaga.errors %} erro-campo{% endif %}" data-curso-vaga>
+                <label class="curso-vaga-nome">{{ marcar }} <span>{{ curso.nome }}</span></label>
+                <div class="curso-vaga-qtd" data-qtd><label for="{{ vaga.id_for_label }}">Vagas</label>{{ vaga }}</div>
+                {% for e in vaga.errors %}<div class="erro">{{ e }}</div>{% endfor %}
+              </div>
+            {% empty %}<p class="vazio">A escola ainda não escolheu os cursos desta captação.</p>{% endfor %}</div>
+          {% elif titulo == "Supervisor(a) dos estagiários" %}<p class="muted" style="font-size:.88rem">Pessoa da concedente que vai acompanhar os estagiários no dia a dia. Ela receberá acesso ao sistema para confirmar as presenças. Se for você mesmo, repita o seu nome.</p>
             <div class="form-linha">{% for campo in campos %}{% include "core/_campo.html" %}{% endfor %}</div>
+          {% elif titulo == "Seu acesso ao sistema" %}<p class="muted" style="font-size:.88rem">Seu usuário é criado a partir do seu nome e aparece depois do envio. Você também pode entrar com o e-mail informado acima.</p>
+            <div class="form-linha">{% for campo in campos %}{% if campo.name != "aceite_termos" %}{% include "core/_campo.html" %}{% endif %}{% endfor %}</div>
+            {% with campo=form.aceite_termos %}<div class="campo check{% if campo.errors %} erro-campo{% endif %}"><label>{{ campo }} Li e aceito os <a href="{% url 'termos' %}" target="_blank" rel="noopener">Termos de Uso</a> e o <a href="{% url 'privacidade' %}" target="_blank" rel="noopener">Aviso de Privacidade</a> do sistema.</label>{% for e in campo.errors %}<div class="erro">{{ e }}</div>{% endfor %}</div>{% endwith %}
+          {% elif titulo == "Quem está preenchendo" %}
+            {% for campo in campos %}{% if campo.name == "preenchido_por" %}{% include "core/_campo.html" %}{% endif %}{% endfor %}
+            <div class="form-linha">{% for campo in campos %}{% if campo.name != "preenchido_por" %}{% include "core/_campo.html" %}{% endif %}{% endfor %}</div>
           {% else %}<div class="form-linha">{% for campo in campos %}{% include "core/_campo.html" %}{% endfor %}</div>{% endif %}
         </fieldset>
       {% endfor %}
-      <button class="btn grande" type="submit">Enviar cadastro</button>
+      <button class="btn grande" type="submit">{% if modo == "editar" %}Salvar alterações{% else %}Enviar cadastro{% endif %}</button>
     </form>
     <div>
       <div class="card">
         <h3>Como funciona</h3>
-        {% if config.texto_captacao %}<p class="quebra">{{ config.texto_captacao }}</p>{% endif %}
+        {% if config.texto_captacao and modo != "editar" %}<p class="quebra">{{ config.texto_captacao }}</p>{% endif %}
         <ol class="passos">
-          <li>Você preenche este cadastro com os dados da empresa ou órgão e as vagas desejadas.</li>
-          <li>O orientador ou o coordenador do curso analisa o cadastro.</li>
-          <li>Sendo aprovado, você recebe um aviso e o supervisor indicado ganha acesso ao sistema de acompanhamento.</li>
+          <li>O(a) representante legal da concedente, ou alguém autorizado por ele(a), preenche este cadastro com os dados da empresa ou órgão, os cursos e as vagas.</li>
+          <li>Quem preenche ganha uma conta: entra quando quiser para ver o andamento e, enquanto a escola não analisa, corrigir os dados e as vagas.</li>
+          <li>O orientador ou o coordenador do curso analisa. A decisão aparece no sistema e chega por e-mail.</li>
+          <li>Aprovado, você vira responsável pela concedente no sistema: cadastra a equipe e o supervisor indicado ganha acesso para confirmar as presenças. As vagas ficam como foram aceitas.</li>
         </ol>
       </div>
-      <div class="caixa-info" style="font-size:.85rem">Os dados são usados só para organizar o estágio, conforme a Lei nº 11.788/2008.</div>
+      <div class="caixa-info" style="font-size:.85rem">Os dados são usados só para organizar o estágio, conforme a Lei nº 11.788/2008 e o <a href="{% url 'privacidade' %}">Aviso de Privacidade</a>.</div>
     </div>
   </div>
 {% endif %}

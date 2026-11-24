@@ -1,3 +1,4 @@
+{% load ui %}
 <div class="card laranja">
   <h3>Senha</h3>
   <p class="muted">Usuário: <strong>{{ alvo.username }}</strong> · {% if alvo.deve_trocar_senha %}ainda não fez o primeiro acesso{% if alvo.is_estagiario and not alvo.data_nascimento %} (sem data de nascimento: precisa de um código){% endif %}{% else %}já criou a própria senha{% endif %}</p>
@@ -9,6 +10,24 @@
   {% elif alvo != user %}<p class="muted" style="font-size:.85rem">Só o orientador de um estagiário dessa pessoa (ou o administrador) gera o código de acesso.</p>
   {% endif %}
 </div>
+<div class="card">
+  <h3>E-mail</h3>
+  <p class="muted mb-0">{% if not alvo.email %}Sem e-mail cadastrado.{% elif alvo.email_confirmado_em %}{{ alvo.email }} · <span class="selo confirmado">confirmado</span> em {{ alvo.email_confirmado_em|date:"d/m/Y" }}{% else %}{{ alvo.email }} · <span class="selo aguardando">não confirmado</span>{% if alvo.confirmacao_enviada_em %} · pedido enviado em {{ alvo.confirmacao_enviada_em|date:"d/m/Y H:i" }}{% endif %}{% endif %}</p>
+  {% if pode_confirmacao and EMAIL_ATIVO %}
+  <form method="post" action="{% url 'pedir_confirmacao_email' alvo.pk %}" class="mt-1">{% csrf_token %}
+    <button class="btn sec" type="submit">{% icone "email" %} Enviar pedido de confirmação</button>
+    <p class="muted" style="font-size:.82rem">{% if alvo.deve_trocar_senha %}Como a pessoa ainda não entrou, o link também serve para ela criar a senha (vale 3 dias). Confira se o e-mail está certo antes de enviar.{% else %}Com o e-mail confirmado, a pessoa cria uma senha nova sozinha se esquecer a dela.{% endif %}</p>
+  </form>
+  {% endif %}
+</div>
+{% if pode_liberar and alvo != user %}
+<div class="card">
+  <h3>Aparelhos conectados</h3>
+  <p class="muted">Celular perdido ou alguém usando a conta? Desconecte a pessoa de todos os aparelhos. A senha continua a mesma; para trocá-la, use o novo primeiro acesso acima.</p>
+  <form method="post" action="{% url 'desconectar_usuario' alvo.pk %}" data-confirmar="Desconectar {{ alvo.primeiro_nome }} de todos os aparelhos?">{% csrf_token %}
+    <button class="btn sec" type="submit">Desconectar de todos os aparelhos</button></form>
+</div>
+{% endif %}
 {% if alvo != user and not alvo.is_superuser %}
 <div class="card">
   <h3>Situação da conta</h3>

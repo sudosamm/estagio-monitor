@@ -4,7 +4,8 @@
 {% block conteudo %}
 <div class="titulo-pagina">
   <div><h1>Captação de concedentes</h1><p>Empresas e órgãos que se cadastraram para receber estagiários em {{ ano }}.</p></div>
-  <form method="get" class="flex"><select name="ano" onchange="this.form.submit()">{% for a in anos %}<option{% if a == ano %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></form>
+  <div class="acoes"><a class="btn sec" href="{% url 'candidatura_publica' %}">{% icone "mais" %} Cadastrar pela concedente</a>
+  <form method="get" class="flex"><select name="ano" onchange="this.form.submit()">{% for a in anos %}<option{% if a == ano %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></form></div>
 </div>
 <div class="card {% if config.captacao_disponivel %}destaque{% else %}laranja{% endif %}">
   {% if config.captacao_disponivel %}

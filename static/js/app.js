@@ -426,10 +426,11 @@ document.querySelectorAll(".avisos .aviso.success, .avisos .aviso.info").forEach
   const contagem = document.querySelector("[data-roteiro-contagem]");
   const MAX = 10;
   function atualizar() {
-    const marcadas = [...lista.querySelectorAll("[data-parada]:checked")].map((c) => c.value);
+    const marcadas = [...lista.querySelectorAll("[data-parada]:checked")].map((c) => c.dataset.destino);
     lista.querySelectorAll("[data-parada]").forEach((c) => { c.disabled = !c.checked && marcadas.length >= MAX; });
     contagem.textContent = marcadas.length ? `${marcadas.length} parada${marcadas.length > 1 ? "s" : ""}${marcadas.length >= MAX ? " (máximo do mapa)" : ""}` : "Marque as concedentes do roteiro";
     botao.classList.toggle("desativado", !marcadas.length);
+    document.querySelectorAll("[data-agenda-rapida-botao]").forEach((b) => { b.disabled = !marcadas.length; });
     if (!marcadas.length) { botao.removeAttribute("href"); return; }
     const destino = marcadas[marcadas.length - 1];
     const paradas = marcadas.slice(0, -1);
@@ -443,3 +444,20 @@ document.querySelectorAll(".avisos .aviso.success, .avisos .aviso.info").forEach
   lista.addEventListener("change", atualizar);
   atualizar();
 })();
+
+// captação: marcar o curso abre o campo de vagas (sem JS, os dois aparecem e o número basta)
+document.querySelectorAll("[data-curso-vaga]").forEach((caixa) => {
+  const marcar = caixa.querySelector('input[type="checkbox"]');
+  const qtd = caixa.querySelector("[data-qtd]");
+  const numero = qtd && qtd.querySelector("input");
+  if (!marcar || !qtd || !numero) return;
+  if (numero.value && !marcar.checked) marcar.checked = true;
+  const aplicar = (focar) => {
+    qtd.hidden = !marcar.checked;
+    caixa.classList.toggle("marcado", marcar.checked);
+    if (!marcar.checked) numero.value = "";
+    else if (focar && !numero.value) numero.focus();
+  };
+  marcar.addEventListener("change", () => aplicar(true));
+  aplicar(false);
+});

@@ -10,7 +10,7 @@
   <div>
     <div class="card">
       <dl class="dl">
-        <dt>Quando</dt><dd>{% if ag.data_hora %}{{ ag.data_hora|date:"l, d/m/Y \à\s H:i" }}{% else %}A definir{% endif %}</dd>
+        <dt>Quando</dt><dd>{% if ag.data_hora %}{{ ag.data_hora|date:"l, d/m/Y \à\s H:i" }}–{{ ag.fim|time:"H:i" }}{% else %}A definir{% endif %}</dd>
         {% if ag.data_sugerida %}<dt>Sugestão</dt><dd>{{ ag.data_sugerida }}</dd>{% endif %}
         <dt>Local</dt><dd>{{ ag.local|default:"—" }}</dd>
         <dt>Solicitado por</dt><dd>{{ ag.solicitante }} ({{ ag.solicitante.get_papel_display }}) em {{ ag.criado_em|date:"d/m/Y H:i" }}</dd>

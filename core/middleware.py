@@ -85,14 +85,14 @@ class ResumoSemanalMiddleware:
     def _tarefas():
         import logging
 
-        from . import auditoria, confirmacao, lembretes
+        from . import auditoria, confirmacao, lembretes, sessoes
         from .acompanhamento import disparar_resumo_se_preciso
         from .avaliacoes import disparar_lembrete as lembrete_avaliacoes
         from .feedback import disparar_lembrete as lembrete_feedback
 
         for tarefa in (disparar_resumo_se_preciso, lembrete_feedback, lembrete_avaliacoes,
                        lembretes.disparar_lembretes_expediente, confirmacao.disparar_confirmacoes,
-                       confirmacao.disparar_resumo_mensal, auditoria.limpar_antigos):
+                       confirmacao.disparar_resumo_mensal, auditoria.limpar_antigos, sessoes.limpar_antigas):
             try:
                 tarefa()
             except Exception:  # noqa: BLE001 — nunca atrapalhar a página

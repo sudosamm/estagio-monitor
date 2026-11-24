@@ -72,4 +72,9 @@
     {% else %}<p class="vazio">Nada pendente. 👍</p>{% endif %}
   </div>
 </div>
+<div class="card" id="contato">
+  <div class="card-cab"><h2>{% icone "telefone" %} Seus dados na folha de frequência</h2><a class="btn sec sm" href="{% url 'perfil' %}">{% icone "editar" %} Editar</a></div>
+  <p class="mb-0"><strong>{{ user.nome_completo }}</strong>{% if user.cargo %} · {{ user.cargo }}{% endif %} · telefone: {{ user.telefone|default:"não informado" }}{% if user.email %} · {{ user.email }}{% endif %}</p>
+  <p class="muted mb-0" style="font-size:.85rem">Telefone e cargo saem no campo SUPERVISOR da folha dos seus estagiários. Mudou? Corrija em Meus dados: o sistema e as próximas folhas já saem com o dado novo (folhas já impressas ou enviadas em PDF não mudam).{% if tem_candidatura %} · <a href="{% url 'minhas_candidaturas' %}">Cadastro da concedente na captação</a>{% endif %}</p>
+</div>
 {% endblock %}

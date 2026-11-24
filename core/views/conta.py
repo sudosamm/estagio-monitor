@@ -62,6 +62,9 @@ class RedefinirSenhaView(PasswordResetConfirmView):
         user.codigo_acesso, user.codigo_acesso_validade = "", None
         user.save(update_fields=["deve_trocar_senha", "codigo_acesso", "codigo_acesso_validade"])
         limpar(user.username)  # desbloqueia o login, se estava bloqueado
+        from ..sessoes import desconectar_todas
+
+        desconectar_todas(user)  # quem estava conectado com a senha antiga sai
         emails.avisar_senha_alterada(self.request, user)
         messages.success(self.request, f"Senha nova criada. Entre com o usuário {user.username} e a senha nova.")
         return resposta

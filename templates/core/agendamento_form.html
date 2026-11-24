@@ -27,7 +27,10 @@
         {% with campo=form.modalidade %}{% include "core/_campo.html" %}{% endwith %}
         {% with campo=form.status %}{% include "core/_campo.html" %}{% endwith %}
       </div>
-      {% with campo=form.data_hora %}{% include "core/_campo.html" %}{% endwith %}
+      <div class="form-linha">
+        {% with campo=form.data_hora %}{% include "core/_campo.html" %}{% endwith %}
+        {% with campo=form.duracao %}{% include "core/_campo.html" %}{% endwith %}
+      </div>
       <div class="sugestoes-data" data-sugestoes hidden><small class="muted">Dias de estágio de quem foi escolhido:</small> <span data-chips></span></div>
       <div class="caixa-alerta" data-avisos hidden></div>
       {% with campo=form.local %}{% include "core/_campo.html" %}{% endwith %}

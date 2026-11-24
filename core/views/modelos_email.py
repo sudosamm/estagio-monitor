@@ -20,7 +20,7 @@ def _exemplo(request):
             "mensagem": "Errei a senha várias vezes e o acesso foi bloqueado.", "quantidade": 3,
             "lista": "• Ana Souza — seg 16/11, 08:00–12:00 (4h)\n• Bruno Lima — seg 16/11, 08:00–12:00 (4h)",
             "mes": "outubro de 2026", "erro": "ValueError", "pagina": "/painel/", "origem": "core/views/orientador.py:120",
-            "ocorrencias": 1}
+            "ocorrencias": 1, "papel": "supervisor(a)", "proximo_passo": emails.PROXIMO_SENHA}
 
 
 @orientador_requerido

@@ -43,7 +43,7 @@
       <div class="card-cab"><h2>{% icone "predio" %} Pessoas da equipe</h2></div>
       <ul class="lista compacta membros">{% for m in membros %}
         <li{% if not m.is_active %} style="opacity:.6"{% endif %}><span class="cresce"><strong>{{ m.nome_completo }}</strong>{% if m.pk in responsaveis %} <span class="etiqueta">responsável</span>{% endif %}{% if not m.is_active %} <span class="etiqueta">desativada</span>{% elif m.deve_trocar_senha %} <span class="etiqueta">ainda não entrou</span>{% endif %}
-          <small style="display:block">{{ m.cargo|default:"" }}{% if m.cargo and m.telefone %} · {% endif %}{{ m.telefone }}{% if m.n_estagios %} · supervisiona {{ m.n_estagios }}{% endif %} · usuário {{ m.username }}</small></span>
+          <small style="display:block">{{ m.cargo|default:"" }}{% if m.cargo and m.telefone %} · {% endif %}{{ m.telefone }}{% if m.email %} · {{ m.email }}{% endif %}{% if m.n_estagios %} · supervisiona {{ m.n_estagios }}{% endif %} · usuário {{ m.username }}</small></span>
           {% if escola %}
             <form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ m.pk }}"><button class="btn sec sm" name="acao" value="responsavel" type="submit">{% if m.pk in responsaveis %}Tirar de responsável{% else %}Tornar responsável{% endif %}</button></form>
             <a class="btn sec sm" href="{% url 'editar_usuario' m.pk %}">Conta</a>
@@ -53,7 +53,14 @@
                 {% if m.is_active %}<button class="btn sec sm bloco" name="acao" value="codigo" type="submit" data-confirmar="Gerar um código novo para {{ m.primeiro_nome }}? A senha atual dele(a) deixa de valer.">{% if m.deve_trocar_senha %}Código de primeiro acesso{% else %}Esqueceu a senha: novo acesso{% endif %}</button>
                 <button class="btn perigo sm bloco" name="acao" value="desativar" type="submit" data-confirmar="Desativar a conta de {{ m.primeiro_nome }}? Ela não consegue mais entrar.">Desativar</button>
                 {% else %}<button class="btn sec sm bloco" name="acao" value="reativar" type="submit">Reativar</button>{% endif %}
-              </form></div></details>
+              </form>
+              {% if m.is_active %}<form method="post" class="contato-membro">{% csrf_token %}<input type="hidden" name="id" value="{{ m.pk }}"><input type="hidden" name="acao" value="contato">
+                <strong>Contato</strong>
+                <input type="tel" name="telefone" value="{{ m.telefone }}" placeholder="Telefone / WhatsApp" aria-label="Telefone" maxlength="30">
+                <input type="email" name="email" value="{{ m.email }}" placeholder="E-mail" aria-label="E-mail" maxlength="254">
+                <input type="text" name="cargo" value="{{ m.cargo }}" placeholder="Cargo/função" aria-label="Cargo" maxlength="80">
+                <button class="btn sm bloco" type="submit">Salvar contato</button></form>{% endif %}
+              </div></details>
           {% endif %}{% endwith %}{% endif %}</li>
       {% empty %}<li class="vazio">Ninguém cadastrado ainda.</li>{% endfor %}</ul>
       <details class="mt-1"{% if form_membro.errors %} open{% endif %}><summary class="btn sm">{% icone "mais" %} Adicionar pessoa</summary>

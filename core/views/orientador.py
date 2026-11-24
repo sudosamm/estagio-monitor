@@ -265,6 +265,8 @@ def _contas(request, papel, q, situacao):
         qs = qs.filter(papel=papel)
     if situacao == "pendentes":
         qs = qs.filter(is_active=True, deve_trocar_senha=True)
+    elif situacao == "email":
+        qs = qs.filter(is_active=True, email_confirmado_em__isnull=True, anonimizado_em__isnull=True).exclude(email="")
     elif situacao != "todas":
         qs = qs.filter(is_active=situacao != "inativas")
     if q:
@@ -324,6 +326,7 @@ def editar_usuario(request, pk):
     return render(request, "core/form_pagina.html", {
         "form": form, "titulo": f"Editar {alvo} ({alvo.username})", "voltar": reverse("usuarios"),
         "extra_template": "core/_redefinir_senha.html", "alvo": alvo, "pode_liberar": _pode_liberar_acesso(request, alvo),
+        "pode_confirmacao": _pode_pedir_confirmacao(request, alvo),
     })
 
 
@@ -349,6 +352,73 @@ def codigos_lote(request):
         return redirect("usuarios")
     return folha_primeiro_acesso(request, alvos, "Folha de primeiro acesso",
                                  aviso="Códigos gerados antes para essas pessoas deixaram de valer.")
+
+
+ESPERA_REENVIO = timedelta(hours=24)
+
+
+def _pode_pedir_confirmacao(request, alvo):
+    """Quem ainda não entrou cria a senha pelo link: aí vale a mesma regra de quem gera o código de acesso."""
+    if not alvo.is_active or not alvo.email or alvo.email_confirmado_em or alvo.pk == request.user.pk:
+        return False
+    return _pode_liberar_acesso(request, alvo) if alvo.deve_trocar_senha else _pode_gerir(request, alvo)
+
+
+@permissao("contas")
+@require_POST
+def pedir_confirmacao_email(request, pk):
+    """Envia o “Confirme seu cadastro” para uma conta que já tem e-mail."""
+    from django.conf import settings
+
+    from .. import emails
+
+    alvo = get_object_or_404(Usuario, pk=pk)
+    if not _pode_pedir_confirmacao(request, alvo):
+        raise PermissionDenied
+    if not settings.EMAIL_ATIVO:
+        messages.error(request, "O envio de e-mails não está configurado no servidor.")
+    elif alvo.confirmacao_enviada_em and timezone.now() - alvo.confirmacao_enviada_em < timedelta(minutes=10):
+        messages.info(request, f"Já enviamos para {alvo.email} há poucos minutos. Peça para olhar também o spam.")
+    elif emails.enviar_confirmacao(request, alvo, pela_escola=True):
+        messages.success(request, f"Pedido de confirmação enviado para {alvo.email}."
+                         + (" Pelo link, a pessoa também cria a senha." if alvo.deve_trocar_senha else ""))
+    else:
+        messages.error(request, "O e-mail de confirmação de cadastro está desligado em Configurações → E-mails.")
+    return redirect("editar_usuario", pk=alvo.pk)
+
+
+@permissao("contas")
+@require_POST
+def confirmacao_lote(request):
+    """Envia o “Confirme seu cadastro” para todas as contas da lista (filtro “E-mail não confirmado”), pulando quem
+    recebeu nas últimas 24 horas."""
+    from django.conf import settings
+
+    from .. import emails
+
+    if not settings.EMAIL_ATIVO:
+        messages.error(request, "O envio de e-mails não está configurado no servidor.")
+        return redirect("usuarios")
+    limite = timezone.now() - ESPERA_REENVIO
+    enviados = pulados = 0
+    for alvo in _contas(request, request.POST.get("papel", ""), request.POST.get("q", ""), "email").distinct()[:300]:
+        if not _pode_pedir_confirmacao(request, alvo):
+            continue
+        if alvo.confirmacao_enviada_em and alvo.confirmacao_enviada_em > limite:
+            pulados += 1
+        elif emails.enviar_confirmacao(request, alvo, pela_escola=True):
+            enviados += 1
+    if enviados:
+        messages.success(request, f"Pedido de confirmação enviado para {enviados} conta(s)."
+                         + (f" {pulados} já tinham recebido nas últimas 24 horas." if pulados else ""))
+    elif pulados:
+        messages.info(request, f"Todas as {pulados} conta(s) já receberam o pedido nas últimas 24 horas.")
+    else:
+        messages.info(request, "Ninguém nesta lista pode receber o pedido (sem e-mail, já confirmado ou sem permissão).")
+    from django.utils.http import urlencode
+
+    return redirect(reverse("usuarios") + "?" + urlencode({"situacao": "email", "papel": request.POST.get("papel", ""),
+                                                           "q": request.POST.get("q", "")}))
 
 
 @permissao("contas")
@@ -568,12 +638,7 @@ def configuracoes(request):
             config.logo_folha.storage.delete(logo_antigo)
         messages.success(request, "Configurações salvas.")
         return redirect("configuracoes")
-    return render(request, "core/form_pagina.html", {
-        "form": form, "titulo": "Configurações do sistema", "voltar": reverse("painel"),
-        "ajuda": "Os dados da escola e o logotipo aparecem no cabeçalho da folha de frequência de todos os estagiários. "
-                 "O banco de talentos só mostra estagiários que autorizarem no próprio perfil.",
-        "extra_template": "core/_config_email.html",
-    })
+    return render(request, "core/configuracoes.html", {"form": form})
 
 
 

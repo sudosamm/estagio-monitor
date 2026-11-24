@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Acessos e aparelhos{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><div class="migalha"><a href="{% url 'perfil' %}#seguranca">← Meus dados</a></div>
+  <h1>Acessos e aparelhos</h1><p class="mb-0">Onde a sua conta está conectada agora e cada entrada, saída ou tentativa com a sua senha.</p></div></div>
+
+<div class="card destaque">
+  <div class="card-cab"><h2>{% icone "escudo" %} Aparelhos conectados ({{ aparelhos|length }})</h2>
+    {% if aparelhos|length > 1 %}<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="outros"><button class="btn perigo sm" type="submit" data-confirmar="Desconectar todos os outros aparelhos? Quem estiver neles precisa entrar de novo com a senha.">Desconectar os outros</button></form>{% endif %}</div>
+  <ul class="lista compacta aparelhos">{% for a in aparelhos %}
+    <li><span class="cresce"><strong>{{ a.aparelho|default:"Aparelho desconhecido" }}</strong>{% if a.atual %} <span class="selo confirmado">este aparelho</span>{% endif %}
+      <small style="display:block">Entrou em {{ a.criada_em|date:"d/m/Y H:i" }} · último uso {% if a.recente %}agora{% else %}há {{ a.ultimo_uso|timesince }}{% endif %}{% if a.ip %} · IP {{ a.ip }}{% endif %}</small></span>
+      {% if a.atual %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn sec sm" type="submit">Sair</button></form>
+      {% else %}<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="desconectar"><input type="hidden" name="id" value="{{ a.pk }}"><button class="btn sec sm" type="submit" data-confirmar="Desconectar {{ a.aparelho|default:'este aparelho' }}?">Desconectar</button></form>{% endif %}</li>
+  {% empty %}<li class="vazio">Nenhum aparelho conectado.</li>{% endfor %}</ul>
+  <p class="muted mb-0" style="font-size:.85rem">A sessão fica presa ao aparelho em que você entrou: se alguém copiar o acesso para outro navegador ou aparelho, a sessão é encerrada na hora e você recebe um aviso. Sair ou desconectar um aparelho vale no servidor, para qualquer cópia. Trocar a senha desconecta todos os outros.</p>
+</div>
+
+<div class="card">
+  <div class="card-cab"><h2>{% icone "relogio" %} Acessos à sua conta</h2></div>
+  <div class="tabela-wrap"><table class="tabela">
+    <thead><tr><th>Quando</th><th>O que aconteceu</th><th>Aparelho</th><th>IP</th></tr></thead>
+    <tbody>{% for a in pagina %}
+      <tr><td class="nowrap">{{ a.quando|date:"d/m/Y H:i" }}</td>
+        <td>{% if a.tipo == "LOGIN" or a.tipo == "LOGOUT" or a.tipo == "2FA" or a.tipo == "SESSAO_ENCERRADA" %}{{ a.descricao }}{% else %}<span class="alerta-txt">{{ a.descricao }}</span>{% endif %}</td>
+        <td>{{ a.aparelho|default:"—" }}</td><td>{{ a.ip|default:"—" }}</td></tr>
+    {% empty %}<tr><td colspan="4" class="vazio">Nenhum acesso registrado ainda.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% if pagina.has_other_pages %}<div class="paginacao">
+    {% if pagina.has_previous %}<a class="btn sec sm" href="?pagina={{ pagina.previous_page_number }}">← Mais recentes</a>{% endif %}
+    <span class="muted">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    {% if pagina.has_next %}<a class="btn sec sm" href="?pagina={{ pagina.next_page_number }}">Mais antigos →</a>{% endif %}
+  </div>{% endif %}
+  <p class="muted mb-0 mt-1" style="font-size:.85rem">Não reconhece algum acesso? Desconecte os outros aparelhos, troque a senha e avise a escola. Os registros ficam guardados por 1 ano.</p>
+</div>
+{% endblock %}

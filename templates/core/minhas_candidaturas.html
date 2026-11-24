@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Cadastro da concedente{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Cadastro da concedente</h1><p class="mb-0">Os cadastros que você mandou para a captação de estágio e a decisão da escola.</p></div>
+  {% if config.captacao_disponivel %}<div class="acoes"><a class="btn sec" href="{% url 'candidatura_publica' %}">{% icone "mais" %} Novo cadastro</a></div>{% endif %}</div>
+<div class="card">
+  <ul class="lista compacta">{% for c in candidaturas %}
+    <li><span class="cresce"><a href="{% url 'minha_candidatura' c.pk %}"><strong>{{ c.nome }}</strong></a>
+      <small style="display:block">Ano letivo {{ c.ano }} · protocolo {{ c.protocolo }} · {{ c.total_vagas }} vaga(s) · enviado em {{ c.criado_em|date:"d/m/Y" }}</small></span>
+      <span class="selo {% if c.status == 'APROVADA' %}confirmado{% elif c.status == 'RECUSADA' %}falta{% else %}hoje{% endif %}">{{ c.get_status_display }}</span></li>
+  {% empty %}<li class="vazio">Você ainda não mandou nenhum cadastro.</li>{% endfor %}</ul>
+</div>
+{% endblock %}

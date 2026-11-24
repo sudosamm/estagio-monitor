@@ -17,6 +17,8 @@ supervisor_requerido = papel(Usuario.Papel.SUPERVISOR)
 def painel_supervisor(request):
     from ..equipe import estagios_de_apoio
 
+    if not request.user.vinculado_a_concedente and request.user.candidaturas_feitas.exists():
+        return redirect("minhas_candidaturas")  # conta da candidatura: ainda sem concedente aprovada
     hoje = timezone.localdate()
     estagios = preparar_lote(estagios_visiveis(request.user).filter(ativo=True), hoje, totais=False)
     apoio = preparar_lote(estagios_de_apoio(request.user), hoje, totais=False)
@@ -34,6 +36,7 @@ def painel_supervisor(request):
     return render(request, "core/painel_supervisor.html", {"estagios": estagios, "pendentes": pendentes,
                                                            "apoio": apoio, **_substituicoes(request.user, hoje),
                                                            "sem_horario": sem_horario,
+                                                           "tem_candidatura": request.user.candidaturas_feitas.exists(),
                                                            "atestados": pendentes_para(request.user, estagios),
                                                            "documentos": _documentos_do_supervisor(estagios),
                                                            **_feedback_do_mes(estagios)})

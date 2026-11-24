@@ -4,14 +4,15 @@
 {% block conteudo %}
 <div class="titulo-pagina">
   <div><div class="migalha"><a href="{% url 'captacao' %}?ano={{ c.ano }}">← Captação {{ c.ano }}</a></div>
-    <h1>{{ c.nome }}</h1><p>{{ c.razao_social }}{% if c.cnpj %} · {{ c.cnpj }}{% endif %} · protocolo {{ c.protocolo }} · enviado em {{ c.criado_em|date:"d/m/Y H:i" }}</p></div>
+    <h1>{{ c.nome }}</h1><p>{{ c.razao_social }}{% if c.cnpj %} · {{ c.cnpj }}{% endif %} · protocolo {{ c.protocolo }} · enviado em {{ c.criado_em|date:"d/m/Y H:i" }}{% if c.alterada_em %} · alterado em {{ c.alterada_em|date:"d/m/Y H:i" }}{% endif %}</p></div>
   <span class="selo {% if c.status == 'APROVADA' %}confirmado{% elif c.status == 'RECUSADA' %}falta{% else %}hoje{% endif %}">{{ c.get_status_display }}</span>
 </div>
 <div class="grade grade-lado">
   <div>
     <div class="card destaque">
-      <h2>Vagas desejadas</h2>
+      <div class="card-cab"><h2>Vagas desejadas</h2>{% if c.status == "PENDENTE" %}<a class="btn sec sm" href="{% url 'editar_candidatura' c.pk %}">{% icone "editar" %} Alterar</a>{% endif %}</div>
       <div class="vagas-lista">{% for v in c.vagas.all %}<div><strong>{{ v.quantidade }}</strong><span>{{ v.curso.nome }}</span></div>{% endfor %}</div>
+      {% if c.status == "APROVADA" %}<p class="muted mb-0" style="font-size:.85rem">Vagas aceitas na aprovação: não mudam mais.</p>{% endif %}
       <h3 class="mt-1">Atividades que os estagiários vão realizar</h3>
       <p class="quebra">{{ c.atividades }}</p>
       <dl class="dl">
@@ -35,6 +36,7 @@
       </dl>
       <hr>
       <div class="grade grade-2">
+        <div><h3>Quem preencheu</h3><p class="mb-0">{% if c.preenchido_por %}{{ c.get_preenchido_por_display }}{% else %}Não informado (cadastro anterior){% endif %}{% if c.cadastrada_por %}<br><small>por {{ c.cadastrada_por.nome_completo }}</small>{% endif %}{% if c.conta %}<br><small>Conta no sistema: {{ c.conta.username }}{% if c.conta.email_confirmado_em %} · e-mail confirmado{% endif %}</small>{% endif %}</p></div>
         <div><h3>Contato</h3><p class="mb-0"><strong>{{ c.contato_nome }}</strong>{% if c.contato_cargo %} · {{ c.contato_cargo }}{% endif %}<br>{{ c.contato_telefone }}{% if c.contato_whatsapp %} (WhatsApp){% endif %}{% if c.contato_email %}<br>{{ c.contato_email }}{% endif %}</p></div>
         <div><h3>Supervisor indicado</h3>{% if c.supervisor_nome %}<p class="mb-0"><strong>{{ c.supervisor_nome }}</strong>{% if c.supervisor_cargo %} · {{ c.supervisor_cargo }}{% endif %}{% if c.supervisor_telefone %}<br>{{ c.supervisor_telefone }}{% endif %}{% if c.supervisor_email %}<br>{{ c.supervisor_email }}{% endif %}</p>{% else %}<p class="muted mb-0">Não informado.</p>{% endif %}</div>
       </div>

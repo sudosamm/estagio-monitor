@@ -7,6 +7,7 @@
     <form method="post" novalidate>
       {% csrf_token %}
       <h2>Criar senha nova</h2>
+      {% for m in messages %}<div class="aviso {{ m.tags }}">{{ m }}</div>{% endfor %}
       {% if validlink %}
         <div class="caixa-info">Usuário: <strong>{{ form.user.username }}</strong></div>
         <p class="muted mt-1" style="font-size:.88rem">Pelo menos 8 caracteres, não só números e nada fácil de adivinhar.</p>

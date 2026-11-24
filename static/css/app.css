@@ -237,7 +237,7 @@ main { flex: 1; padding-block: 1.5rem 3rem; }
 .campo label, .campo .rotulo { display: block; font-weight: 600; font-size: .88rem; margin-bottom: .3rem; color: var(--cinza-700); }
 .campo .ajuda { font-size: .8rem; color: var(--cinza-500); margin-top: .25rem; }
 .campo .erro { font-size: .82rem; color: var(--vermelho); margin-top: .25rem; }
-input[type=text], input[type=password], input[type=email], input[type=number], input[type=date], input[type=time],
+input[type=text], input[type=password], input[type=email], input[type=tel], input[type=number], input[type=date], input[type=time],
 input[type=datetime-local], input[type=url], input[type=search], input[type=file], select, textarea {
   width: 100%; padding: .55rem .7rem; border: 1px solid var(--cinza-300); border-radius: 8px; font: inherit;
   background: var(--superficie); color: var(--cinza-900);
@@ -518,6 +518,15 @@ h1 svg.ic, h2 svg.ic, h3 svg.ic { width: 1.05em; height: 1.05em; vertical-align:
 .campo-oculto { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .vagas-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 1rem; }
 .vagas-grade input { max-width: 120px; }
+.cursos-vagas { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .6rem; }
+.curso-vaga { border: 1.5px solid color-mix(in srgb, var(--verde) 25%, transparent); border-radius: var(--raio); padding: .6rem .8rem; transition: border-color .15s, background .15s; }
+.curso-vaga.marcado { border-color: var(--verde); background: color-mix(in srgb, var(--verde-claro) 55%, transparent); }
+.curso-vaga-nome { display: flex; gap: .55rem; align-items: center; font-weight: 600; cursor: pointer; margin: 0; }
+.curso-vaga-nome input { width: 1.15rem; height: 1.15rem; flex: none; }
+.curso-vaga-qtd { display: flex; align-items: center; gap: .5rem; margin-top: .55rem; }
+.curso-vaga-qtd label { margin: 0; font-weight: 400; }
+.curso-vaga-qtd input { max-width: 110px; }
+.curso-vaga-qtd[hidden] { display: none; }
 .vagas-lista { display: flex; flex-wrap: wrap; gap: .6rem; }
 .vagas-lista div { background: var(--verde-claro); color: var(--verde-escuro); border-radius: 10px; padding: .5rem .8rem; display: flex; align-items: baseline; gap: .4rem; }
 .vagas-lista strong { font-size: 1.4rem; }
@@ -902,3 +911,20 @@ kbd { font: 600 .72rem/1 ui-monospace, monospace; padding: .18rem .35rem; border
 .membros li > .cresce { min-width: min(14rem, 100%); }
 /* tamanho padrão dos ícones sem regra própria (especificidade zero: qualquer regra específica vence) */
 :where(svg.ic) { width: 1.1em; height: 1.1em; vertical-align: -.18em; flex: none; }
+
+/* acessos e aparelhos */
+.aparelhos li form { flex: none; }
+.contato-membro { display: grid; gap: .35rem; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--cinza-200); min-width: 220px; }
+.contato-membro strong { font-size: .85rem; }
+.indice-config { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1rem; }
+.indice-config a { font-size: .85rem; padding: .3rem .7rem; border-radius: 999px; background: var(--superficie); box-shadow: var(--sombra); text-decoration: none; }
+.secao[id] { scroll-margin-top: 1rem; }
+.barra-salvar { position: sticky; bottom: 0; background: var(--superficie); padding: .7rem 0 .2rem; margin-top: .5rem; z-index: 2; }
+/* agendamento rápido */
+.agenda-proposta { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
+.agenda-proposta li { display: flex; gap: .9rem; align-items: flex-start; padding: .6rem .2rem; border-bottom: 1px solid var(--cinza-200); }
+.agenda-proposta li:last-child { border-bottom: 0; }
+.ap-hora { display: flex; flex-direction: column; align-items: center; min-width: 4.2rem; padding: .3rem .4rem; border-radius: 10px; background: var(--verde-claro); color: var(--verde-escuro); }
+.ap-hora strong { font-size: 1.15rem; }
+.ap-hora small { font-size: .75rem; }
+.roteiro-dia select { max-width: 220px; }

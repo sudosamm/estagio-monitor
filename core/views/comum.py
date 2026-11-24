@@ -25,6 +25,8 @@ def inicio(request):
     if user.is_gestor:
         return redirect("painel")
     if user.is_supervisor:
+        if not user.vinculado_a_concedente and user.candidaturas_feitas.exists():
+            return redirect("minhas_candidaturas")  # conta criada na candidatura, ainda sem aprovação
         return redirect("painel_supervisor")
     estagios = list(estagios_visiveis(user).filter(ativo=True))
     if len(estagios) == 1:
@@ -36,10 +38,23 @@ def confirmar_email(request, token):
     """Link do e-mail de confirmação. Funciona mesmo sem estar logado (o link abre no celular, por exemplo)."""
     user = emails.usuario_do_token(token)
     if user is None:
-        messages.error(request, "Link de confirmação inválido ou vencido. Peça outro em Meus dados.")
-    elif not user.email_confirmado_em:
+        messages.error(request, "Link de confirmação inválido ou vencido. Peça outro em Meus dados ou à escola.")
+        return redirect("perfil" if request.user.is_authenticated else "login")
+    novo = not user.email_confirmado_em
+    if novo:
         user.email_confirmado_em = timezone.now()
         user.save(update_fields=["email_confirmado_em"])
+    if user.deve_trocar_senha and not request.user.is_authenticated:
+        # ainda não entrou: o mesmo link leva a criar a senha (como o “Esqueci minha senha”, que vale para e-mails
+        # confirmados). O link de criar a senha vale 2 horas e uma vez só.
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
+
+        messages.success(request, f"E-mail {user.email} confirmado. Agora crie a sua senha.")
+        return redirect("redefinir_senha_email", urlsafe_base64_encode(force_bytes(user.pk)),
+                        default_token_generator.make_token(user))
+    if novo:
         emails.enviar("EMAIL_CONFIRMADO", [user.email], nome=user.primeiro_nome, usuario=user.username)
         messages.success(request, f"E-mail {user.email} confirmado. Se esquecer a senha, use “Esqueci minha senha”.")
     else:
@@ -75,8 +90,12 @@ def trocar_senha(request):
         user.deve_trocar_senha = False
         user.save(update_fields=["deve_trocar_senha"])
         update_session_auth_hash(request, user)
+        from ..sessoes import desconectar_todas
+
+        outros = desconectar_todas(user, exceto_chave=request.session.session_key)
         emails.avisar_senha_alterada(request, user)
-        messages.success(request, "Senha alterada com sucesso.")
+        messages.success(request, "Senha alterada com sucesso." + (
+            f" Por segurança, {outros} outro(s) aparelho(s) conectado(s) foram desconectados." if outros else ""))
         return redirect("inicio")
     return render(request, "core/trocar_senha.html", {"form": form, "obrigatorio": obrigatorio})
 
@@ -97,8 +116,12 @@ def perfil(request):
     from .. import dois_fatores
     from ..models import RegistroAcao
 
-    acessos = RegistroAcao.objects.filter(usuario=request.user, tipo__in=["LOGIN", "LOGIN_FALHOU", "2FA_FALHOU"])[:6]
+    from ..sessoes import ativas
+    from .acessos import TIPOS_ACESSO
+
+    acessos = RegistroAcao.objects.filter(usuario=request.user, tipo__in=TIPOS_ACESSO)[:3]
     return render(request, "core/perfil.html", {"form": form, "config": config, "acessos": acessos,
+                                                "n_aparelhos": len(ativas(request.user)),
                                                 "pode_2fa": dois_fatores.pode_usar(request.user),
                                                 "exige_2fa": dois_fatores.precisa(request.user)})
 
@@ -164,7 +187,8 @@ def pode_ver_perfil_profissional(user, alvo):
         return False
     if Estagio.objects.filter(estagiario=alvo, supervisor=user).exists():
         return True
-    return alvo.perfil_visivel and Configuracao.atual().banco_talentos_habilitado
+    return (alvo.perfil_visivel and Configuracao.atual().banco_talentos_habilitado
+            and user.vinculado_a_concedente)  # conta de candidatura ainda não aprovada não vê o banco
 
 
 @login_required
@@ -184,6 +208,8 @@ def banco_talentos(request):
         raise PermissionDenied
     if not config.banco_talentos_habilitado and not user.is_gestor:
         raise Http404
+    if not (user.is_gestor or user.vinculado_a_concedente):  # conta de candidatura sem aprovação não vê
+        raise PermissionDenied
     qs = Usuario.objects.filter(papel=Usuario.Papel.ESTAGIARIO, is_active=True, perfil_visivel=True)
     q, curso = request.GET.get("q", "").strip(), request.GET.get("curso", "")
     if q:
