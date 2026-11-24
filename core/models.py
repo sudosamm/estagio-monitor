@@ -1,3 +1,4 @@
+import contextvars
 from datetime import date
 from decimal import Decimal
 
@@ -8,6 +9,10 @@ from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
+
+# Guardados só durante uma requisição (o middleware CacheDaRequisicaoMiddleware abre e fecha): evita reler a
+# configuração várias vezes na mesma página. Fora de uma requisição (comandos, testes sem cliente) não guarda nada.
+CACHE_REQUISICAO = contextvars.ContextVar("cache_requisicao", default=None)
 
 DIAS_SEMANA = [
     (0, "Segunda"),
@@ -1162,6 +1167,8 @@ class Sugestao(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                 related_name="sugestoes")
     pagina = models.CharField("Página onde estava", max_length=300, blank=True)
+    nota = models.PositiveSmallIntegerField("Nota (1 a 5)", null=True, blank=True,
+                                            help_text="Do botão “Sua opinião” (período de testes)")
     navegador = models.CharField(max_length=300, blank=True)
     ip = models.GenericIPAddressField(null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -1390,6 +1397,11 @@ class Configuracao(models.Model):
     lembrete_avaliacoes_em = models.DateTimeField(null=True, blank=True, editable=False)
     sice_url = models.URLField("Endereço do SICE para o estagiário", blank=True,
                                help_text="Aparece como botão “Abrir o SICE” na tela de copiar as respostas.")
+    periodo_testes = models.BooleanField(
+        "Sistema em período de testes", default=True,
+        help_text="Mostra a estagiários e supervisores o botão “Sua opinião” em todas as páginas, para avaliarem o "
+                  "sistema com uma nota e um comentário. As respostas ficam em Comunicação → Opiniões sobre o sistema.",
+    )
     email_sugestoes = models.EmailField(
         "E-mail que recebe as sugestões e os erros", blank=True,
         help_text="Tudo o que for enviado em “Sugestões e erros” chega aqui, com os anexos. Vazio = variável "
@@ -1453,10 +1465,18 @@ class Configuracao(models.Model):
     def save(self, *args, **kwargs):
         self.pk = 1
         super().save(*args, **kwargs)
+        cache = CACHE_REQUISICAO.get()
+        if cache is not None:
+            cache["configuracao"] = self
 
     @classmethod
     def atual(cls):
+        cache = CACHE_REQUISICAO.get()
+        if cache is not None and "configuracao" in cache:
+            return cache["configuracao"]
         obj, _ = cls.objects.get_or_create(pk=1)
+        if cache is not None:
+            cache["configuracao"] = obj
         return obj
 
     @property

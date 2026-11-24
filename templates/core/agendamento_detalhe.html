@@ -25,6 +25,10 @@
       <ul class="lista compacta">{% for e, a in estagios_visita %}<li><span class="cresce">{{ e.estagiario }}{% if a.lancado_sice_em %} <span class="selo pasta-conferido">no SICE</span>{% elif a %} <span class="selo pasta-enviado">falta lançar no SICE</span>{% endif %}</span>
         {% if a %}<a class="btn sec sm" href="{% url 'acompanhamento_editar' e.pk a.pk %}">Editar</a> <a class="btn sm" href="{% url 'acompanhamento_sice' a.pk %}">Copiar p/ SICE</a>{% else %}<a class="btn sm" href="{% url 'acompanhamento_novo' e.pk %}?visita={{ ag.pk }}">Preencher</a>{% endif %}</li>{% endfor %}</ul>
       {% endif %}
+      {% if fichas %}
+      <hr><h3>Dados para a visita</h3>
+      {% for f in fichas %}{% include "core/_ficha_estagio.html" with e=f.e horas=f.horas escala=f.escala proximos=f.proximos sem_registro=f.sem_registro a_validar=f.a_validar ultima_visita=f.ultima_visita proxima_visita=f.proxima_visita outros=f.outros mapa=f.mapa com_incluir=False %}{% endfor %}
+      {% endif %}
       {% if ag.status != "CANCELADO" and ag.status != "REALIZADO" %}{% if ag.solicitante == user or e_orientador %}
       <hr><form method="post" action="{% url 'cancelar_agendamento' ag.pk %}" data-confirmar="Cancelar este agendamento?">{% csrf_token %}<button class="btn perigo" type="submit">Cancelar</button></form>
       {% endif %}{% endif %}

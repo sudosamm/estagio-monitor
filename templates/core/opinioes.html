@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Opiniões sobre o sistema{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Opiniões sobre o sistema</h1><p>O que estagiários e supervisores mandam pelo botão “Sua opinião” e pela página “Sugestões e erros”.{% if not CONFIG.periodo_testes %} O botão está desligado em Configurações.{% endif %}</p></div></div>
+<div class="kpis">
+  <div class="kpi"><div class="valor">{{ total }}</div><div class="rotulo">Recebidas</div></div>
+  <div class="kpi laranja"><div class="valor">{{ abertas }}</div><div class="rotulo">Ainda não resolvidas</div></div>
+  <div class="kpi azul"><div class="valor">{% if media %}{{ media|floatformat:1 }}{% else %}—{% endif %}</div><div class="rotulo">Nota média (1 a 5)</div></div>
+</div>
+<div class="grade grade-lado">
+  <div>
+    <form class="filtros card" method="get">
+      <div><label class="rotulo">Tipo</label><select name="tipo"><option value="">Todos</option>{% for v, r in tipos %}<option value="{{ v }}"{% if f.tipo == v %} selected{% endif %}>{{ r }}</option>{% endfor %}</select></div>
+      <div><label class="rotulo">Quem mandou</label><select name="papel"><option value="">Todos</option>{% for v, r in papeis %}<option value="{{ v }}"{% if f.papel == v %} selected{% endif %}>{{ r }}</option>{% endfor %}<option value="VISITANTE"{% if f.papel == "VISITANTE" %} selected{% endif %}>Sem login</option></select></div>
+      <div><label class="rotulo">Situação</label><select name="situacao"><option value="">Abertas</option><option value="resolvidas"{% if f.situacao == "resolvidas" %} selected{% endif %}>Resolvidas</option><option value="todas"{% if f.situacao == "todas" %} selected{% endif %}>Todas</option></select></div>
+      <button class="btn" type="submit">Filtrar</button>
+    </form>
+    <div class="card"><ul class="lista opinioes">{% for s in itens %}
+      <li class="{% if s.resolvida %}resolvida{% endif %}">
+        <div class="cresce">
+          <div class="flex" style="flex-wrap:wrap;gap:.4rem"><strong>{{ s.usuario.nome_completo|default:s.nome }}</strong>
+            <span class="etiqueta">{% if s.usuario %}{{ s.usuario.get_papel_display }}{% else %}sem login{% endif %}</span>
+            <span class="etiqueta">{{ s.get_tipo_display }}</span>{% if s.nota %}<span class="nota-opiniao n{{ s.nota }}" title="Nota {{ s.nota }} de 5">{{ s.nota }}/5</span>{% endif %}
+            <small class="muted">{{ s.criado_em|date:"d/m/Y H:i" }}</small></div>
+          <p class="quebra" style="margin:.3rem 0">{{ s.mensagem }}</p>
+          <small class="muted">{% if s.pagina %}Página: <a href="{{ s.pagina }}">{{ s.pagina|truncatechars:60 }}</a>{% endif %}{% if s.anexos.all %} · {{ s.anexos.all|length }} anexo(s): {% for a in s.anexos.all %}<a href="{% url 'anexo_sugestao' a.pk %}">{{ a.nome_original }}</a> {% endfor %}{% endif %}{% if s.email %} · <a href="mailto:{{ s.email }}">responder por e-mail</a>{% endif %}</small>
+        </div>
+        <form method="post" action="{% url 'marcar_opiniao' s.pk %}">{% csrf_token %}<input type="hidden" name="voltar" value="{{ request.get_full_path }}"><button class="btn sec sm" type="submit">{% if s.resolvida %}Reabrir{% else %}Resolvida{% endif %}</button></form>
+      </li>{% empty %}<li class="vazio">Nada por aqui.</li>{% endfor %}</ul></div>
+  </div>
+  <div>
+    <div class="card"><h3>Notas</h3>
+      {% for n, q in notas %}<div class="barra-nota"><span>{{ n }}</span><div><i style="width:{% if max_nota %}{% widthratio q max_nota 100 %}{% else %}0{% endif %}%"></i></div><b>{{ q }}</b></div>{% endfor %}
+    </div>
+    <div class="card"><h3>Quem mandou</h3><dl class="dl">{% for p, n in por_papel %}<dt>{{ p }}</dt><dd>{{ n }}</dd>{% empty %}<dd class="muted">—</dd>{% endfor %}</dl></div>
+    <div class="card"><h3>Páginas mais citadas</h3><ul class="lista compacta">{% for p, n in paginas %}<li><span class="cresce"><small>{{ p|truncatechars:45 }}</small></span><b>{{ n }}</b></li>{% empty %}<li class="vazio">—</li>{% endfor %}</ul></div>
+  </div>
+</div>
+{% endblock %}

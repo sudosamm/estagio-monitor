@@ -24,6 +24,17 @@ def _p(*publico):
 
 
 VERSOES = (
+    Versao("2026.11.24", "Painel com calendário e agendamento mais fácil", (
+        (GESTAO, "Painel: calendário do mês com visitas, feriados, fim de termos, previsões de conclusão, aniversários e "
+                 "quantos ficaram sem registro em cada dia. Clique num dia para ver tudo e agendar nele."),
+        (("orientador",), "Agendar visita: busca de estagiários e, ao escolher, a ficha completa (endereço e mapa, "
+                          "supervisor e telefones, horário, próximos dias, horas e pendências). Local, assunto e dias "
+                          "em comum são preenchidos sozinhos, com aviso de conflito de horário."),
+        (_p("todos"), "Sistema mais rápido: as listas carregam tudo de uma vez e as páginas começam a abrir quando você "
+                      "aponta para o link."),
+        (("estagiario", "supervisor"), "O sistema está em testes: use o botão “Sua opinião”, no canto da tela, para "
+                                       "contar o que achou. Leva 10 segundos."),
+    )),
     Versao("2026.11.18", "Senha por e-mail e calendário com nível", (
         (_p("estagiario"), "Calendário: cada horário marcado enche o dia de água (25%, 50%, 75%, 100%). Confirmado pelo "
                            "supervisor sem todos os horários, o dia vira grama."),

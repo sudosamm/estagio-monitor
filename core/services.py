@@ -10,7 +10,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.utils.crypto import get_random_string
 
 from .models import DiaSemEstagio, Estagio, Notificacao, Registro, Usuario, chave_municipio
@@ -307,6 +307,55 @@ ROTULOS = {
 }
 
 
+# ---------------------------------------------------------------- carga em lote (listas de estágios)
+
+
+def preparar_lote(estagios, desde, totais=True):
+    """Para listas (painel, lista de estagiários, relatórios): carrega de uma vez o que status_periodo,
+    resumo_horas e simular_termino consultariam estágio por estágio — escalas, registros e dias planejados a
+    partir de `desde`, feriados e os totais de horas. Fica guardado nos próprios objetos; quem não passa por
+    aqui continua consultando do jeito normal. `desde` precisa ser <= hoje para a previsão de término usar o lote."""
+    from .models import DiaPlanejado, Escala, LocalEstagio
+
+    estagios = list(estagios)
+    if not estagios:
+        return estagios
+    ids = [e.pk for e in estagios]
+    sem_local = [e for e in estagios if e.local_id and "local" not in e._state.fields_cache]
+    if sem_local:
+        locais = LocalEstagio.objects.in_bulk({e.local_id for e in sem_local})
+        for e in sem_local:
+            e.local = locais.get(e.local_id)
+    escalas, registros, planos = {}, {}, {}
+    if all("escalas" in getattr(e, "_prefetched_objects_cache", {}) for e in estagios):
+        escalas = {e.pk: list(e.escalas.all()) for e in estagios}
+    else:
+        for esc in Escala.objects.filter(estagio_id__in=ids):
+            escalas.setdefault(esc.estagio_id, []).append(esc)
+    for r in Registro.objects.filter(estagio_id__in=ids, data__gte=desde):
+        registros.setdefault(r.estagio_id, {})[r.data] = r
+    for p in DiaPlanejado.objects.filter(estagio_id__in=ids, data__gte=desde):
+        planos.setdefault(p.estagio_id, {})[p.data] = p
+    feriados = list(DiaSemEstagio.objects.filter(Q(anual=True) | Q(data__gte=desde)))
+    soma = {}
+    if totais:
+        soma = {t.pop("estagio_id"): t for t in Registro.objects.filter(estagio_id__in=ids)
+                .values("estagio_id").annotate(**_totais())}
+    vazio = {"confirmadas": None, "pendentes": None, "presencas": 0, "ausencias": 0, "faltas": 0}
+    for e in estagios:
+        e._escalas_cache = sorted(escalas.get(e.pk, []), key=lambda x: x.vigente_desde, reverse=True)
+        e._lote = {"desde": desde, "registros": registros.get(e.pk, {}), "planos": planos.get(e.pk, {}),
+                   "feriados": feriados}
+        if totais:
+            e._lote_totais = soma.get(e.pk, vazio)
+    return estagios
+
+
+def _lote(estagio, inicio):
+    lote = getattr(estagio, "_lote", None)
+    return lote if lote is not None and inicio >= lote["desde"] else None
+
+
 def filtro_feriados_do_estagio(estagio):
     """Quais cadastros valem para o estágio: os da escola (do orientador dele), os nacionais/estaduais e os
     municipais do município da concedente."""
@@ -321,9 +370,29 @@ def filtro_feriados_do_estagio(estagio):
     return filtro
 
 
+def _feriado_vale(d, estagio, chave):
+    """O mesmo critério de filtro_feriados_do_estagio, em Python (para a carga em lote)."""
+    A = DiaSemEstagio.Abrangencia
+    if d.abrangencia == A.TODOS:
+        return True
+    if d.abrangencia == A.ESCOLA:
+        return d.orientador_id == estagio.orientador_id and d.curso_id in (None, estagio.curso_id)
+    if d.abrangencia == A.MUNICIPIO:
+        return bool(chave) and d.municipio_chave == chave
+    if d.abrangencia == A.CONCEDENTE:
+        return bool(estagio.local_id) and d.concedente_id == estagio.local_id
+    return False
+
+
 def dias_sem_estagio(estagio, inicio, fim):
-    qs = DiaSemEstagio.objects.filter(filtro_feriados_do_estagio(estagio)).filter(
-        Q(anual=False, data__range=(inicio, fim)) | Q(anual=True, data__lte=fim))
+    lote = _lote(estagio, inicio)
+    if lote is not None:
+        chave = chave_municipio(estagio.local.cidade) if estagio.local_id else ""
+        qs = [d for d in lote["feriados"] if _feriado_vale(d, estagio, chave)
+              and ((not d.anual and inicio <= d.data <= fim) or (d.anual and d.data <= fim))]
+    else:
+        qs = DiaSemEstagio.objects.filter(filtro_feriados_do_estagio(estagio)).filter(
+            Q(anual=False, data__range=(inicio, fim)) | Q(anual=True, data__lte=fim))
     dias = {}
     # o municipal vem primeiro: em dia com dois cadastros, a folha mostra o nome do feriado da cidade
     A = DiaSemEstagio.Abrangencia
@@ -462,8 +531,13 @@ def status_periodo(estagio, inicio, fim, hoje=None, limite=None):
     from django.utils import timezone
 
     hoje = hoje or timezone.localdate()
-    registros = {r.data: r for r in estagio.registros.filter(data__range=(inicio, fim))}
-    planos = {p.data: p for p in estagio.dias_planejados.filter(data__range=(inicio, fim))}
+    lote = _lote(estagio, inicio)
+    if lote is not None:
+        registros = {d: r for d, r in lote["registros"].items() if inicio <= d <= fim}
+        planos = {d: p for d, p in lote["planos"].items() if inicio <= d <= fim}
+    else:
+        registros = {r.data: r for r in estagio.registros.filter(data__range=(inicio, fim))}
+        planos = {p.data: p for p in estagio.dias_planejados.filter(data__range=(inicio, fim))}
     feriados = dias_sem_estagio(estagio, inicio, fim)
     resultado = []
     dia = inicio
@@ -529,20 +603,29 @@ def calendario_mes(estagio, ano, mes, limite=None):
 # ---------------------------------------------------------------- horas
 
 
+def _totais():
+    """Agregações de horas e contagens dos registros (numa consulta só; agrupada por estágio no lote)."""
+    P, R = Registro.Situacao, Registro.Confirmacao
+    return dict(
+        confirmadas=Sum("horas", filter=Q(situacao=P.PRESENTE, confirmacao=R.CONFIRMADA)),
+        pendentes=Sum("horas", filter=Q(situacao=P.PRESENTE, confirmacao=R.PENDENTE)),
+        presencas=Count("pk", filter=Q(situacao=P.PRESENTE)),
+        ausencias=Count("pk", filter=Q(situacao=P.AUSENCIA)),
+        faltas=Count("pk", filter=Q(situacao=P.FALTA)),
+    )
+
+
 def resumo_horas(estagio):
-    regs = estagio.registros.filter(situacao=Registro.Situacao.PRESENTE)
-    confirmadas = regs.filter(confirmacao=Registro.Confirmacao.CONFIRMADA).aggregate(s=Sum("horas"))["s"] or Decimal(0)
-    pendentes = regs.filter(confirmacao=Registro.Confirmacao.PENDENTE).aggregate(s=Sum("horas"))["s"] or Decimal(0)
+    t = getattr(estagio, "_lote_totais", None)
+    if t is None:
+        t = estagio.registros.aggregate(**_totais())
+    confirmadas, pendentes = t["confirmadas"] or Decimal(0), t["pendentes"] or Decimal(0)
     total = Decimal(estagio.carga_horaria_total)
     cumpridas = confirmadas + estagio.horas_anteriores
     faltam = max(total - cumpridas - pendentes, Decimal(0))
     pct = float(min(cumpridas / total * 100, 100)) if total else 0
     pct_pend = float(min(pendentes / total * 100, 100 - pct)) if total else 0
-    contagem = {
-        "presencas": regs.count(),
-        "ausencias": estagio.registros.filter(situacao=Registro.Situacao.AUSENCIA).count(),
-        "faltas": estagio.registros.filter(situacao=Registro.Situacao.FALTA).count(),
-    }
+    contagem = {"presencas": t["presencas"], "ausencias": t["ausencias"], "faltas": t["faltas"]}
     termino, dias_restantes = simular_termino(estagio, faltam)
     return {
         "total": total,
@@ -573,8 +656,13 @@ def simular_termino(estagio, horas_faltando):
     inicio = max(hoje, estagio.data_inicio)
     limite = inicio + timedelta(days=730)
     feriados = dias_sem_estagio(estagio, inicio, limite)
-    ja_registrados = set(estagio.registros.filter(data__gte=inicio).values_list("data", flat=True))
-    planos = dict(estagio.dias_planejados.filter(data__gte=inicio).values_list("data", "horas"))
+    lote = _lote(estagio, inicio)
+    if lote is not None:
+        ja_registrados = {d for d in lote["registros"] if d >= inicio}
+        planos = {d: p.horas for d, p in lote["planos"].items() if d >= inicio}
+    else:
+        ja_registrados = set(estagio.registros.filter(data__gte=inicio).values_list("data", flat=True))
+        planos = dict(estagio.dias_planejados.filter(data__gte=inicio).values_list("data", "horas"))
     acumulado, dia, n = Decimal(0), inicio, 0
     while dia <= limite:
         if dia not in ja_registrados:

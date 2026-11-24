@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from unittest import mock
 
@@ -3226,3 +3226,135 @@ class EmailDeContaTests(Base):
         n = len(self.mail.outbox)
         self.client.post(reverse("esqueci_senha"), {"identificador": "maria.souza"}, REMOTE_ADDR="10.5.0.2")
         self.assertEqual(len(self.mail.outbox), n)
+
+
+class CargaEmLoteTests(Base):
+    def test_lote_da_o_mesmo_resultado_que_um_por_um(self):
+        from datetime import time as t
+
+        from .models import DiaPlanejado, DiaSemEstagio, Registro
+        from .services import preparar_lote, resumo_horas, status_periodo
+
+        self.local.cidade = "Fortaleza"
+        self.local.save()
+        DiaSemEstagio.objects.create(data=date(2026, 11, 3), descricao="Feriado municipal", orientador=self.ori,
+                                     abrangencia=DiaSemEstagio.Abrangencia.MUNICIPIO, municipio="Fortaleza")
+        DiaSemEstagio.objects.create(data=date(2026, 11, 16), descricao="Evento da escola", orientador=self.ori,
+                                     abrangencia=DiaSemEstagio.Abrangencia.ESCOLA, curso=self.curso)
+        DiaSemEstagio.objects.create(data=date(2026, 11, 17), descricao="Recesso de outra escola", orientador=self.sup,
+                                     abrangencia=DiaSemEstagio.Abrangencia.ESCOLA)
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 2), situacao="PRESENTE", horas=4,
+                                confirmacao="CONFIRMADA", hora_chegada=t(7))
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 9), situacao="FALTA")
+        Registro.objects.create(estagio=self.est, data=date(2026, 11, 10), situacao="PRESENTE", horas=4)
+        DiaPlanejado.objects.create(estagio=self.est, data=date(2026, 11, 20), horas=3)
+        inicio, fim = date(2026, 11, 1), date(2026, 12, 31)
+        sozinho = Estagio.objects.get(pk=self.est.pk)
+        esperado = ([(s.data, s.codigo, s.motivo_sem_estagio) for s in status_periodo(sozinho, inicio, fim)], resumo_horas(sozinho))
+        em_lote = preparar_lote(Estagio.objects.filter(pk=self.est.pk).select_related("curso", "local"), inicio)[0]
+        with self.assertNumQueries(0):
+            obtido = ([(s.data, s.codigo, s.motivo_sem_estagio) for s in status_periodo(em_lote, inicio, fim)], resumo_horas(em_lote))
+        self.assertEqual(obtido, esperado)
+
+    def test_painel_nao_cresce_com_o_numero_de_estagiarios(self):
+        self.entrar(self.ori)
+        self.client.get(reverse("painel"))
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as antes:
+            self.client.get(reverse("painel"))
+        for i in range(8):
+            aluno = _ativo(criar_usuario(f"Aluno Extra{i} Lima", Usuario.Papel.ESTAGIARIO))
+            e = Estagio.objects.create(estagiario=aluno, orientador=self.ori, supervisor=self.sup, curso=self.curso,
+                                       turma=self.turma, local=self.local, data_inicio=date(2026, 11, 2))
+            Escala.objects.create(estagio=e, vigente_desde=date(2026, 11, 2), dias="0,1", horas_por_dia=4)
+        with CaptureQueriesContext(connection) as depois:
+            self.client.get(reverse("painel"))
+        self.assertLessEqual(len(depois), len(antes) + 2)
+
+
+class PainelAgendaTests(Base):
+    def test_calendario_do_mes_no_painel(self):
+        from django.utils import timezone as tz
+
+        from .models import Agendamento, DiaSemEstagio
+
+        DiaSemEstagio.objects.create(data=date(2026, 11, 20), descricao="Consciência Negra", orientador=self.ori,
+                                     abrangencia=DiaSemEstagio.Abrangencia.TODOS)
+        a = Agendamento.objects.create(tipo="VISITA", status="AGENDADO", orientador=self.ori, solicitante=self.ori,
+                                       assunto="Visita à Empresa X", data_hora=tz.make_aware(datetime(2026, 11, 12, 9)))
+        a.estagios.add(self.est)
+        self.est.data_fim = date(2026, 11, 27)
+        self.est.save()
+        Usuario.objects.filter(pk=self.aluno.pk).update(data_nascimento=date(2008, 11, 25))
+        self.entrar(self.ori)
+        r = self.client.get(reverse("painel") + "?mes=2026-11&dia=2026-11-12")
+        dias = r.context["dias_json"]
+        self.assertEqual(dias["2026-11-20"]["feriados"], ["Consciência Negra"])
+        self.assertEqual(dias["2026-11-12"]["eventos"][0]["hora"], "09:00")
+        self.assertIn("Visita à Empresa X", dias["2026-11-12"]["eventos"][0]["texto"])
+        self.assertIn("termo", {e["tipo"] for e in dias["2026-11-27"]["eventos"]})
+        self.assertIn("Aniversário de Maria da Silva Souza (18 anos)", [e["texto"] for e in dias["2026-11-25"]["eventos"]])
+        self.assertEqual(dias["2026-11-09"]["sem_registro"], 1)  # segunda passada, sem registro (hoje é qua 11/11)
+        self.assertContains(r, "Agendar neste dia")
+        self.assertContains(r, f'{reverse("novo_agendamento")}?data=2026-11-12')
+        self.assertEqual(self.client.get(reverse("painel") + "?mes=abc").status_code, 200)
+
+    def test_ficha_do_estagiario_e_preenchimento_do_agendamento(self):
+        self.local.endereco, self.local.cidade = "Rua A", "Itapipoca"
+        self.local.save()
+        self.entrar(self.ori)
+        r = self.client.get(reverse("ficha_estagio", args=[self.est.pk]))
+        dados = r.json()
+        self.assertEqual(dados["local_id"], self.local.pk)
+        self.assertIn("2026-11-16", dados["dias"])  # segunda (escala seg e ter)
+        self.assertNotIn("2026-11-18", dados["dias"])  # quarta: fora da escala
+        self.assertIn("Abrir no mapa", dados["html"])
+        self.assertIn("Sérgio Supervisor", dados["html"])
+        r = self.client.get(reverse("novo_agendamento") + "?data=2026-11-16")
+        self.assertEqual(r.context["form"].initial["data_hora"], datetime(2026, 11, 16, 8, 0))
+        self.assertTemplateUsed(r, "core/agendamento_form.html")
+        for u in (self.aluno, self.sup, _ativo(criar_usuario("Otto Orientador", Usuario.Papel.ORIENTADOR))):
+            self.client.force_login(u)
+            self.assertIn(self.client.get(reverse("ficha_estagio", args=[self.est.pk])).status_code, (403, 404))
+
+
+class OpiniaoTests(Base):
+    def test_botao_e_envio_de_opiniao(self):
+        from .models import Notificacao, Sugestao
+
+        adm = _ativo(criar_usuario("Ana Admin Lima", Usuario.Papel.ORIENTADOR))
+        Usuario.objects.filter(pk=adm.pk).update(is_superuser=True)
+        self.entrar(self.aluno)
+        self.assertContains(self.client.get(self.est.get_absolute_url()), "Sua opinião")
+        r = self.client.post(reverse("enviar_opiniao"), {"tipo": "SUGESTAO", "pagina": "/x/"}, HTTP_ACCEPT="application/json")
+        self.assertEqual(r.status_code, 400)  # nem nota nem comentário
+        r = self.client.post(reverse("enviar_opiniao"), {"nota": "5", "tipo": "ELOGIO", "pagina": self.est.get_absolute_url()},
+                             HTTP_ACCEPT="application/json")
+        self.assertEqual(r.json(), {"ok": True})
+        s = Sugestao.objects.get()
+        self.assertEqual((s.nota, s.usuario, s.pagina), (5, self.aluno, self.est.get_absolute_url()))
+        self.assertFalse(Notificacao.objects.filter(usuario=adm).exists())  # elogio não incomoda o sino
+        self.client.post(reverse("enviar_opiniao"), {"nota": "1", "tipo": "ERRO", "mensagem": "Travou", "pagina": "https://mal.example/"})
+        self.assertTrue(Notificacao.objects.filter(usuario=adm, texto__contains="Travou").exists())
+        self.assertEqual(Sugestao.objects.latest("pk").pagina, reverse("inicio"))  # volta só para o próprio site
+        self.entrar(self.ori)
+        self.assertNotContains(self.client.get(reverse("painel")), "data-abrir-opiniao")  # gestão não vê o botão
+        self.assertEqual(self.client.get(reverse("opinioes")).status_code, 403)
+        self.client.force_login(Usuario.objects.get(pk=adm.pk))
+        r = self.client.get(reverse("opinioes"))
+        self.assertContains(r, "Travou")
+        self.assertEqual(r.context["media"], 3)
+        self.client.post(reverse("marcar_opiniao", args=[s.pk]))
+        s.refresh_from_db()
+        self.assertTrue(s.resolvida)
+
+    def test_botao_some_fora_do_periodo_de_testes(self):
+        from .models import Configuracao
+
+        c = Configuracao.atual()
+        c.periodo_testes = False
+        c.save()
+        self.entrar(self.aluno)
+        self.assertNotContains(self.client.get(self.est.get_absolute_url()), "data-abrir-opiniao")

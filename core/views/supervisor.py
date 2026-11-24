@@ -6,7 +6,7 @@ from django.views.decorators.http import require_POST
 
 from ..atestados import pendentes_para
 from ..models import HistoricoRegistro, Justificativa, Registro, Usuario
-from ..services import estagios_visiveis, notificar, status_hoje
+from ..services import estagios_visiveis, notificar, preparar_lote, status_hoje
 from .base import papel
 
 supervisor_requerido = papel(Usuario.Papel.SUPERVISOR)
@@ -14,8 +14,8 @@ supervisor_requerido = papel(Usuario.Papel.SUPERVISOR)
 
 @supervisor_requerido
 def painel_supervisor(request):
-    estagios = list(estagios_visiveis(request.user).filter(ativo=True).prefetch_related("escalas"))
     hoje = timezone.localdate()
+    estagios = preparar_lote(estagios_visiveis(request.user).filter(ativo=True), hoje, totais=False)
     sem_horario = []
     for e in estagios:
         e.st = status_hoje(e)

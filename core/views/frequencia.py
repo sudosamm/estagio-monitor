@@ -9,7 +9,7 @@ from datetime import date
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import F, Max, Q, Sum
+from django.db.models import F, Q
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -183,7 +183,7 @@ def frequencias_painel(request):
     ano, mes = _mes_param(request)
     inicio_mes = date(ano, mes, 1)
     ano_lista = None if user.is_supervisor else ano_em_uso(request)
-    base = _estagios_painel(request).select_related("turma")
+    base = _estagios_painel(request).select_related("turma__curso")
     turmas = Turma.objects.filter(pk__in=base.values("turma")).select_related("curso")
     filtro_turma = request.GET.get("turma", "")
     if filtro_turma.isdigit():
@@ -196,7 +196,7 @@ def frequencias_painel(request):
         envio = FolhaEnviadaForm(
             request.POST if request.POST.get("acao") == "enviar" else None,
             request.FILES if request.POST.get("acao") == "enviar" else None,
-            estagios_qs=_estagios_painel(request).select_related("turma"),
+            estagios_qs=_estagios_painel(request).select_related("turma__curso"),
             turmas=turmas_do_ano(user, ano_lista), initial={"mes": f"{ano}-{mes:02d}"},
         )
         if request.method == "POST" and request.POST.get("acao") == "config":
@@ -223,15 +223,17 @@ def frequencias_painel(request):
             return redirect(f"{reverse('frequencias')}?mes={d['mes']:%Y-%m}")
 
     logs = ImpressaoFrequencia.objects.filter(estagio__in=estagios, mes=inicio_mes)
-    for e in estagios:
-        meus = logs.filter(estagio=e)
-        do_aluno = meus.filter(usuario=e.estagiario)
-        dados = do_aluno.aggregate(impressoes=Sum("impressoes"), ultima=Max("ultima_impressao"))
-        e.aberturas_aluno = do_aluno.filter(folha_enviada__isnull=True).count()
-        e.downloads_aluno = do_aluno.filter(folha_enviada__isnull=False).count()
-        e.impressoes_aluno = dados["impressoes"] or 0
-        e.ultima_aluno = dados["ultima"]
-        e.impressoes_outros = meus.exclude(usuario=e.estagiario).aggregate(s=Sum("impressoes"))["s"] or 0
+    por_estagio = {}
+    for log in logs.only("estagio_id", "usuario_id", "folha_enviada_id", "impressoes", "ultima_impressao"):
+        por_estagio.setdefault(log.estagio_id, []).append(log)
+    for e in estagios:  # tudo de uma consulta só (antes eram 6 por estagiário)
+        meus = por_estagio.get(e.pk, [])
+        do_aluno = [l for l in meus if l.usuario_id == e.estagiario_id]
+        e.aberturas_aluno = sum(1 for l in do_aluno if l.folha_enviada_id is None)
+        e.downloads_aluno = sum(1 for l in do_aluno if l.folha_enviada_id is not None)
+        e.impressoes_aluno = sum(l.impressoes or 0 for l in do_aluno)
+        e.ultima_aluno = max((l.ultima_impressao for l in do_aluno if l.ultima_impressao), default=None)
+        e.impressoes_outros = sum(l.impressoes or 0 for l in meus if l.usuario_id != e.estagiario_id)
         e.situacao_folha = ("impressa" if e.impressoes_aluno else "baixada" if e.downloads_aluno
                             else "aberta" if e.aberturas_aluno else "nao")
     ordem = {"nao": 0, "aberta": 1, "baixada": 2, "impressa": 3}

@@ -1,0 +1,27 @@
+{% load ui %}
+<button type="button" class="botao-opiniao" data-abrir-opiniao aria-haspopup="dialog">{% icone "mensagem" %}<span>Sua opinião</span></button>
+<dialog class="dialogo-opiniao" data-opiniao aria-labelledby="opiniao-titulo">
+  <form method="post" action="{% url 'enviar_opiniao' %}" data-form-opiniao>
+    {% csrf_token %}<input type="hidden" name="pagina" value="{{ request.get_full_path }}">
+    <div class="card-cab"><h3 id="opiniao-titulo">O sistema está em testes</h3><button type="button" class="btn sec sm" data-fechar-opiniao aria-label="Fechar">✕</button></div>
+    <p class="muted" style="font-size:.88rem;margin-top:0">Conte o que achou desta tela ou do sistema. Sua opinião vai direto para quem está fazendo as melhorias.</p>
+    <fieldset class="notas-opiniao"><legend>Como está sendo usar?</legend>
+      <label><input type="radio" name="nota" value="5"><span aria-hidden="true">😍</span><small>Ótimo</small></label>
+      <label><input type="radio" name="nota" value="4"><span aria-hidden="true">🙂</span><small>Bom</small></label>
+      <label><input type="radio" name="nota" value="3"><span aria-hidden="true">😐</span><small>Regular</small></label>
+      <label><input type="radio" name="nota" value="2"><span aria-hidden="true">🙁</span><small>Ruim</small></label>
+      <label><input type="radio" name="nota" value="1"><span aria-hidden="true">😣</span><small>Muito ruim</small></label>
+    </fieldset>
+    <fieldset class="tipos-opiniao"><legend>É sobre</legend>
+      <label><input type="radio" name="tipo" value="SUGESTAO" checked> Sugestão</label>
+      <label><input type="radio" name="tipo" value="ERRO"> Algo deu errado</label>
+      <label><input type="radio" name="tipo" value="ELOGIO"> Elogio</label>
+      <label><input type="radio" name="tipo" value="DUVIDA"> Dúvida</label>
+    </fieldset>
+    <label class="rotulo" for="opiniao-msg">Comentário <small class="muted">(opcional)</small></label>
+    <textarea id="opiniao-msg" name="mensagem" rows="3" maxlength="2000" placeholder="O que você tentou fazer? O que poderia ser mais fácil?"></textarea>
+    <div class="aviso error" data-erro-opiniao hidden></div>
+    <div class="acoes mt-1"><button class="btn" type="submit">Enviar</button><a class="btn sec" href="{% url 'sugestoes' %}?de={{ request.get_full_path|urlencode }}">Enviar com print/anexo</a></div>
+  </form>
+  <div class="opiniao-ok" data-ok-opiniao hidden><p style="font-size:2rem;margin:0">🙌</p><h3>Obrigado!</h3><p class="muted">Sua opinião foi enviada.</p><button type="button" class="btn" data-fechar-opiniao>Fechar</button></div>
+</dialog>

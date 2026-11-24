@@ -4,7 +4,7 @@ from django.http import HttpResponse
 from django.urls import path
 
 from core.seguranca import LoginForm
-from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, conta, encerramento, estagio, feedback, frequencia, importacao, novidades, visitas, modelos_email, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
+from core.views import agenda, atestados, avaliacoes, avisos, captacao, comum, conta, encerramento, estagio, feedback, frequencia, importacao, novidades, opinioes, visitas, modelos_email, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
 
 urlpatterns = [
     path("", comum.inicio, name="inicio"),
@@ -23,6 +23,9 @@ urlpatterns = [
     path("novidades/", novidades.novidades, name="novidades"),
     path("novidades/visto/", novidades.novidades_visto, name="novidades_visto"),
     path("sugestoes/", novidades.sugestoes, name="sugestoes"),
+    path("opiniao/", opinioes.enviar_opiniao, name="enviar_opiniao"),
+    path("opinioes/", opinioes.opinioes, name="opinioes"),
+    path("opinioes/<int:pk>/marcar/", opinioes.marcar_opiniao, name="marcar_opiniao"),
     path("sugestoes/anexos/<int:pk>/", novidades.anexo_sugestao, name="anexo_sugestao"),
     path("notificacoes/", comum.notificacoes, name="notificacoes"),
     path("notificacoes/lidas/", comum.notificacoes_marcar_lidas, name="notificacoes_lidas"),
@@ -138,6 +141,7 @@ urlpatterns = [
     # agenda
     path("agenda/", agenda.agendamentos, name="agendamentos"),
     path("agenda/novo/", agenda.novo_agendamento, name="novo_agendamento"),
+    path("agenda/ficha/<int:pk>/", agenda.ficha_estagio, name="ficha_estagio"),
     path("agenda/<int:pk>/", agenda.agendamento_detalhe, name="agendamento_detalhe"),
     path("agenda/<int:pk>/cancelar/", agenda.cancelar_agendamento, name="cancelar_agendamento"),
     path("agenda/assinar/", agenda.assinar_agenda, name="assinar_agenda"),

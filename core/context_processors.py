@@ -6,7 +6,7 @@ def _item(rotulo, nome, ativos, url_atual, contador=0):
     return {"rotulo": rotulo, "url": reverse(nome), "ativo": url_atual in ativos, "contador": contador or 0}
 
 
-def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0):
+def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0, opinioes=0):
     """Barra da área de gestão: dois atalhos soltos e três seções (o que a pessoa não pode usar não aparece)."""
     pode = user.pode
     acompanhamento = [
@@ -26,6 +26,7 @@ def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0):
     comunicacao = [
         _item("Avisos para a turma", "comunicados", {"comunicados", "comunicado"}, url_atual),
         pode("arquivos") and _item("Arquivos gerais", "documentos_gerais", {"documentos_gerais"}, url_atual),
+        user.is_superuser and _item("Opiniões sobre o sistema", "opinioes", {"opinioes"}, url_atual, opinioes),
     ]
     feriados = (_item("Feriados e recessos", "dias_sem_estagio", {"dias_sem_estagio", "importar_feriados", "recessos"},
                       url_atual) if pode("feriados")
@@ -102,8 +103,13 @@ def globais(request):
             ctx["candidaturas_pendentes"] = pendentes.count()
         if user.is_gestor and not user.deve_trocar_senha:
             url_atual = request.resolver_match.url_name if request.resolver_match else ""
+            opinioes = 0
+            if user.is_superuser:
+                from .models import Sugestao
+
+                opinioes = Sugestao.objects.filter(resolvida=False).count()
             ctx["MENU"] = menu_gestor(user, url_atual, ctx["CONFIG"], ctx.get("atestados_pendentes"),
-                                      ctx.get("candidaturas_pendentes"))
+                                      ctx.get("candidaturas_pendentes"), opinioes)
     elif request.path in ("/entrar/", "/"):
         from .models import Configuracao
 

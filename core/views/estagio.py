@@ -21,7 +21,7 @@ from ..models import (
 from ..services import (
     conferir_localizacao,
     calendario_mes, horas_padrao, limite_calendario, notificar, proximos_dias, resumo_horas,
-    status_hoje, status_periodo, trocar_supervisor,
+    preparar_lote, status_hoje, status_periodo, trocar_supervisor,
 )
 from .base import (
     destino_seguro, eh_orientador_do, eh_supervisor_do, orientador_requerido, pegar_estagio, pode_definir_horario,
@@ -91,6 +91,7 @@ def estagio_detalhe(request, pk):
     user = request.user
     aba = request.GET.get("aba", "visao")
     ano, mes = _mes_param(request)
+    preparar_lote([estagio], min(date(ano, mes, 1), timezone.localdate()))  # menos consultas no calendário e nas horas
     horas = resumo_horas(estagio)
     limite = limite_calendario(estagio, horas)
     ctx = {

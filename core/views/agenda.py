@@ -1,5 +1,5 @@
 """Visitas, conversas e reuniões."""
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
 from datetime import timezone as dt_timezone
 
 from django.conf import settings
@@ -7,7 +7,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
+from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.crypto import get_random_string
@@ -15,8 +16,10 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..forms import AgendamentoForm, SolicitacaoForm
-from ..models import Agendamento, Usuario
-from ..services import estagios_visiveis, notificar
+from ..models import Agendamento, Estagio, Registro, Usuario
+from ..services import (
+    estagios_visiveis, limite_calendario, notificar, preparar_lote, resumo_horas, status_periodo,
+)
 
 
 def _sem_agenda(user):
@@ -56,10 +59,15 @@ def novo_agendamento(request):
         raise PermissionDenied
     estagios = estagios_visiveis(user).filter(ativo=True)
     inicial = {}
-    if request.GET.get("estagio"):
+    if request.GET.get("estagio", "").isdigit():
         sel = estagios.filter(pk=request.GET["estagio"]).first()
         if sel:
             inicial = {"estagios": [sel], "local": sel.local}
+    try:  # vindo do calendário do painel: “Agendar neste dia”
+        dia = date.fromisoformat(request.GET.get("data", ""))
+        inicial["data_hora"] = datetime.combine(dia, time(8, 0))
+    except ValueError:
+        pass
     if user.is_orientador or user.is_superuser:
         form = AgendamentoForm(request.POST or None, estagios_qs=estagios, initial=inicial)
     else:
@@ -88,9 +96,72 @@ def novo_agendamento(request):
         messages.success(request, "Solicitação enviada ao orientador." if ag.status == Agendamento.Status.SOLICITADO
                          else "Agendamento criado e participantes avisados.")
         return redirect(ag)
-    titulo = "Agendar visita ou conversa" if user.is_orientador else "Solicitar visita ou conversa"
-    return render(request, "core/form_pagina.html", {"form": form, "titulo": titulo, "voltar": "/agenda/",
-                                                     "botao": "Salvar"})
+    if isinstance(form, AgendamentoForm):
+        return render(request, "core/agendamento_form.html", {
+            "form": form, "agenda": _agenda_proxima(user),
+        })
+    return render(request, "core/form_pagina.html", {"form": form, "titulo": "Solicitar visita ou conversa",
+                                                     "voltar": "/agenda/", "botao": "Salvar"})
+
+
+def _agenda_proxima(user):
+    """Compromissos já marcados (para avisar de conflito de horário na tela de agendamento)."""
+    qs = _agendamentos_de(user).filter(data_hora__gte=timezone.now() - timedelta(hours=3),
+                                       data_hora__lte=timezone.now() + timedelta(days=180),
+                                       status=Agendamento.Status.AGENDADO)
+    if user.is_superuser:
+        qs = qs.filter(orientador=user)
+    return [{"inicio": timezone.localtime(a.data_hora).strftime("%Y-%m-%dT%H:%M"), "assunto": a.assunto,
+             "duracao": DURACAO_PADRAO.get(a.tipo, 60)} for a in qs]
+
+
+def ficha_contexto(estagio, user, hoje=None):
+    """Tudo o que o orientador precisa para marcar e fazer a visita a um estagiário."""
+    hoje = hoje or timezone.localdate()
+    preparar_lote([estagio], hoje - timedelta(days=14))
+    horas = resumo_horas(estagio)
+    limite = limite_calendario(estagio, horas)
+    futuros = [s for s in status_periodo(estagio, hoje, hoje + timedelta(days=90), hoje=hoje, limite=limite)
+               if s.codigo in ("hoje", "previsto")]
+    recentes = status_periodo(estagio, hoje - timedelta(days=14), hoje - timedelta(days=1), hoje=hoje, limite=limite)
+    visitas = estagio.agendamentos.exclude(status=Agendamento.Status.CANCELADO)
+    outros = (estagios_visiveis(user).filter(ativo=True, local_id=estagio.local_id).exclude(pk=estagio.pk)
+              .select_related("estagiario").order_by("estagiario__nome_completo") if estagio.local_id else [])
+    local = estagio.local
+    mapa = ""
+    if local and (local.endereco or local.cidade):
+        from urllib.parse import quote
+
+        mapa = "https://www.google.com/maps/search/?api=1&query=" + quote(
+            ", ".join(p for p in [local.endereco, local.numero, local.bairro, local.cidade, local.uf] if p))
+    return {
+        "e": estagio, "horas": horas, "escala": estagio.escala_em(hoje), "proximos": futuros[:5], "dias": futuros,
+        "sem_registro": sum(1 for s in recentes if s.codigo == "sem_registro"),
+        "a_validar": estagio.registros.filter(situacao=Registro.Situacao.PRESENTE,
+                                              confirmacao=Registro.Confirmacao.PENDENTE, data__lt=hoje).count(),
+        "ultima_visita": visitas.filter(status=Agendamento.Status.REALIZADO).order_by("-data_hora").first(),
+        "proxima_visita": visitas.filter(status=Agendamento.Status.AGENDADO, data_hora__gte=timezone.now())
+                                 .order_by("data_hora").first(),
+        "outros": list(outros), "mapa": mapa,
+    }
+
+
+@login_required
+def ficha_estagio(request, pk):
+    """Ficha do estagiário para a tela de agendamento (JSON com o HTML pronto e os dados para preencher)."""
+    user = request.user
+    if not (user.is_superuser or (user.is_gestor and user.pode("agenda"))):
+        raise PermissionDenied
+    estagio = get_object_or_404(estagios_visiveis(user), pk=pk)
+    ctx = ficha_contexto(estagio, user)
+    esc = ctx["escala"]
+    return JsonResponse({
+        "id": estagio.pk, "nome": estagio.estagiario.nome_completo, "primeiro_nome": estagio.estagiario.primeiro_nome,
+        "local_id": estagio.local_id, "local_nome": str(estagio.local or ""),
+        "entrada": esc.horario_entrada.strftime("%H:%M") if esc and esc.horario_entrada else "",
+        "dias": [s.data.isoformat() for s in ctx["dias"]],
+        "html": render_to_string("core/_ficha_estagio.html", {**ctx, "com_incluir": True}, request=request),
+    })
 
 
 @login_required
@@ -118,8 +189,11 @@ def agendamento_detalhe(request, pk):
             return redirect(ag)
     acomp = {a.estagio_id: a for a in ag.acompanhamentos.all()}
     estagios = [(e, acomp.get(e.pk)) for e in ag.estagios.select_related("estagiario")]
+    fichas = []
+    if e_orientador and ag.status in (Agendamento.Status.SOLICITADO, Agendamento.Status.AGENDADO):
+        fichas = [ficha_contexto(e, user) for e in ag.estagios.select_related("estagiario", "local", "supervisor", "curso")]
     return render(request, "core/agendamento_detalhe.html", {"ag": ag, "form": form, "e_orientador": e_orientador,
-                                                             "estagios_visita": estagios})
+                                                             "estagios_visita": estagios, "fichas": fichas})
 
 
 @login_required

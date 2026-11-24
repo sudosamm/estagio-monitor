@@ -451,7 +451,7 @@ class ConfiguracaoForm(FormularioModelo):
     class Meta:
         model = Configuracao
         fields = ["nome_escola", "municipio_escola", "ano_referencia", "cabecalho_folha", "logo_folha",
-                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "email_sugestoes", "avaliacoes_abertas", "avaliacoes_prazo", "sice_url", "tema_escuro", "retencao_anos", "feedback_mensal", "atestados_supervisor", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
+                  "mostrar_codigo_folha", "estagiarios_emitem_folha", "checkin_localizacao", "periodo_testes", "email_sugestoes", "avaliacoes_abertas", "avaliacoes_prazo", "sice_url", "tema_escuro", "retencao_anos", "feedback_mensal", "atestados_supervisor", "avisos_email", "resumo_semanal", "captacao_aberta", "ano_captacao", "captacao_prazo", "texto_captacao",
                   "curriculos_habilitados", "banco_talentos_habilitado"]
         widgets = {"logo_folha": forms.ClearableFileInput(attrs={"accept": "image/*"}), "captacao_prazo": DataInput(), "avaliacoes_prazo": DataInput(),
                    "texto_captacao": forms.Textarea(attrs={"rows": 3})}
@@ -1440,3 +1440,20 @@ class ModeloEmailForm(Formulario):
         if "link" in t.variaveis and "{link}" not in dados.get("corpo", "") and self.tipo != "BLOQUEIO":
             raise forms.ValidationError("Este e-mail precisa do {link} no texto: é por ele que a pessoa continua.")
         return dados
+
+
+class OpiniaoForm(Formulario):
+    """Botão “Sua opinião” (período de testes): nota rápida e comentário opcional."""
+    NOTAS = [(5, "Ótimo"), (4, "Bom"), (3, "Regular"), (2, "Ruim"), (1, "Muito ruim")]
+    TIPOS = [("SUGESTAO", "Sugestão"), ("ERRO", "Algo deu errado"), ("ELOGIO", "Elogio"), ("DUVIDA", "Dúvida")]
+
+    nota = forms.TypedChoiceField(choices=NOTAS, coerce=int, required=False, widget=forms.RadioSelect)
+    tipo = forms.ChoiceField(choices=TIPOS, initial="SUGESTAO", widget=forms.RadioSelect)
+    mensagem = forms.CharField(max_length=2000, required=False, widget=forms.Textarea(attrs={"rows": 3}))
+    pagina = forms.CharField(max_length=300, required=False, widget=forms.HiddenInput)
+
+    def clean(self):
+        d = super().clean()
+        if not d.get("nota") and not (d.get("mensagem") or "").strip():
+            raise forms.ValidationError("Escolha uma nota ou escreva um comentário.")
+        return d

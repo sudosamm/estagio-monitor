@@ -1,0 +1,22 @@
+{% load ui %}
+<article class="ficha" data-ficha="{{ e.pk }}">
+  <header class="ficha-cab">
+    {% avatar e.estagiario %}
+    <div class="cresce"><strong><a href="{{ e.get_absolute_url }}">{{ e.estagiario.nome_completo }}</a></strong>
+      <small class="muted">{% if e.turma %}{{ e.turma }}{% else %}{{ e.curso }}{% endif %}</small></div>
+    {% with wa=e.estagiario.telefone|whatsapp %}{% if wa %}<a class="btn sec sm" href="{{ wa }}" target="_blank" rel="noopener" title="WhatsApp do estagiário">{% icone "mensagem" %}</a>{% endif %}{% endwith %}
+  </header>
+  <dl class="dl ficha-dl">
+    <dt>Concedente</dt><dd>{% if e.local %}<strong>{{ e.local }}</strong>{% if e.local.endereco_completo %}<br><small>{{ e.local.endereco_completo }}</small>{% endif %}
+      {% if mapa %}<br><a href="{{ mapa }}" target="_blank" rel="noopener">{% icone "pin" %} Abrir no mapa</a>{% endif %}{% if e.local.telefone %} · <a href="tel:{{ e.local.telefone }}">{{ e.local.telefone }}</a>{% endif %}{% else %}<span class="muted">não definida</span>{% endif %}</dd>
+    <dt>Supervisor</dt><dd>{% if e.supervisor %}{{ e.supervisor.nome_completo }}{% if e.supervisor.cargo %} <small class="muted">({{ e.supervisor.cargo }})</small>{% endif %}
+      {% if e.supervisor.telefone %}<br><a href="tel:{{ e.supervisor.telefone }}">{{ e.supervisor.telefone }}</a>{% with wa=e.supervisor.telefone|whatsapp %}{% if wa %} · <a href="{{ wa }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}{% endwith %}{% endif %}{% else %}<span class="muted">não definido</span>{% endif %}</dd>
+    <dt>Horário</dt><dd>{% if escala %}{{ escala.dias_display }}{% if escala.horario_display %} · {{ escala.horario_display }}{% endif %}{% else %}<span class="muted">sem escala</span>{% endif %}</dd>
+    <dt>Próximos dias</dt><dd>{% for s in proximos %}<span class="etiqueta">{{ s.data|date:"D d/m" }}</span> {% empty %}<span class="muted">nenhum nos próximos 90 dias</span>{% endfor %}</dd>
+    <dt>Horas</dt><dd>{{ horas.cumpridas|horas }} de {{ horas.total|horas }} ({{ horas.pct|floatformat:0 }}%){% if horas.previsao_termino %} · termina por volta de {{ horas.previsao_termino|date:"d/m/Y" }}{% endif %}</dd>
+    <dt>Visitas</dt><dd>{% if ultima_visita %}última em {{ ultima_visita.data_hora|date:"d/m/Y" }}{% else %}nenhuma realizada{% endif %}{% if proxima_visita %} · <a href="{{ proxima_visita.get_absolute_url }}">próxima em {{ proxima_visita.data_hora|date:"d/m H:i" }}</a>{% endif %}</dd>
+  </dl>
+  {% if sem_registro or a_validar or horas.faltas %}<p class="ficha-alerta">{% if sem_registro %}{{ sem_registro }} dia{{ sem_registro|pluralize }} sem registro nas últimas 2 semanas. {% endif %}{% if a_validar %}{{ a_validar }} presença{{ a_validar|pluralize }} aguardando o supervisor. {% endif %}{% if horas.faltas %}{{ horas.faltas }} falta{{ horas.faltas|pluralize }} no total.{% endif %}</p>{% endif %}
+  {% if outros %}<div class="ficha-outros"><small class="muted">Também estagiam aqui:</small>
+    {% for o in outros %}{% if com_incluir %}<button type="button" class="etiqueta botao" data-incluir="{{ o.pk }}" title="Incluir na visita">+ {{ o.estagiario.nome_completo }}</button>{% else %}<a class="etiqueta" href="{{ o.get_absolute_url }}">{{ o.estagiario.nome_completo }}</a>{% endif %} {% endfor %}</div>{% endif %}
+</article>

@@ -14,7 +14,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import Agendamento, Configuracao, Registro, Usuario
-from .services import ano_referencia, email_ativo, estagios_visiveis, filtrar_ano, resumo_horas, status_periodo
+from .services import (
+    ano_referencia, email_ativo, estagios_visiveis, filtrar_ano, preparar_lote, resumo_horas, status_periodo,
+)
 
 LIMITE_FALTAS = 3
 LIMITE_SEM_REGISTRO = 3
@@ -95,6 +97,9 @@ def consolidar(estagios, hoje=None):
 
     todas = pastas(estagios, hoje)
     feedbacks = ultimos(estagios)
+    if estagios:
+        preparar_lote(estagios, min(min(max(e.data_inicio, e.acompanhamento_desde or e.data_inicio) for e in estagios),
+                                    hoje))
     for e in estagios:
         linha = situacao_estagio(e, hoje, todas[e.pk], feedbacks.get(e.pk))
         r = linha["r"]
@@ -130,8 +135,7 @@ def resumo_semanal(usuario, hoje=None):
     semana = hoje - timedelta(days=7)
     ontem = hoje - timedelta(days=1)
     qs = filtrar_ano(estagios_visiveis(usuario).filter(ativo=True), ano_referencia())
-    estagios = list(com_contagens(qs.select_related("turma").prefetch_related("escalas"))
-                    .order_by("estagiario__nome_completo"))
+    estagios = preparar_lote(com_contagens(qs.select_related("turma")).order_by("estagiario__nome_completo"), semana)
     s = {"sem_registro": [], "faltas": [], "a_validar": [], "termo_vencendo": [], "apos_termo": [], "quase": [],
          "concluidos": []}
     faltas = {}

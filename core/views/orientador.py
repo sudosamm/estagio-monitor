@@ -18,19 +18,19 @@ from ..forms import (
     EstagiariosLoteForm, LocalForm, OrientadorForm, SubstitutosForm, SupervisoresLoteForm, TurmaForm, UsuarioEditForm,
 )
 from ..models import (
-    Agendamento, Configuracao, Curso, DiaSemEstagio, Documento, Escala, Estagio, LocalEstagio, Registro, Turma, Usuario,
+    DIAS_ABREV, Agendamento, Configuracao, Curso, DiaSemEstagio, Documento, Escala, Estagio, LocalEstagio, Registro, Turma, Usuario,
     chave_municipio,
 )
 from ..services import (
     agrupar_periodos, ano_em_uso, ano_referencia, anos_disponiveis, cadastrar_dias, pessoas_da_concedente, criar_usuario, estagios_do_municipio, estagios_visiveis,
-    feriados_nacionais, filtrar_ano, municipios_das_concedentes, notificar, resumo_horas, status_hoje, status_periodo, trocar_supervisor,
+    feriados_nacionais, filtrar_ano, municipios_das_concedentes, notificar, preparar_lote, resumo_horas, status_hoje, status_periodo, trocar_supervisor,
 )
 from ..seguranca import gerar_codigo, liberar_primeiro_acesso, precisa_de_codigo
 from .base import destino_seguro, orientador_requerido, permissao
 
 
 def _meus_estagios(request, ativos=True):
-    qs = estagios_visiveis(request.user).select_related("turma").prefetch_related("escalas")
+    qs = estagios_visiveis(request.user).select_related("turma__curso").prefetch_related("escalas")
     return qs.filter(ativo=True) if ativos else qs
 
 
@@ -47,15 +47,33 @@ def contexto_ano(request, ano):
     return {"ano": ano, "anos": anos_disponiveis(), "ano_ref": ano_referencia()}
 
 
+def _mes_do_painel(request, hoje):
+    try:
+        a, m = (int(x) for x in request.GET.get("mes", "").split("-"))
+        return (a, m) if 2000 <= a <= 2100 and 1 <= m <= 12 else (hoje.year, hoje.month)
+    except ValueError:
+        return hoje.year, hoje.month
+
+
 @orientador_requerido
 def painel(request):
+    from ..agenda_mes import TIPOS, agenda_do_mes, dados_json, grade_limites
+    from .estagio import _nav_mes
+
     hoje = timezone.localdate()
     ano = ano_em_uso(request)
     todos_ativos = _meus_estagios(request)
-    estagios = list(filtrar_ano(todos_ativos, ano))
+    semana_atras = hoje - timedelta(days=7)
+    cal_ano, cal_mes = _mes_do_painel(request, hoje)
+    grade_inicio, _ = grade_limites(cal_ano, cal_mes)
+    estagios = preparar_lote(filtrar_ano(todos_ativos, ano).select_related("estagiario"), min(semana_atras, grade_inicio))
+    semanas = agenda_do_mes(request.user, estagios, cal_ano, cal_mes, hoje)
+    dias_json = dados_json(semanas)
+    dia_sel = request.GET.get("dia", "")
+    if dia_sel not in dias_json:
+        dia_sel = hoje.isoformat() if hoje.isoformat() in dias_json else f"{cal_ano}-{cal_mes:02d}-01"
     grupos = {"presentes": [], "ausentes": [], "pendentes": [], "nao_previstos": []}
     alertas = []
-    semana_atras = hoje - timedelta(days=7)
     for e in estagios:
         st = status_hoje(e)
         e.st = st
@@ -89,6 +107,8 @@ def painel(request):
         "grupos": grupos, "total": len(estagios), "alertas": alertas,
         "previstos_hoje": len(estagios) - len(grupos["nao_previstos"]),
         "pendentes_validacao": pendentes_validacao, "solicitacoes": solicitacoes, "proximas": proximas,
+        "semanas": semanas, "dias_json": dias_json, "dia_sel": dia_sel, "dia_info": dias_json[dia_sel],
+        "nav_cal": _nav_mes(cal_ano, cal_mes), "tipos_agenda": TIPOS, "dias_semana": DIAS_ABREV,
     })
 
 
@@ -96,7 +116,7 @@ def painel(request):
 def estagios_lista(request):
     ano = ano_em_uso(request)
     qs, f = filtrar_lista(request, ano)
-    estagios = list(qs)
+    estagios = preparar_lote(qs, timezone.localdate())
     for e in estagios:
         e.st = status_hoje(e)
         e.h = resumo_horas(e)

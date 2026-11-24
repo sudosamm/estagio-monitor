@@ -24,6 +24,72 @@
   <div class="kpi vermelho"><div class="valor">{{ grupos.pendentes|length }}</div><div class="rotulo">Ainda não marcaram</div></div>
 </div>
 {% include "core/_push.html" with lembrete=True %}
+<div class="painel-agenda">
+  <section class="card agenda-card" aria-label="Calendário do mês">
+    <div class="cal-nav">
+      <a class="btn sec sm" href="?mes={{ nav_cal.anterior }}" aria-label="Mês anterior">{% icone "esq" %}</a>
+      <h2>{{ nav_cal.titulo }}</h2>
+      <span class="flex">{% now "Y-m" as mes_hoje %}{% if nav_cal.atual != mes_hoje %}<a class="btn sec sm" href="?">Hoje</a>{% endif %}<a class="btn sec sm" href="?mes={{ nav_cal.proximo }}" aria-label="Próximo mês">{% icone "dir" %}</a></span>
+    </div>
+    <div class="agenda-mes">
+      {% for d in dias_semana %}<div class="cab">{{ d }}</div>{% endfor %}
+      {% for semana in semanas %}{% for d in semana %}
+        <a class="ag-dia{% if not d.do_mes %} fora{% endif %}{% if d.hoje %} e-hoje{% endif %}{% if d.feriados %} feriado{% endif %}{% if d.iso == dia_sel %} sel{% endif %}" href="?mes={{ nav_cal.atual }}&amp;dia={{ d.iso }}#dia-agenda" data-dia="{{ d.iso }}"
+           title="{{ d.data|date:'d/m' }}{% for f in d.feriados %} · {{ f }}{% endfor %}{% if d.eventos %} · {{ d.eventos|length }} item(ns){% endif %}{% if d.sem_registro %} · {{ d.sem_registro }} sem registro{% endif %}">
+          <span class="n">{{ d.data.day }}</span>
+          {% if d.sem_registro %}<span class="ag-alerta">{{ d.sem_registro }}</span>{% endif %}
+          <span class="ag-chips">{% for ev in d.eventos|slice:":3" %}<i class="ag-chip t-{{ ev.tipo }}">{% if ev.hora %}<b>{{ ev.hora }}</b> {% endif %}{{ ev.texto }}</i>{% endfor %}{% with n=d.eventos|length %}{% if n > 3 %}<i class="ag-mais">+{{ n|add:"-3" }}</i>{% endif %}{% endwith %}</span>
+        </a>
+      {% endfor %}{% endfor %}
+    </div>
+    <div class="legenda">
+      {% for chave, t in tipos_agenda.items %}<span><i class="ag-chave t-{{ chave }}"></i>{{ t.0 }}</span>{% endfor %}
+      <span><i class="chave-sem-estagio"></i>Feriado/recesso</span>
+      <span><i class="ag-chave t-alerta"></i>Estagiários sem registro no dia</span>
+    </div>
+  </section>
+  <aside class="card destaque dia-agenda" id="dia-agenda" aria-live="polite">
+    <div class="card-cab"><h3 data-dia-titulo>{{ dia_info.titulo }}</h3></div>
+    <div data-dia-corpo>
+      {% for f in dia_info.feriados %}<p class="dia-feriado">{{ f }}</p>{% endfor %}
+      {% if dia_info.sem_registro %}<p class="dia-alerta"><a href="{% url 'estagios_lista' %}">{{ dia_info.sem_registro }} estagiário{{ dia_info.sem_registro|pluralize }} sem registro neste dia</a></p>{% endif %}
+      <ul class="lista compacta dia-eventos">{% for ev in dia_info.eventos %}<li><i class="ag-chave t-{{ ev.tipo }}"></i><span class="cresce">{% if ev.url %}<a href="{{ ev.url }}">{% endif %}{% if ev.hora %}<b>{{ ev.hora }}</b> {% endif %}{{ ev.texto }}{% if ev.url %}</a>{% endif %}</span></li>{% empty %}{% if not dia_info.feriados and not dia_info.sem_registro %}<li class="vazio">Nada marcado neste dia.</li>{% endif %}{% endfor %}</ul>
+    </div>
+    {% if user|pode:"agenda" %}<a class="btn bloco mt-1" data-dia-agendar href="{{ dia_info.agendar }}">{% icone "calendario" %} Agendar neste dia</a>{% endif %}
+  </aside>
+</div>
+{{ dias_json|json_script:"agenda-dias" }}
+<script>
+(() => {
+  const dados = JSON.parse(document.getElementById("agenda-dias").textContent);
+  const painel = document.getElementById("dia-agenda");
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  function mostrar(iso) {
+    const d = dados[iso]; if (!d) return;
+    painel.querySelector("[data-dia-titulo]").textContent = d.titulo;
+    const corpo = painel.querySelector("[data-dia-corpo]"); corpo.replaceChildren();
+    d.feriados.forEach((f) => corpo.append(el("p", "dia-feriado", f)));
+    if (d.sem_registro) { const p = el("p", "dia-alerta"); const a = el("a", "", `${d.sem_registro} estagiário${d.sem_registro > 1 ? "s" : ""} sem registro neste dia`); a.href = "{% url 'estagios_lista' %}"; p.append(a); corpo.append(p); }
+    const ul = el("ul", "lista compacta dia-eventos");
+    d.eventos.forEach((ev) => {
+      const li = el("li"); li.append(el("i", `ag-chave t-${ev.tipo}`));
+      const span = el("span", "cresce"); const alvo = ev.url ? el("a") : span; if (ev.url) { alvo.href = ev.url; span.append(alvo); }
+      if (ev.hora) { alvo.append(el("b", "", ev.hora), " "); } alvo.append(ev.texto); li.append(span); ul.append(li);
+    });
+    if (!d.eventos.length && !d.feriados.length && !d.sem_registro) ul.append(el("li", "vazio", "Nada marcado neste dia."));
+    corpo.append(ul);
+    const ag = painel.querySelector("[data-dia-agendar]"); if (ag) ag.href = d.agendar;
+    document.querySelectorAll(".ag-dia.sel").forEach((x) => x.classList.remove("sel"));
+    document.querySelector(`.ag-dia[data-dia="${iso}"]`)?.classList.add("sel");
+    const url = new URL(location.href); url.searchParams.set("dia", iso); history.replaceState(null, "", url);
+  }
+  document.querySelectorAll(".ag-dia[data-dia]").forEach((a) => a.addEventListener("click", (ev) => {
+    if (ev.ctrlKey || ev.metaKey) return;
+    ev.preventDefault(); mostrar(a.dataset.dia);
+    if (window.matchMedia("(max-width: 900px)").matches) painel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+})();
+</script>
 <div class="grade grade-lado">
   <div>
     <div class="card destaque">

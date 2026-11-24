@@ -18,10 +18,31 @@ Todos recebem **notificações** (o sino no topo) quando algo muda, por exemplo:
 ### Menu da gestão
 Para orientador, coordenação e administrador, a barra tem **Painel** e **Estagiários** soltos e três menus:
 - **Acompanhamento:** indicadores, resumo da semana, agenda de visitas, frequências, feedback dos supervisores, atestados, pasta de documentos, alterar dias.
-- **Comunicação:** avisos para a turma, arquivos gerais.
+- **Comunicação:** avisos para a turma, arquivos gerais e, para o administrador, opiniões sobre o sistema.
 - **Cadastros:** contas, concedentes, turmas e cursos, feriados e recessos, captação, banco de talentos, encerramento do ano.
 
 O número de pendências (atestados para analisar, concedentes na captação) aparece no nome do menu e no item. Cada pessoa só vê o que tem permissão de usar. Estagiários e supervisores continuam com a barra simples.
+
+### Painel do orientador (página inicial)
+- **Calendário do mês** no topo, com setas para outros meses e “Hoje”. Cada dia mostra:
+  - visitas e conversas com o horário (laranja e azul), solicitações que já têm data (amarelo);
+  - fim do termo (vermelho), previsão de conclusão da carga horária (verde), início de estágio e aniversários dos estagiários;
+  - feriados e recessos listrados;
+  - uma bolinha vermelha com quantos estagiários ficaram **sem registro** naquele dia.
+- Clicar num dia mostra tudo dele ao lado, sem recarregar, com o botão **Agendar neste dia** (abre o agendamento já com a data). No celular, o calendário mostra bolinhas coloridas no lugar dos textos.
+- Abaixo continuam os números do dia, quem está no estágio hoje, solicitações, próximas visitas e presenças aguardando o supervisor.
+
+### Agendar visita ou conversa
+- A lista de estagiários tem **busca** (nome ou concedente) e “Só os marcados”.
+- Ao marcar um estagiário, aparece ao lado a **ficha** dele: concedente com endereço, telefone e **Abrir no mapa**; supervisor com telefone e WhatsApp; dias e horários; próximos dias de estágio; horas e previsão de término; dias sem registro, presenças a validar e faltas; última e próxima visita; e quem mais estagia na mesma concedente (com botão para incluir na mesma visita).
+- O sistema **preenche** o local, o assunto (“Visita de acompanhamento — Ana e Bruno”) e mostra os **dias de estágio em comum** de quem foi escolhido, para marcar com um toque. Nada do que você digitou é apagado.
+- **Avisos** antes de salvar: quando o estagiário não tem estágio no dia escolhido (fora da escala, feriado ou depois do fim), e quando você já tem outro compromisso perto daquele horário.
+- A página da visita mostra as mesmas fichas em “Dados para a visita”, para consultar no celular durante a visita.
+
+### Período de testes: “Sua opinião”
+- Com **Configurações → Sistema em período de testes** ligado (padrão), estagiários e supervisores veem o botão **Sua opinião** no canto da tela, em todas as páginas.
+- Ele abre uma janela com uma nota (de 😍 a 😣), o assunto (sugestão, algo deu errado, elogio, dúvida) e um comentário opcional. A página onde a pessoa estava vai junto. Para mandar print, há o atalho para *Sugestões e erros*.
+- Tudo fica em **Comunicação → Opiniões sobre o sistema** (administrador): nota média, distribuição das notas, quem mandou, páginas mais citadas, filtros e o botão **Resolvida**. Erros e notas 1 ou 2 também avisam o administrador no sino.
 
 ### Tema escuro
 Além do visual claro dos portais do governo, há um tema escuro próprio, **“Noite no sertão”**. O fundo é verde-mata profundo, em vez de cinza. O amarelo do sol marca a aba e o campo em foco, e os botões ficam no verde do Ceará. A faixa verde, amarela e laranja do cabeçalho continua. Os contrastes foram conferidos: textos com pelo menos 4,5:1, bordas e gráficos com pelo menos 3:1.
@@ -262,7 +283,7 @@ A página **Sugestões e erros** (menu da foto, rodapé e tela de login) aceita 
 - até 5 anexos (prints, fotos, PDF, documentos, planilhas, vídeos ou ZIP; 20 MB no total).
 
 Tudo vai **por e-mail**, com os anexos e mais a conta, a página onde a pessoa estava e o navegador. Responder o e-mail responde a quem enviou. O destino é o campo *E-mail que recebe as sugestões e os erros* em **Configurações**; vazio, vale a variável `SUGESTOES_EMAIL` e, por último, o e-mail dos administradores.
-- Também fica guardado em **Administração → Sugestões e erros**, com os anexos para baixar e a marcação *resolvida*. Os administradores recebem um aviso no sino.
+- Também fica guardado em **Comunicação → Opiniões sobre o sistema** (e no /admin/), com os anexos para baixar e a marcação *resolvida*. Os administradores recebem um aviso no sino.
 - Há uma proteção contra robôs (campo escondido) e um limite de 5 mensagens por hora por pessoa.
 
 ### Feedback do supervisor
@@ -401,6 +422,11 @@ As permissões de cada papel ficam em uma tabela só, `PERMISSOES_POR_PAPEL` em 
 | Emitir folhas em lote, enviar folhas e decidir se o estagiário emite | ✔ | — |
 
 Coordenadores são criados pelo administrador em **Contas → + Coordenador**.
+
+### Velocidade
+- As listas (painel, estagiários, frequências, indicadores, resumo da semana, painel do supervisor) carregam registros, escalas, feriados e totais de horas **de uma vez para todos os estagiários**, em vez de um por um. Com 120 estagiários, o painel caiu de ~760 para ~20 consultas ao banco, e os indicadores de ~1.700 para ~20.
+- A configuração geral é lida uma vez por página.
+- Ao parar o dedo ou o mouse sobre um link, o navegador já começa a buscar a página (downloads, saídas e telas que registram algo ao abrir ficam de fora). Uma barra animada no topo mostra que a próxima página está carregando, e as mensagens de sucesso somem sozinhas.
 
 ### Como as horas são contadas
 - Só contam as horas de presenças **confirmadas pelo supervisor** (ou pelo orientador).

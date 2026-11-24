@@ -32,6 +32,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% if user.is_authenticated %}
+  {# Abre as páginas mais rápido: o navegador já busca o link quando o dedo/mouse para sobre ele. Ficam de fora #}
+  {# downloads, saídas e telas que registram algo ao abrir (notificação lida, abertura da folha, QR…). #}
+  <script type="speculationrules">
+  {"prefetch": [{"where": {"and": [{"href_matches": "/*"},
+    {"not": {"href_matches": ["/sair/*", "/admin/*", "/notificacoes/*", "/novidades/*", "/arquivos/*", "/p/*", "/email/*", "/senha/*", "/agenda/calendario/*", "/estagios/*/frequencia/*", "/frequencias/folhas/*", "/frequencia/*", "/usuarios/*", "/atestados/*/arquivo/*", "/documentos/tipos/*/modelo/*", "/estagios/exportar/*", "/estagios/*/declaracao/*", "/turmas/*/relatorio/*", "/folha/*", "/sugestoes/anexos/*", "/acompanhamentos/*/sice/*"]}},
+    {"not": {"selector_matches": "[download], [target=_blank], [data-sem-prefetch]"}}]}, "eagerness": "moderate"}]}
+  </script>
+  {% endif %}
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -113,6 +122,7 @@
       {% block conteudo %}{% endblock %}
     </div>
   </main>
+  {% if user.is_authenticated and CONFIG.periodo_testes and not user.is_gestor and not user.deve_trocar_senha %}{% include "core/_opiniao.html" %}{% endif %}
   <footer class="rodape">
     <div class="container">
       <span>{{ NOME_SISTEMA }} — ferramenta de apoio ao acompanhamento de estágio</span>

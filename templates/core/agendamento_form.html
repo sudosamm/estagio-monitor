@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load static ui %}
+{% block titulo %}Agendar visita ou conversa{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina">
+  <div><div class="migalha"><a href="{% url 'agendamentos' %}">← Agenda</a></div><h1>Agendar visita ou conversa</h1>
+    <p>Escolha os estagiários: os dados deles aparecem ao lado, e o local, o assunto e os dias de estágio são preenchidos sozinhos.</p></div>
+</div>
+<div class="grade agendar">
+  <div class="card destaque">
+    <form method="post" novalidate data-agendar data-ficha-url="{% url 'ficha_estagio' 0 %}">
+      {% csrf_token %}
+      {% for campo in form.hidden_fields %}{{ campo }}{% endfor %}
+      {% if form.non_field_errors %}<div class="aviso error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+      {% with campo=form.estagios %}
+      <div class="campo{% if campo.errors %} erro-campo{% endif %}">
+        <span class="rotulo">Estagiários <small class="muted" data-contagem></small></span>
+        <div class="busca-estagios"><input type="search" placeholder="Buscar por nome ou concedente" data-buscar aria-label="Buscar estagiário">
+          <label class="check"><input type="checkbox" data-so-marcados> Só os marcados</label></div>
+        <div class="opcoes lista" id="lista-estagios">{% for op in campo %}<label data-texto="{{ op.choice_label|lower }}">{{ op.tag }} {{ op.choice_label }}</label>{% endfor %}</div>
+        <p class="muted vazio-busca" data-sem-resultado hidden>Ninguém encontrado.</p>
+        {% for e in campo.errors %}<div class="erro">{{ e }}</div>{% endfor %}
+      </div>
+      {% endwith %}
+      <div class="form-linha">
+        {% with campo=form.tipo %}{% include "core/_campo.html" %}{% endwith %}
+        {% with campo=form.modalidade %}{% include "core/_campo.html" %}{% endwith %}
+        {% with campo=form.status %}{% include "core/_campo.html" %}{% endwith %}
+      </div>
+      {% with campo=form.data_hora %}{% include "core/_campo.html" %}{% endwith %}
+      <div class="sugestoes-data" data-sugestoes hidden><small class="muted">Dias de estágio de quem foi escolhido:</small> <span data-chips></span></div>
+      <div class="caixa-alerta" data-avisos hidden></div>
+      {% with campo=form.local %}{% include "core/_campo.html" %}{% endwith %}
+      {% with campo=form.assunto %}{% include "core/_campo.html" %}{% endwith %}
+      {% with campo=form.detalhes %}{% include "core/_campo.html" %}{% endwith %}
+      <details><summary class="muted">Relato (depois da visita)</summary>{% with campo=form.relato %}{% include "core/_campo.html" %}{% endwith %}</details>
+      <div class="acoes mt-1"><button class="btn" type="submit">Salvar e avisar os envolvidos</button><a class="btn sec" href="{% url 'agendamentos' %}">Cancelar</a></div>
+    </form>
+  </div>
+  <aside class="fichas" data-fichas aria-live="polite">
+    <div class="card vazio-fichas" data-fichas-vazio><p class="muted mb-0">Os dados de cada estagiário escolhido aparecem aqui: concedente com endereço e mapa, supervisor e telefones, horário, próximos dias de estágio, horas e pendências.</p></div>
+  </aside>
+</div>
+{{ agenda|json_script:"agenda-ocupada" }}
+<script src="{% static 'js/agendamento.js' %}" defer></script>
+{% endblock %}

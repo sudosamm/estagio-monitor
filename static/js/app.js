@@ -313,3 +313,47 @@ document.querySelectorAll("textarea[maxlength]").forEach((t) => {
   t.addEventListener("input", atualizar);
   atualizar();
 });
+// “Sua opinião” (período de testes): abre o diálogo e envia sem sair da página
+(() => {
+  const dlg = document.querySelector("[data-opiniao]");
+  if (!dlg) return;
+  const form = dlg.querySelector("[data-form-opiniao]");
+  const ok = dlg.querySelector("[data-ok-opiniao]");
+  const erro = dlg.querySelector("[data-erro-opiniao]");
+  document.querySelector("[data-abrir-opiniao]").addEventListener("click", () => {
+    form.hidden = false; ok.hidden = true; erro.hidden = true; dlg.showModal();
+  });
+  dlg.querySelectorAll("[data-fechar-opiniao]").forEach((b) => b.addEventListener("click", () => dlg.close()));
+  dlg.addEventListener("click", (ev) => { if (ev.target === dlg) dlg.close(); });
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const botao = form.querySelector('button[type="submit"]');
+    botao.disabled = true;
+    try {
+      const r = await fetch(form.action, { method: "POST", body: new FormData(form), headers: { Accept: "application/json" }, credentials: "same-origin" });
+      const dados = await r.json().catch(() => ({}));
+      if (r.ok && dados.ok) { form.reset(); form.hidden = true; ok.hidden = false; }
+      else { erro.textContent = dados.erro || "Não foi possível enviar agora. Tente de novo."; erro.hidden = false; }
+    } catch (e) {
+      erro.textContent = "Sem conexão. Tente de novo em instantes."; erro.hidden = false;
+    } finally { botao.disabled = false; }
+  });
+})();
+// barra de carregamento no topo enquanto a próxima página chega (dá retorno imediato no celular)
+(() => {
+  const html = document.documentElement;
+  const comecar = () => html.classList.add("navegando");
+  document.addEventListener("click", (ev) => {
+    const a = ev.target.closest("a[href]");
+    if (!a || ev.defaultPrevented || ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+    if (a.target === "_blank" || a.hasAttribute("download") || a.origin !== location.origin) return;
+    if (a.pathname === location.pathname && a.search === location.search && a.hash) return;
+    comecar();
+  });
+  document.addEventListener("submit", (ev) => { setTimeout(() => { if (!ev.defaultPrevented && !ev.target.closest("dialog")) comecar(); }, 0); });
+  window.addEventListener("pageshow", () => html.classList.remove("navegando"));
+})();
+// mensagens de sucesso e informação somem sozinhas (os erros ficam)
+document.querySelectorAll(".avisos .aviso.success, .avisos .aviso.info").forEach((m) => {
+  setTimeout(() => { m.classList.add("saindo"); setTimeout(() => m.remove(), 400); }, 7000);
+});

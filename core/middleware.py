@@ -2,6 +2,22 @@ from django.shortcuts import redirect
 from django.urls import reverse
 
 
+class CacheDaRequisicaoMiddleware:
+    """Abre um cache que vale só durante esta requisição (ex.: a configuração geral, lida várias vezes por página)."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from .models import CACHE_REQUISICAO
+
+        token = CACHE_REQUISICAO.set({})
+        try:
+            return self.get_response(request)
+        finally:
+            CACHE_REQUISICAO.reset(token)
+
+
 class TrocaSenhaObrigatoriaMiddleware:
     """Obriga quem entrou com a senha padrão a criar uma senha própria."""
 
