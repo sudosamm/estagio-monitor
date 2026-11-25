@@ -53,6 +53,14 @@
       {% else %}<button class="btn sec sm" type="submit" name="modo" value="orientador">Desligar: usar como orientador</button>{% endif %}</form>
   </div>
   {% endif %}
+  {% if user.is_estagiario %}
+  <div class="card" id="responsaveis">
+    <h3>{% icone "usuarios" %} Quem acompanha o seu estágio</h3>
+    {% if responsaveis %}<ul class="lista compacta">{% for v in responsaveis %}<li><span class="cresce"><strong>{{ v.responsavel.nome_completo }}</strong>{% if v.parentesco %} · {{ v.parentesco }}{% endif %}<small style="display:block">responsável legal, cadastrado {% if v.origem == "PEDIDO" %}a pedido dele(a){% else %}pelo seu termo de compromisso{% endif %}</small></span></li>{% endfor %}</ul>
+    <p class="muted mb-0" style="font-size:.82rem">Eles veem, só para ler, as suas presenças e faltas, as horas e os avisos da escola. Não veem as suas anotações, mensagens, atestados nem localização. Dúvidas: fale com o seu orientador.</p>
+    {% else %}<p class="muted mb-0" style="font-size:.88rem">Nenhum responsável acompanha o seu estágio no sistema.</p>{% endif %}
+  </div>
+  {% endif %}
   <div class="card" id="seguranca">
     <h3>{% icone "escudo" %} Segurança e privacidade</h3>
     {% if pode_2fa %}

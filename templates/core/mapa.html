@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% load ui static %}
+{% block titulo %}Mapa dos estágios{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Mapa dos estágios</h1>
+  <p class="mb-0">{{ dia|date:"l, d/m/Y" }}{% if dia == hoje %} · atualiza sozinho a cada 3 minutos{% endif %} · {{ locais|length }} concedente{{ locais|length|pluralize }}</p></div>
+  <form class="roteiro-dia" method="get">
+    <a class="btn sec sm" href="?data={{ anterior }}&curso={{ curso }}&turma={{ turma }}&cidade={{ cidade|urlencode }}" aria-label="Dia anterior">{% icone "esq" %}</a>
+    <input type="date" name="data" value="{{ dia|date:'Y-m-d' }}" onchange="this.form.submit()" aria-label="Dia">
+    <a class="btn sec sm" href="?data={{ proximo }}&curso={{ curso }}&turma={{ turma }}&cidade={{ cidade|urlencode }}" aria-label="Próximo dia">{% icone "dir" %}</a>
+    {% if cursos|length > 1 %}<select name="curso" onchange="this.form.submit()" aria-label="Curso"><option value="">Todos os cursos</option>{% for c in cursos %}<option value="{{ c.pk }}"{% if curso == c.pk|stringformat:"s" %} selected{% endif %}>{{ c }}</option>{% endfor %}</select>{% endif %}
+    {% if turmas|length > 1 %}<select name="turma" onchange="this.form.submit()" aria-label="Turma"><option value="">Todas as turmas</option>{% for t in turmas %}<option value="{{ t.pk }}"{% if turma == t.pk|stringformat:"s" %} selected{% endif %}>{{ t }}</option>{% endfor %}</select>{% endif %}
+    {% if cidades|length > 1 or cidade %}<select name="cidade" onchange="this.form.submit()" aria-label="Município"><option value="">Todos os municípios</option>{% for c in cidades %}<option{% if c == cidade %} selected{% endif %}>{{ c }}</option>{% endfor %}</select>{% endif %}
+  </form>
+</div>
+
+<div class="mapa-resumo">
+  <span class="pilula verde">{{ resumo.presentes }} presente{{ resumo.presentes|pluralize }}{% if resumo.no_local and dia == hoje %} · {{ resumo.no_local }} no local agora{% endif %}</span>
+  {% if resumo.nao_chegou %}<span class="pilula ambar">{{ resumo.nao_chegou }} ainda não marc{{ resumo.nao_chegou|pluralize:"ou,aram" }}</span>{% endif %}
+  {% if resumo.falta %}<span class="pilula vermelho">{{ resumo.falta }} falta{{ resumo.falta|pluralize }} ou sem registro</span>{% endif %}
+  {% if resumo.ausencia %}<span class="pilula cinza">{{ resumo.ausencia }} ausência{{ resumo.ausencia|pluralize }} informada{{ resumo.ausencia|pluralize }}</span>{% endif %}
+  {% if resumo.aguardando %}<span class="pilula azul">{{ resumo.aguardando }} aguardando o supervisor</span>{% endif %}
+</div>
+
+{% if com_ponto %}
+<div class="mapa-area card"><div id="mapa" data-mapa{% if dia == hoje %} data-atualizar{% endif %} aria-label="Mapa das concedentes"></div></div>
+<div class="mapa-legenda">
+  <span><i class="pino-ex verde"></i> todos que tinham estágio estão presentes</span>
+  <span><i class="pino-ex ambar"></i> alguém ainda não marcou</span>
+  <span><i class="pino-ex vermelho"></i> falta ou sem registro</span>
+  <span><i class="pino-ex cinza"></i> sem estágio no dia</span>
+  <span><i class="sup-ex sim"></i> supervisor presente <i class="sup-ex nao"></i> ausente (informado pelos estagiários)</span>
+</div>
+{% else %}
+<div class="caixa-info mb-1">Nenhuma concedente desta lista tem a localização no cadastro ainda. Abra a concedente e marque o ponto no mapa da ficha (dá para procurar pelo endereço): ela passa a aparecer aqui.</div>
+{% endif %}
+
+{% if dia >= hoje %}<form id="rota" method="post" action="{% url 'agendamento_rapido' %}">{% csrf_token %}
+  <input type="hidden" name="data" value="{{ dia|date:'Y-m-d' }}"><input type="hidden" name="acao" value="previa">
+  <input type="hidden" name="inicio" value="08:00"><input type="hidden" name="duracao" value="45"><input type="hidden" name="deslocamento" value="20">
+</form>{% endif %}
+
+<div class="card">
+  <div class="card-cab"><h2>{% icone "pin" %} Concedentes</h2>
+    {% if dia >= hoje %}<button class="btn sm" type="submit" form="rota" data-rota-botao>{% icone "rota" %} Montar roteiro com as marcadas</button>{% endif %}</div>
+  {% if dia >= hoje %}<p class="muted" style="font-size:.85rem;margin-top:0">Marque as concedentes (aqui ou no alfinete) e monte o roteiro: o agendamento rápido mostra os horários antes de criar as visitas. O roteiro usa só os seus estagiários.</p>{% endif %}
+  <ul class="lista compacta mapa-lista">{% for p in locais %}
+    <li id="local-{{ p.id }}"><span class="pino-ex {{ p.cor }}" aria-hidden="true"></span>
+      <span class="cresce"><a href="{{ p.url }}"><strong>{{ p.nome }}</strong></a>{% if p.lat is None %} <span class="etiqueta" title="Sem localização no cadastro">sem ponto no mapa</span>{% endif %}
+        <small style="display:block">{{ p.presentes }} de {{ p.total }} presente{{ p.total|pluralize }}{% if p.contagem.nao_chegou %} · {{ p.contagem.nao_chegou }} não marc{{ p.contagem.nao_chegou|pluralize:"ou,aram" }}{% endif %}{% if p.contagem.falta %} · {{ p.contagem.falta }} falta{{ p.contagem.falta|pluralize }}{% endif %}{% if p.contagem.ausencia %} · {{ p.contagem.ausencia }} ausência{{ p.contagem.ausencia|pluralize }}{% endif %} · supervisor: {{ p.supervisor.texto }}</small>
+        <small style="display:block" class="muted">{% if p.visita %}visita marcada às {{ p.visita }} · {% endif %}{% if p.dias_sem_visita is None %}nunca visitada{% else %}última visita há {{ p.dias_sem_visita }} dia{{ p.dias_sem_visita|pluralize }}{% endif %}{% if p.cidade %} · {{ p.cidade }}{% endif %}</small>
+        <details class="mapa-alunos"><summary>Estagiários</summary><ul>{% for e in p.estagiarios %}<li><a href="{{ e.url }}">{{ e.nome }}</a> — {{ e.texto }}{% if e.local_ok %} · localização conferida{% endif %}{% if e.aguardando %} · aguardando supervisor{% endif %}</li>{% endfor %}</ul></details></span>
+      {% if dia >= hoje %}<label class="mapa-marcar"><input type="checkbox" name="locais" value="{{ p.id }}" form="rota" data-local="{{ p.id }}"> roteiro</label>{% endif %}</li>
+  {% empty %}<li class="vazio">Nenhum estagiário ativo com concedente nesta lista.</li>{% endfor %}</ul>
+</div>
+<p class="muted" style="font-size:.82rem">O mapa mostra só onde ficam as concedentes. A posição do celular dos estagiários não aparece: “localização conferida” quer dizer que a presença foi marcada dentro do raio da concedente. Mapa © colaboradores do OpenStreetMap.</p>
+{{ com_ponto|json_script:"dados-mapa" }}
+<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>
+<script src="{% static 'js/mapa.js' %}" defer></script>
+{% endblock %}

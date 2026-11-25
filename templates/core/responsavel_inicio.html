@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Estudantes que você acompanha{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div><h1>Estudantes que você acompanha</h1><p class="mb-0">Como responsável legal, você vê as presenças, as horas e os avisos do estágio.</p></div></div>
+<div class="quadro">{% for e in ativos %}
+  <a class="aluno-card {{ e.st.codigo }}" href="{% url 'responsavel_estagio' e.pk %}">{% avatar e.estagiario "sm verde" %}
+    <span class="cresce"><strong>{{ e.estagiario.nome_completo }}</strong><small>{{ e.st.rotulo|default:"sem estágio hoje" }} · {{ e.horas_resumo.cumpridas|horas }} de {{ e.horas_resumo.total|horas }}</small></span></a>
+{% empty %}<p class="vazio">Nenhum estágio em andamento.</p>{% endfor %}</div>
+{% for e in estagios %}{% if not e.ativo %}<p class="mb-0"><a href="{% url 'responsavel_estagio' e.pk %}">{{ e.estagiario.nome_completo }} — estágio encerrado ({{ e.curso }})</a></p>{% endif %}{% endfor %}
+{% endblock %}

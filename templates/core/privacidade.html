@@ -19,6 +19,7 @@
     <li><strong>Atestados e comprovantes:</strong> enviados pelo estagiário para justificar uma falta. Podem conter dados de saúde, que a LGPD chama de <em>dados sensíveis</em>.</li>
     <li><strong>Mensagens, arquivos, avaliações e feedback</strong> trocados entre estagiário, supervisor e escola.</li>
     <li><strong>Foto de perfil</strong> (opcional){% if talentos %} e <strong>perfil profissional e currículo</strong> (opcionais, só aparecem às concedentes se o estagiário autorizar){% endif %}.</li>
+    <li><strong>Responsáveis legais dos estudantes:</strong> nome, CPF, telefone, parentesco e, se informado, e-mail, como estão no termo de compromisso (TCE) ou informados pelo próprio responsável. O endereço do TCE não é guardado no sistema.</li>
     <li><strong>Acessos e segurança:</strong> data, hora, IP e tipo de aparelho de cada entrada na conta, senhas erradas e ações da gestão (registro de ações).</li>
   </ul>
 
@@ -32,10 +33,11 @@
     <li><strong>O estagiário</strong> vê tudo do próprio estágio.</li>
     <li><strong>O supervisor</strong> vê a frequência, as mensagens (menos as marcadas como “só com o orientador”) e os documentos dos estagiários que supervisiona. Um funcionário da concedente só confirma presenças no lugar dele por um período definido, com permissão registrada.</li>
     <li><strong>O responsável pela concedente</strong> vê a frequência dos estagiários da própria concedente e cadastra a equipe.</li>
+    <li><strong>O responsável legal</strong> que a escola cadastrou (o do TCE, ou quem pediu) vê, só para ler, as presenças e faltas, as horas, a previsão de término, as visitas do orientador e os avisos da escola sobre o estágio do estudante, e recebe aviso quando há falta. <strong>Não</strong> vê o texto “como foi o dia”, as mensagens, os atestados, a localização nem o currículo. Isso continua depois que o estudante faz 18 anos: é a transparência da escola com quem fez a matrícula. O estudante vê em Meus dados quem acompanha o estágio dele e pode falar com a escola sobre isso.</li>
     <li><strong>A escola</strong> (orientador, coordenação do curso e administração) vê os estágios que acompanha.</li>
     <li><strong>Atestados:</strong> só a escola{% if atestados_supervisor %} e o supervisor{% endif %} abrem o arquivo.</li>
   </ul>
-  <p>Para funcionar, o sistema usa a hospedagem contratada pela escola, a rede da Cloudflare, que protege o acesso, e o servidor de e-mail dos avisos. As notificações no celular passam pelos serviços de push do Google, da Apple ou da Mozilla, conforme o aparelho, sempre criptografadas. As fontes das páginas vêm do Google Fonts, que recebe o endereço IP de quem abre a página.</p>
+  <p>Para funcionar, o sistema usa a hospedagem contratada pela escola, a rede da Cloudflare, que protege o acesso, e o servidor de e-mail dos avisos. As notificações no celular passam pelos serviços de push do Google, da Apple ou da Mozilla, conforme o aparelho, sempre criptografadas. As fontes das páginas vêm do Google Fonts, que recebe o endereço IP de quem abre a página. Os mapas da gestão (mapa dos estágios e localização das concedentes) usam as imagens e a busca de endereços do OpenStreetMap, que recebe o endereço IP de quem abre o mapa e, na busca, o endereço da concedente procurado. A posição do celular dos estagiários nunca é enviada ao mapa.</p>
 
   <h2 id="tempo">5. Por quanto tempo guardamos</h2>
   <p>Os dados do estágio ficam guardados por <strong>{{ retencao }} ano{{ retencao|pluralize }}</strong> depois do fim do ano letivo em que ele terminou, para emitir declarações e responder a dúvidas. Depois desse prazo, são <strong>anonimizados</strong>: nomes e contatos são apagados e ficam só os números, como horas e frequência, para os indicadores. Os registros de acesso ficam {{ guardar_acessos }}. O Marco Civil da Internet exige no mínimo 6 meses.</p>

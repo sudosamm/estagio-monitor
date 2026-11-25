@@ -67,6 +67,7 @@ MIDDLEWARE = [
     "core.sessoes.SessaoAparelhoMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.TrocaSenhaObrigatoriaMiddleware",
+    "core.middleware.AreaDoResponsavelMiddleware",
     "core.auditoria.AuditoriaMiddleware",
     "core.middleware.ResumoSemanalMiddleware",
 ]

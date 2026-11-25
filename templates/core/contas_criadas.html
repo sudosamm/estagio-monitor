@@ -10,7 +10,7 @@
     <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Como fazer o primeiro acesso</th></tr></thead>
     <tbody>{% for u, codigo in linhas %}<tr>
       <td>{{ u.nome_completo }}</td><td><strong>{{ u.username }}</strong></td><td>{{ u.get_papel_display }}</td>
-      <td>{% if codigo %}“Tenho um código”: <strong class="codigo-acesso">{{ codigo }}</strong>{% if u.is_estagiario and u.data_nascimento %}<br><small class="muted">ou nome completo + data de nascimento</small>{% endif %}{% else %}“Sou estagiário(a)”: nome completo + data de nascimento{% endif %}</td>
+      <td>{% if codigo %}“Tenho um código”: <strong class="codigo-acesso">{{ codigo }}</strong>{% if u.is_estagiario and u.data_nascimento %}<br><small class="muted">ou nome completo + data de nascimento</small>{% endif %}{% if u.whatsapp_acesso %}<br><a class="btn sec sm nao-imprimir mt-1" href="{{ u.whatsapp_acesso }}" target="_blank" rel="noopener" data-sem-trava>Enviar pelo WhatsApp ({{ u.telefone }})</a>{% endif %}{% else %}“Sou estagiário(a)”: nome completo + data de nascimento{% endif %}</td>
     </tr>{% empty %}<tr><td colspan="4" class="vazio">Nenhuma conta nova.</td></tr>{% endfor %}</tbody>
   </table></div>
 </div>

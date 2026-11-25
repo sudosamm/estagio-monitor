@@ -147,8 +147,10 @@ def _dias(texto):
     return sorted(dias)
 
 
-def ler_csv(conteudo):
-    """Lê o CSV (aceita ; ou , e UTF-8 com ou sem BOM; também Latin-1, comum no Excel)."""
+def ler_csv(conteudo, colunas=None):
+    """Lê o CSV (aceita ; ou , e UTF-8 com ou sem BOM; também Latin-1, comum no Excel). `colunas`: as obrigatórias
+    (padrão: as da importação de estágios)."""
+    colunas = COLUNAS if colunas is None else colunas
     if isinstance(conteudo, bytes):
         for codificacao in ("utf-8-sig", "cp1252"):
             try:
@@ -163,7 +165,7 @@ def ler_csv(conteudo):
     if not leitor.fieldnames:
         raise ErroImportacao("O arquivo está vazio.")
     cabecalho = {c: _chave(c).replace(" ", "_") for c in leitor.fieldnames if c}
-    faltando = [c for c, obrig, _ in COLUNAS if obrig and c not in cabecalho.values()]
+    faltando = [c for c, obrig, _ in colunas if obrig and c not in cabecalho.values()]
     if faltando:
         raise ErroImportacao("Colunas obrigatórias ausentes: " + ", ".join(faltando)
                              + ". Baixe o modelo para ver os nomes das colunas.")

@@ -135,6 +135,14 @@ def estagio_detalhe(request, pk):
             estagios=estagio, data_hora__year=ano, data_hora__month=mes,
         ).exclude(status=Agendamento.Status.CANCELADO)
         dias_visita = {timezone.localtime(v.data_hora).date() for v in visitas if v.data_hora}
+        if ctx["e_orientador"]:
+            from ..forms import ResponsavelForm
+            from ..responsaveis import maior_no_inicio
+
+            ctx["responsaveis"] = (estagio.estagiario.responsaveis_legais.select_related("responsavel")
+                                   .order_by("encerrado_em", "responsavel__nome_completo"))
+            ctx["form_responsavel"] = ResponsavelForm(prefix="resp")
+            ctx["maior_no_inicio"] = maior_no_inicio(estagio.estagiario)
         ctx.update(
             semanas=semanas, dias_visita=dias_visita, nav=_nav_mes(ano, mes), dias_semana=DIAS_ABREV,
             proximos=proximos_dias(estagio, 6, limite), ausencia_form=AusenciaForm(initial={"data": timezone.localdate()}),
@@ -228,6 +236,10 @@ def marcar_presenca(request, pk):
     if diario:
         reg.diario = diario
         reg.save(update_fields=["diario"])
+    supervisor = {"sim": True, "nao": False}.get(request.POST.get("supervisor", ""))
+    if supervisor is not None:  # o estagiário conta se o supervisor está no local (aparece no mapa dos estágios)
+        reg.supervisor_presente = supervisor
+        reg.save(update_fields=["supervisor_presente"])
     if not status_hoje(estagio).previsto:
         messages.warning(request, "Hoje não estava previsto na sua escala — o supervisor vai validar.")
     messages.success(request, f"Presença marcada às {agora:%H:%M}. Aguardando confirmação do supervisor.")

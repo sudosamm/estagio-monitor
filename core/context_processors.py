@@ -14,6 +14,7 @@ def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0, opinioes=0
         _item("Resumo da semana", "resumo_semanal", {"resumo_semanal"}, url_atual),
         pode("agenda") and _item("Agenda de visitas", "agendamentos",
                                  {"agendamentos", "novo_agendamento", "agendamento_detalhe", "assinar_agenda"}, url_atual),
+        pode("painel") and _item("Mapa dos estágios", "mapa_estagios", {"mapa_estagios"}, url_atual),
         pode("agenda") and _item("Roteiro de visitas", "roteiro", {"roteiro"}, url_atual),
         _item("Frequências", "frequencias", {"frequencias"}, url_atual),
         _item("Feedback dos supervisores", "feedback_geral", {"feedback_geral"}, url_atual),

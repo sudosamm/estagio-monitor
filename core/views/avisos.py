@@ -83,7 +83,12 @@ def comunicados(request):
             partes.append(str(d["local"]))
         pessoas = set()
         if d["para"] in ("estagiarios", "todos"):
-            pessoas |= {e.estagiario for e in alvo.select_related("estagiario") if e.estagiario.is_active}
+            alunos = {e.estagiario for e in alvo.select_related("estagiario") if e.estagiario.is_active}
+            pessoas |= alunos
+            if d.get("responsaveis"):
+                from ..responsaveis import responsaveis_de
+
+                pessoas |= set(responsaveis_de(alunos))
         if d["para"] in ("supervisores", "todos"):
             pessoas |= {e.supervisor for e in alvo.select_related("supervisor") if e.supervisor and e.supervisor.is_active}
         pessoas.discard(user)

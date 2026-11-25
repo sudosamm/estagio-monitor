@@ -930,3 +930,49 @@ kbd { font: 600 .72rem/1 ui-monospace, monospace; padding: .18rem .35rem; border
 .ap-hora strong { font-size: 1.15rem; }
 .ap-hora small { font-size: .75rem; }
 .roteiro-dia select { max-width: 220px; }
+/* estagiário informa se o supervisor está no local */
+.sup-presente { border: 0; padding: 0; margin: .2rem 0 .4rem; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .9rem; }
+.sup-presente legend { float: left; font-weight: 600; margin-right: .4rem; padding: 0; }
+.sup-presente label { display: inline-flex; align-items: center; gap: .3rem; cursor: pointer; }
+.sup-presente small { flex-basis: 100%; opacity: .85; }
+/* mapa dos estágios */
+.mapa-resumo { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .8rem; }
+.pilula { font-size: .85rem; padding: .25rem .7rem; border-radius: 999px; font-weight: 600; }
+.pilula.verde { background: #e3f2e7; color: #145c2c; } .pilula.ambar { background: #fdf0d8; color: #7a4a00; }
+.pilula.vermelho { background: #fbe3e3; color: #8e1c1c; } .pilula.cinza { background: var(--cinza-100); color: var(--cinza-700); }
+.pilula.azul { background: #e2edfb; color: #0f4f9c; }
+.mapa-area { padding: 0; overflow: hidden; }
+#mapa { height: min(62vh, 560px); width: 100%; }
+.pino { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #fff; font-weight: 700;
+  font-size: .9rem; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); position: relative; }
+.pino.verde, .pino-ex.verde { background: #1e8e3e; } .pino.ambar, .pino-ex.ambar { background: #c77700; }
+.pino.vermelho, .pino-ex.vermelho { background: #c62828; } .pino.cinza, .pino-ex.cinza { background: #7a8580; }
+.pino.sup-sim::after, .pino.sup-nao::after { content: ""; position: absolute; top: -4px; right: -4px; width: 12px; height: 12px;
+  border-radius: 50%; border: 2px solid #fff; }
+.pino.sup-sim::after, .sup-ex.sim { background: #1667c7; } .pino.sup-nao::after, .sup-ex.nao { background: #c62828; }
+.pino-ex { display: inline-block; width: 14px; height: 14px; border-radius: 50%; flex: none; vertical-align: -2px; }
+.sup-ex { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; }
+.mapa-legenda { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; font-size: .82rem; color: var(--cinza-700); margin: -.4rem 0 1rem; }
+.mapa-lista li { align-items: flex-start; }
+.mapa-lista .pino-ex { margin-top: .3rem; }
+.mapa-alunos summary { cursor: pointer; font-size: .85rem; color: var(--verde); margin-top: .2rem; }
+.mapa-alunos ul { margin: .3rem 0 0; padding-left: 1.1rem; font-size: .85rem; }
+.mapa-marcar { display: inline-flex; gap: .3rem; align-items: center; font-size: .85rem; white-space: nowrap; cursor: pointer; }
+.mapa-popup p { margin: .35rem 0; } .mapa-popup small { display: block; color: #555; }
+.mapa-popup ul { margin: .3rem 0 .5rem; padding-left: 1rem; max-height: 9rem; overflow: auto; }
+.leaflet-container { font: inherit; }
+:root[data-tema="escuro"] .leaflet-tile-pane { filter: brightness(.82) contrast(1.05); }
+:root[data-tema="escuro"] .pilula.verde { background: #173a27; color: #8be6b2; }
+:root[data-tema="escuro"] .pilula.ambar { background: #3d2a05; color: #f7c66b; }
+:root[data-tema="escuro"] .pilula.vermelho { background: #3d1414; color: #f29b9b; }
+:root[data-tema="escuro"] .pilula.azul { background: #12263f; color: #9cc4f5; }
+.leaflet-popup-content a { color: #005a2b; }
+.ponto-mapa { margin-bottom: .8rem; }
+.ponto-mapa-area { height: 300px; border-radius: 10px; overflow: hidden; border: 1px solid var(--cinza-200); }
+.pino.pino-ficha { width: 26px; height: 26px; cursor: grab; }
+/* área do responsável */
+.hoje-resp { border-left: 5px solid var(--cinza-300); border-radius: 0 var(--raio) var(--raio) 0; }
+.hoje-resp.confirmado, .hoje-resp.aguardando { border-left-color: #1e8e3e; }
+.hoje-resp.hoje { border-left-color: #c77700; } .hoje-resp.falta, .hoje-resp.contestado { border-left-color: #c62828; }
+.hoje-resp h2 { font-size: 1.15rem; }
+@media print { .nao-imprimir { display: none !important; } }

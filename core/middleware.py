@@ -70,6 +70,40 @@ class TrocaSenhaObrigatoriaMiddleware:
         return None
 
 
+class AreaDoResponsavelMiddleware:
+    """Responsável legal só usa a própria área (só leitura) e as telas da conta. Qualquer outra tela do sistema
+    (lançar dias, mensagens, atestados, folhas…) volta para a área dele, mesmo que alguém mande o link."""
+
+    LIBERADAS = {
+        "inicio", "responsavel_inicio", "responsavel_estagio", "comunicado", "meus_comunicados", "perfil", "trocar_senha",
+        "logout", "login", "primeiro_acesso", "primeiro_acesso_senha", "privacidade", "termos", "aceitar_termos", "acessos",
+        "notificacoes", "notificacao_abrir", "notificacoes_lidas", "novidades", "novidades_visto", "trocar_tema",
+        "push_chave", "push_inscrever", "push_cancelar", "push_teste", "dois_fatores", "verificar_dois_fatores",
+        "baixar_meus_dados", "foto_usuario", "sugestoes", "enviar_opiniao", "confirmar_email", "reenviar_confirmacao",
+        "esqueci_senha", "redefinir_senha_email", "pedir_ajuda", "manifesto", "offline", "saude",
+    }
+    PREFIXOS = ("/static/", "/sw.js", "/manifest.webmanifest", "/offline/", "/saude/")
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated and user.is_responsavel and not request.path.startswith(self.PREFIXOS):
+            from django.core.exceptions import PermissionDenied
+            from django.urls import Resolver404, resolve
+
+            try:
+                nome = resolve(request.path_info).url_name
+            except Resolver404:
+                nome = None
+            if nome is not None and nome not in self.LIBERADAS:
+                if request.method != "GET":
+                    raise PermissionDenied
+                return redirect("responsavel_inicio")
+        return self.get_response(request)
+
+
 class ResumoSemanalMiddleware:
     """Tarefas com hora marcada, disparadas pelo próprio movimento do sistema (sem precisar de cron): resumo semanal
     (segunda, 6h), lembretes de feedback e avaliações, lembrete de fim de expediente dos estagiários, e-mail

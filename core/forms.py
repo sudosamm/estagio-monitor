@@ -976,6 +976,9 @@ class ComunicadoForm(Formulario):
     titulo = forms.CharField(label="Assunto", max_length=120,
                              widget=forms.TextInput(attrs={"placeholder": "Ex.: Entrega do relatório até sexta"}))
     texto = forms.CharField(label="Mensagem", max_length=3000, widget=forms.Textarea(attrs={"rows": 5}))
+    responsaveis = forms.BooleanField(
+        label="Também para os responsáveis legais dos estagiários", required=False, initial=True,
+        help_text="Eles recebem no sino (e no e-mail, se tiverem) os avisos mandados aos estagiários.")
 
     def __init__(self, *a, usuario=None, **kw):
         super().__init__(*a, **kw)
@@ -1359,6 +1362,36 @@ def chave_nome(nome):
 
 class RecusarCandidaturaForm(Formulario):
     parecer = forms.CharField(label="Motivo (vai na mensagem para a concedente)", widget=forms.Textarea(attrs={"rows": 3}))
+
+
+# ------------------------------------------------------------------ responsáveis legais
+
+
+class ResponsavelForm(Formulario):
+    """Responsável legal do estudante, como está no TCE (ou a pedido do responsável)."""
+
+    nome = forms.CharField(label="Nome completo", max_length=150)
+    cpf = forms.CharField(label="CPF", max_length=14, required=False,
+                          help_text="Recomendado: evita contas repetidas para irmãos e permite entrar com o CPF.")
+    telefone = forms.CharField(label="Telefone / WhatsApp", max_length=30, required=False)
+    email = forms.EmailField(label="E-mail", required=False, help_text="Opcional. O TCE não traz; dá para incluir depois.")
+    parentesco = forms.CharField(label="Parentesco", max_length=40, required=False,
+                                 widget=forms.TextInput(attrs={"placeholder": "mãe, pai, avó…"}))
+    origem = forms.ChoiceField(label="De onde veio", widget=forms.RadioSelect, initial="TCE",
+                               choices=[("TCE", "Do termo de compromisso (TCE)"), ("PEDIDO", "O próprio responsável pediu")])
+
+    def clean_nome(self):
+        nome = " ".join(self.cleaned_data["nome"].split())
+        if len(nome.split()) < 2:
+            raise forms.ValidationError("Informe nome e sobrenome.")
+        return nome
+
+    def clean_cpf(self):
+        return limpar_cpf(self.cleaned_data.get("cpf"))
+
+
+class ImportarResponsaveisForm(Formulario):
+    arquivo = forms.FileField(label="Planilha (CSV)", widget=forms.ClearableFileInput(attrs={"accept": ".csv,text/csv"}))
 
 
 # ------------------------------------------------------------------ importação em massa

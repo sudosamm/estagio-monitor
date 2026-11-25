@@ -62,6 +62,7 @@ class Usuario(AbstractUser):
         COORDENADOR = "COORDENADOR", "Coordenador(a) de curso"
         SUPERVISOR = "SUPERVISOR", "Supervisor(a)"
         ESTAGIARIO = "ESTAGIARIO", "Estagiário(a)"
+        RESPONSAVEL = "RESPONSAVEL", "Responsável legal"
 
     papel = models.CharField(max_length=12, choices=Papel.choices, default=Papel.ESTAGIARIO)
     nome_completo = models.CharField(max_length=150)
@@ -263,6 +264,11 @@ class Usuario(AbstractUser):
     @property
     def is_estagiario(self):
         return self.papel == self.Papel.ESTAGIARIO
+
+    @property
+    def is_responsavel(self):
+        """Responsável legal de um estudante: só acompanha o estágio (área própria, só leitura)."""
+        return self.papel == self.Papel.RESPONSAVEL
 
     @property
     def primeiro_nome(self):
@@ -708,6 +714,9 @@ class Registro(models.Model):
     obs_supervisor = models.TextField("Observação do supervisor", blank=True)
     registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     # localização no momento da marcação: {"lat", "lng", "precisao", "distancia"} ou {"erro": "..."}
+    supervisor_presente = models.BooleanField(
+        "O supervisor estava no local", null=True, blank=True,
+        help_text="Informado pelo estagiário ao marcar a entrada (ou pelo QR code do supervisor). Vazio = não informou.")
     geo_entrada = models.JSONField("Localização da entrada", null=True, blank=True)
     geo_saida = models.JSONField("Localização da saída", null=True, blank=True)
     justificativa = models.ForeignKey("Justificativa", null=True, blank=True, on_delete=models.SET_NULL,
@@ -805,7 +814,29 @@ class Registro(models.Model):
                 estagio_id=self.estagio_id, data=self.data, registro=self, usuario=getattr(self, "_autor", None),
                 acao=getattr(self, "_acao", "") or ("CRIOU" if antes is None else "ALTEROU"), mudancas=mudancas,
                 ip=getattr(self, "_ip", None))
+        if antes is not None or "situacao" in depois:
+            self._avisar_responsaveis(antes or {}, depois)
         self._antes = depois
+
+    def _avisar_responsaveis(self, antes, depois):
+        """Falta registrada ou presença contestada pelo supervisor: o responsável legal fica sabendo."""
+        falta = depois.get("situacao") == self.Situacao.FALTA and antes.get("situacao") != self.Situacao.FALTA
+        contestada = (depois.get("situacao") == self.Situacao.PRESENTE
+                      and depois.get("confirmacao") == self.Confirmacao.CONTESTADA
+                      and antes.get("confirmacao") != self.Confirmacao.CONTESTADA)
+        if not (falta or contestada):
+            return
+        from django.db import transaction
+
+        def avisar():
+            from .responsaveis import notificar_responsaveis
+
+            aluno = self.estagio.estagiario
+            o_que = "uma falta" if falta else "que a presença foi contestada pelo supervisor"
+            notificar_responsaveis(aluno, f"Estágio de {aluno.primeiro_nome}: registramos {o_que} em {self.data:%d/%m}.",
+                                   reverse("responsavel_estagio", args=[self.estagio_id]))
+
+        transaction.on_commit(avisar)
 
     def delete(self, *args, **kwargs):
         HistoricoRegistro.objects.create(
@@ -1947,6 +1978,40 @@ class RegistroAcao(models.Model):
 
     def __str__(self):
         return f"{self.quando:%d/%m/%Y %H:%M} {self.quem}: {self.descricao}"
+
+
+class VinculoResponsavel(models.Model):
+    """Responsável legal que acompanha o estágio de um estudante: o do TCE ou quem pediu à escola. Um responsável
+    pode acompanhar mais de um estudante (irmãos)."""
+
+    class Origem(models.TextChoices):
+        TCE = "TCE", "Termo de compromisso (TCE)"
+        PEDIDO = "PEDIDO", "A pedido do responsável"
+
+    estagiario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="responsaveis_legais")
+    responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                    related_name="estudantes_acompanhados")
+    parentesco = models.CharField("Parentesco", max_length=40, blank=True, help_text="Ex.: mãe, pai, avó, tio")
+    origem = models.CharField(max_length=6, choices=Origem.choices, default=Origem.TCE)
+    criado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
+    criado_em = models.DateTimeField(auto_now_add=True)
+    encerrado_em = models.DateTimeField(null=True, blank=True, help_text="A escola tirou o acesso deste responsável")
+    encerrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                      related_name="+")
+
+    class Meta:
+        ordering = ["estagiario__nome_completo", "responsavel__nome_completo"]
+        constraints = [models.UniqueConstraint(fields=["estagiario", "responsavel"], name="vinculo_responsavel_unico")]
+        verbose_name = "responsável legal"
+        verbose_name_plural = "responsáveis legais"
+
+    def __str__(self):
+        return f"{self.responsavel} → {self.estagiario}"
+
+    @property
+    def ativo(self):
+        return self.encerrado_em is None
 
 
 class SessaoAparelho(models.Model):

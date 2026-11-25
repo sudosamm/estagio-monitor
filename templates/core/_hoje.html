@@ -6,6 +6,10 @@
     <h2>Hoje é dia de estágio</h2>
     <p>{% now "l, d \d\e F" %}{% if escala_atual.horario_display %} · {{ escala_atual.horario_display }}{% endif %} · {{ estagio.local|default:"local a definir" }}</p>
     <form method="post" action="{% url 'marcar_presenca' estagio.pk %}"{% if CONFIG.checkin_localizacao != "DESLIGADO" %} data-geo{% endif %}>{% csrf_token %}
+      <fieldset class="sup-presente"><legend>Seu supervisor está aí agora?</legend>
+        <label><input type="radio" name="supervisor" value="sim"> Sim</label>
+        <label><input type="radio" name="supervisor" value="nao"> Não</label>
+        <small>Opcional: ajuda a escola a acompanhar o estágio.</small></fieldset>
       <details><summary>Adicionar anotação (opcional)</summary><textarea name="diario" rows="3" placeholder="Como está sendo o dia?"></textarea></details>
       <div class="acoes mt-1"><button class="btn grande" type="submit">{% icone "check" %} Estou no estágio</button>
         <a class="btn sec" href="{% url 'estagio_dia' estagio.pk st.data|date:'Y-m-d' %}">{% icone "relogio" %} Digitar meus horários</a></div>

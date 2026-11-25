@@ -6,8 +6,8 @@ troque VERSAO: todo mundo vê a tela de aceite de novo no próximo acesso.
 from django.conf import settings
 from django.utils import timezone
 
-VERSAO = "2026.11.24"
-ATUALIZADO_EM = "24/11/2026"
+VERSAO = "2026.11.25"
+ATUALIZADO_EM = "25/11/2026"
 
 
 def precisa_aceitar(user):

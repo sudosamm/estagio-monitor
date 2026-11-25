@@ -24,6 +24,8 @@ def inicio(request):
     user = request.user
     if user.is_gestor:
         return redirect("painel")
+    if user.is_responsavel:
+        return redirect("responsavel_inicio")
     if user.is_supervisor:
         if not user.vinculado_a_concedente and user.candidaturas_feitas.exists():
             return redirect("minhas_candidaturas")  # conta criada na candidatura, ainda sem aprovação
@@ -120,8 +122,11 @@ def perfil(request):
     from .acessos import TIPOS_ACESSO
 
     acessos = RegistroAcao.objects.filter(usuario=request.user, tipo__in=TIPOS_ACESSO)[:3]
+    from ..responsaveis import vinculos_de
+
+    responsaveis = list(vinculos_de(request.user)) if request.user.is_estagiario else []
     return render(request, "core/perfil.html", {"form": form, "config": config, "acessos": acessos,
-                                                "n_aparelhos": len(ativas(request.user)),
+                                                "n_aparelhos": len(ativas(request.user)), "responsaveis": responsaveis,
                                                 "pode_2fa": dois_fatores.pode_usar(request.user),
                                                 "exige_2fa": dois_fatores.precisa(request.user)})
 
@@ -155,6 +160,10 @@ def pode_ver_foto(user, alvo):
     """Dono, gestores, fotos de gestores, quem divide um estágio com a pessoa e quem pode ver o perfil profissional."""
     if user.pk == alvo.pk or user.is_gestor or alvo.is_gestor:
         return True
+    if user.is_responsavel:  # o responsável vê a foto dos estudantes que acompanha
+        from ..responsaveis import estudantes_de
+
+        return estudantes_de(user).filter(pk=alvo.pk).exists()
     juntos = (Estagio.objects.filter(Q(estagiario=alvo) | Q(supervisor=alvo))
               .filter(Q(estagiario=user) | Q(supervisor=user) | Q(orientador=user)))
     if juntos.exists():

@@ -38,6 +38,11 @@ def achar_por_nascimento(texto, nascimento):
 def achar_por_codigo(texto, codigo):
     pendentes = _pendentes().exclude(codigo_acesso="")
     candidatos = list(pendentes.filter(username__iexact=texto.strip()))
+    digitos = "".join(c for c in texto if c.isdigit())
+    if not candidatos and len(digitos) == 11:  # o responsável pode informar o CPF
+        from ..validators import formatar_cpf
+
+        candidatos = list(pendentes.filter(cpf=formatar_cpf(digitos)))
     if not candidatos:
         chave = chave_texto(texto)
         candidatos = [u for u in pendentes if chave_texto(u.nome_completo) == chave]

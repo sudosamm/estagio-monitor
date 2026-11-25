@@ -6,7 +6,7 @@ from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import path, reverse
 
-from core.views import acessos, agenda, atestados, avaliacoes, avisos, captacao, comum, confirmacao, conta, dois_fatores, encerramento, equipe, estagio, feedback, frequencia, importacao, legal, novidades, opinioes, roteiro, sistema, visitas, modelos_email, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
+from core.views import acessos, agenda, mapa, responsavel, atestados, avaliacoes, avisos, captacao, comum, confirmacao, conta, dois_fatores, encerramento, equipe, estagio, feedback, frequencia, importacao, legal, novidades, opinioes, roteiro, sistema, visitas, modelos_email, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
 
 
 def _login_do_admin(request):
@@ -36,6 +36,10 @@ urlpatterns = [
     path("perfil/", comum.perfil, name="perfil"),
     path("perfil/email/reenviar/", comum.reenviar_confirmacao, name="reenviar_confirmacao"),
     path("perfil/acessos/", acessos.acessos, name="acessos"),
+    path("acompanhar/", responsavel.responsavel_inicio, name="responsavel_inicio"),
+    path("acompanhar/<int:pk>/", responsavel.responsavel_estagio, name="responsavel_estagio"),
+    path("estagios/<int:pk>/responsaveis/", responsavel.responsaveis_estagio, name="responsaveis_estagio"),
+    path("contas/responsaveis/importar/", responsavel.importar_responsaveis, name="importar_responsaveis"),
     path("perfil/modo/", comum.alternar_modo, name="alternar_modo"),
     path("email/confirmar/<str:token>/", comum.confirmar_email, name="confirmar_email"),
     path("tema/", comum.trocar_tema, name="trocar_tema"),
@@ -176,6 +180,7 @@ urlpatterns = [
     # agenda
     path("agenda/", agenda.agendamentos, name="agendamentos"),
     path("agenda/novo/", agenda.novo_agendamento, name="novo_agendamento"),
+    path("mapa/", mapa.mapa_estagios, name="mapa_estagios"),
     path("agenda/roteiro/", roteiro.roteiro, name="roteiro"),
     path("agenda/roteiro/agendar/", roteiro.agendamento_rapido, name="agendamento_rapido"),
     path("agenda/ficha/<int:pk>/", agenda.ficha_estagio, name="ficha_estagio"),

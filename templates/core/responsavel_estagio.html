@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block titulo %}Estágio de {{ estagio.estagiario.primeiro_nome }}{% endblock %}
+{% block conteudo %}
+<div class="titulo-pagina"><div>{% if outros %}<div class="migalha"><a href="{% url 'responsavel_inicio' %}">← Estudantes que você acompanha</a></div>{% endif %}
+  <div class="flex" style="gap:.8rem">{% avatar estagio.estagiario %}<div><h1 class="mb-0">{{ estagio.estagiario.nome_completo }}</h1>
+  <p class="mb-0">{{ estagio.curso }}{% if estagio.turma %} · turma {{ estagio.turma.ano_ingresso }}{% endif %}{% if not estagio.ativo %} · <span class="etiqueta">estágio encerrado</span>{% endif %}</p></div></div></div></div>
+
+<div class="caixa-info mb-1">Você acompanha este estágio como {{ vinculo.parentesco|default:"responsável legal" }}. Aqui você vê as presenças, as horas e as visitas do orientador, e recebe os avisos da turma. Para falar com a escola, use os contatos do orientador abaixo.</div>
+
+{% if hoje %}
+<div class="card hoje-resp {{ hoje.codigo }}">
+  <h2>{% icone "relogio" %} Hoje: {% if hoje.codigo == "hoje" %}presença ainda não marcada{% elif hoje.rotulo %}{{ hoje.rotulo|lower }}{% else %}sem estágio previsto{% endif %}</h2>
+  <p class="mb-0">{% if hoje.registro and hoje.registro.situacao == "PRESENTE" %}{% if hoje.registro.hora_chegada %}Chegou às {{ hoje.registro.hora_chegada|time:"H:i" }}{% if hoje.registro.hora_saida %} e saiu às {{ hoje.registro.hora_saida|time:"H:i" }}{% endif %}.{% else %}Presença lançada.{% endif %} {% if hoje.codigo == "confirmado" %}O supervisor confirmou.{% elif hoje.codigo == "aguardando" %}Aguardando a confirmação do supervisor da concedente.{% endif %}
+  {% elif hoje.registro %}{{ hoje.registro.get_situacao_display }}.
+  {% elif hoje.previsto %}Dia de estágio{% if escala_atual.horario_display %}, das {{ escala_atual.horario_display }}{% endif %}: ainda não marcou presença.
+  {% else %}Hoje não é dia de estágio.{% endif %}</p>
+</div>
+{% endif %}
+
+<div class="kpis">
+  <div class="kpi"><div class="valor">{{ horas.cumpridas|horas }}</div><div class="rotulo">de {{ horas.total|horas }} confirmadas ({{ horas.pct|floatformat:0 }}%)</div></div>
+  <div class="kpi azul"><div class="valor">{{ horas.presencas }}</div><div class="rotulo">presenças</div></div>
+  <div class="kpi {% if horas.faltas %}vermelho{% else %}laranja{% endif %}"><div class="valor">{{ horas.faltas }}</div><div class="rotulo">falta{{ horas.faltas|pluralize }}{% if horas.ausencias %} · {{ horas.ausencias }} ausência{{ horas.ausencias|pluralize }} informada{{ horas.ausencias|pluralize }}{% endif %}</div></div>
+  {% if horas.previsao_termino and estagio.ativo %}<div class="kpi amarelo"><div class="valor">{{ horas.previsao_termino|date:"d/m" }}</div><div class="rotulo">previsão de término</div></div>{% endif %}
+</div>
+
+<div class="grade grade-lado">
+  <div>
+    {% include "core/_calendario.html" %}
+  </div>
+  <div>
+    <div class="card">
+      <h3>{% icone "calendario" %} Visitas do orientador</h3>
+      <ul class="lista compacta">{% for v in proximas_visitas %}<li><span class="cresce"><strong>{{ v.data_hora|date:"l, d/m \à\s H:i" }}</strong><small style="display:block">{{ v.get_tipo_display }}{% if v.local %} · {{ v.local }}{% endif %}</small></span></li>
+      {% empty %}<li class="vazio">Nenhuma visita marcada.</li>{% endfor %}</ul>
+    </div>
+    <div class="card">
+      <div class="card-cab"><h3>{% icone "sino" %} Avisos da escola</h3><a class="btn sec sm" href="{% url 'meus_comunicados' %}">Todos</a></div>
+      <ul class="lista compacta">{% for c in avisos %}<li><a class="cresce" href="{{ c.get_absolute_url }}"><strong>{{ c.titulo }}</strong><small style="display:block">{{ c.criado_em|date:"d/m/Y" }}{% if c.autor %} · {{ c.autor.primeiro_nome }}{% endif %}</small></a></li>
+      {% empty %}<li class="vazio">Nenhum aviso ainda.</li>{% endfor %}</ul>
+    </div>
+    <div class="card">
+      <h3>{% icone "escola" %} Contatos</h3>
+      <p class="mb-0">Orientador(a): <strong>{{ estagio.orientador.nome_completo }}</strong>{% if estagio.orientador.telefone %}<br>{% icone "telefone" %} {{ estagio.orientador.telefone }}{% endif %}{% if estagio.orientador.email %}<br>{{ estagio.orientador.email }}{% endif %}</p>
+      {% if estagio.local %}<hr><p class="mb-0">Local do estágio: <strong>{{ estagio.local.nome }}</strong>{% if estagio.local.endereco_completo %}<br><small class="muted">{{ estagio.local.endereco_completo }}</small>{% endif %}{% if estagio.supervisor %}<br><small>Supervisor(a): {{ estagio.supervisor.nome_completo }}</small>{% endif %}</p>{% endif %}
+      <p class="muted mb-0 mt-1" style="font-size:.85rem">{{ config.nome_escola|default:NOME_INSTITUICAO }}</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

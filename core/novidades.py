@@ -24,6 +24,15 @@ def _p(*publico):
 
 
 VERSOES = (
+    Versao("2026.11.25", "Mapa dos estágios", (
+        (GESTAO, "Acompanhamento → Mapa dos estágios: cada concedente com a cor do dia (todos presentes, alguém não "
+                 "chegou, falta), quem está no local e o que os estagiários informaram do supervisor. Marque concedentes "
+                 "e monte o roteiro de visitas. Para aparecer no mapa, marque o ponto na ficha da concedente."),
+        (_p("estagiario"), "Ao marcar presença, conte se o seu supervisor está aí (opcional)."),
+        (GESTAO, "Responsáveis legais: cadastre na página do estágio (ou em lote, em Contas) e mande o acesso pelo "
+                 "WhatsApp. Eles acompanham, só para ler, presenças, horas, visitas e os avisos da turma."),
+        (_p("estagiario"), "Em Meus dados, veja quem acompanha o seu estágio (seus responsáveis legais)."),
+    )),
     Versao("2026.11.24.2", "Aparelhos conectados, conta da concedente e agendamento rápido", (
         (_p("todos"), "Meus dados → Acessos e aparelhos: veja onde sua conta está conectada e desconecte qualquer "
                       "aparelho. Se alguém tentar usar o seu acesso em outro aparelho, a sessão é encerrada e você é "

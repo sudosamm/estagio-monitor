@@ -240,6 +240,14 @@ def folha_primeiro_acesso(request, usuarios, titulo, aviso=""):
 
 def _folha(request, linhas, titulo, aviso="", voltar=""):
     request._acao_concluida = True  # para o registro de ações: a tela de códigos é o sucesso (não redireciona)
+    from ..responsaveis import estudantes_de, link_whatsapp, mensagem_acesso
+
+    endereco_codigo = request.build_absolute_uri(reverse("primeiro_acesso")) + "?modo=codigo"
+    escola = Configuracao.atual().nome_escola or "escola"
+    for u, codigo in linhas:  # botão “Enviar pelo WhatsApp” (a escola só toca em Enviar, do próprio celular)
+        if codigo and u.telefone:
+            alunos = [a.primeiro_nome for a in estudantes_de(u)] if u.is_responsavel else []
+            u.whatsapp_acesso = link_whatsapp(u.telefone, mensagem_acesso(u, codigo, endereco_codigo, escola, alunos))
     resposta = render(request, "core/contas_criadas.html", {
         "linhas": linhas, "titulo": titulo, "aviso": aviso, "tem_codigo": any(c for _, c in linhas),
         "endereco": request.build_absolute_uri(reverse("primeiro_acesso")), "voltar": voltar,
@@ -261,6 +269,7 @@ def _contas(request, papel, q, situacao):
         qs = Usuario.objects.filter(
             Q(pk__in=meus.values("estagiario")) | Q(pk__in=meus.values("supervisor"))
             | Q(criado_por=request.user) | Q(papel=Usuario.Papel.SUPERVISOR) | Q(pk=request.user.pk)
+            | Q(estudantes_acompanhados__estagiario__in=meus.values("estagiario"))
         )
     if papel:
         qs = qs.filter(papel=papel)
@@ -294,6 +303,9 @@ def _pode_gerir(request, alvo):
         return False
     if alvo.is_supervisor:
         return True
+    if alvo.is_responsavel:  # quem orienta um dos estudantes que ele acompanha
+        return estagios_visiveis(request.user).filter(
+            estagiario__responsaveis_legais__responsavel=alvo).exists() or alvo.criado_por_id == request.user.pk
     return estagios_visiveis(request.user).filter(estagiario=alvo).exists() or alvo.criado_por_id == request.user.pk
 
 
@@ -603,7 +615,11 @@ def local_editar(request, pk=None):
         return redirect("locais")
     supervisores = obj.supervisores.order_by("nome_completo") if obj else []
     recessos_futuros = agrupar_periodos(obj.recessos.filter(data__gte=timezone.localdate()).order_by("data")) if obj else []
+    from django.db.models import Avg
+
+    centro = LocalEstagio.objects.filter(latitude__isnull=False).aggregate(lat=Avg("latitude"), lng=Avg("longitude"))
     return render(request, "core/concedente_form.html", {"form": form, "obj": obj, "supervisores": supervisores,
+                                                         "centro_mapa": centro if centro["lat"] is not None else None,
                                                          "recessos": recessos_futuros})
 
 

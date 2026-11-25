@@ -175,6 +175,7 @@ document.querySelectorAll("[data-minha-posicao]").forEach((b) => {
     navigator.geolocation.getCurrentPosition((pos) => {
       document.getElementById("id_latitude").value = pos.coords.latitude.toFixed(6);
       document.getElementById("id_longitude").value = pos.coords.longitude.toFixed(6);
+      document.getElementById("id_latitude").dispatchEvent(new Event("change")); // move o alfinete do mapa
       b.disabled = false; b.textContent = `Posição preenchida (precisão de ${Math.round(pos.coords.accuracy)} m)`;
     }, () => { b.disabled = false; b.textContent = original; window.alert("Não foi possível obter a localização. Permita o acesso no navegador."); },
     { enableHighAccuracy: true, timeout: 15000 });

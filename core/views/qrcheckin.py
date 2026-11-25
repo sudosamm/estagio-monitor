@@ -105,6 +105,7 @@ def checkin_qr_confirmar(request):
             setattr(reg, acao, agora)
             if acao == "hora_saida" and reg.calcular_horas():
                 reg.horas = reg.calcular_horas()
+        reg.supervisor_presente = True  # o QR code só aparece no celular do supervisor
         reg.confirmar(supervisor, Registro.Confirmacao.CONFIRMADA, "Confirmada pelo QR code do supervisor.")
         reg.anotar(request.user, HistoricoRegistro.Acao.QRCODE, request).save()
         rotulo = dict(PONTOS)[acao].replace("Marcar ", "").capitalize()

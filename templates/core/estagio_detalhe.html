@@ -123,6 +123,25 @@
       {% if estagio.supervisor %}<hr><p class="mb-0">Supervisor: <strong>{{ estagio.supervisor }}</strong>{% if estagio.supervisor.cargo %} · {{ estagio.supervisor.cargo }}{% endif %}</p>{% if estagio.supervisor.telefone %}<p class="muted mb-0">{{ estagio.supervisor.telefone }}{% with wa=estagio.supervisor.telefone|whatsapp %}{% if wa %} · <a href="{{ wa }}" target="_blank" rel="noopener noreferrer">WhatsApp</a>{% endif %}{% endwith %}</p>{% endif %}{% endif %}
     </div>
     {% endif %}
+    {% if e_orientador %}
+    <div class="card" id="responsaveis">
+      <h3>{% icone "usuarios" %} Responsáveis legais</h3>
+      <ul class="lista compacta">{% for v in responsaveis %}{% with r=v.responsavel %}
+        <li{% if not v.ativo %} style="opacity:.6"{% endif %}><span class="cresce"><strong>{{ r.nome_completo }}</strong>{% if v.parentesco %} · {{ v.parentesco }}{% endif %}
+          <small style="display:block">{% if not v.ativo %}sem acesso desde {{ v.encerrado_em|date:"d/m/Y" }}{% elif r.deve_trocar_senha %}ainda não entrou{% elif r.last_login %}último acesso {{ r.last_login|date:"d/m/Y" }}{% else %}já criou a senha{% endif %}{% if r.telefone %} · {{ r.telefone }}{% endif %} · {{ v.get_origem_display|lower }}</small></span>
+          <form method="post" action="{% url 'responsaveis_estagio' estagio.pk %}" class="flex" style="gap:.3rem">{% csrf_token %}<input type="hidden" name="id" value="{{ v.pk }}">
+            {% if v.ativo %}<button class="btn sec sm" name="acao" value="acesso" type="submit" data-confirmar="{% if r.deve_trocar_senha %}Gerar um código novo para {{ r.primeiro_nome }}?{% else %}{{ r.primeiro_nome }} já criou a senha. Gerar um novo acesso? A senha atual deixa de valer.{% endif %}">{% if r.deve_trocar_senha %}Código de acesso{% else %}Novo acesso{% endif %}</button>
+            <button class="btn perigo sm" name="acao" value="encerrar" type="submit" data-confirmar="Tirar o acesso de {{ r.primeiro_nome }} ao estágio de {{ estagio.estagiario.primeiro_nome }}?">Tirar acesso</button>
+            {% else %}<button class="btn sec sm" name="acao" value="acesso" type="submit">Devolver o acesso</button>{% endif %}</form></li>
+      {% endwith %}{% empty %}<li class="vazio">Nenhum responsável cadastrado.{% if maior_no_inicio %} {{ estagio.estagiario.primeiro_nome }} começou o estágio com 18 anos ou mais: cadastre só se o responsável pedir.{% endif %}</li>{% endfor %}</ul>
+      <details class="mt-1"{% if not responsaveis %} open{% endif %}><summary class="btn sec sm">{% icone "mais" %} Cadastrar responsável</summary>
+        <form method="post" action="{% url 'responsaveis_estagio' estagio.pk %}" class="mt-1">{% csrf_token %}<input type="hidden" name="acao" value="adicionar">
+          {% with form=form_responsavel %}{% include "core/_form.html" %}{% endwith %}
+          <p class="muted" style="font-size:.82rem">O responsável vê presenças, horas, visitas do orientador e os avisos da turma, só para ler. Não vê anotações, mensagens, atestados nem localização. O código de acesso aparece na próxima tela, com o botão para mandar pelo WhatsApp.</p>
+          <button class="btn sm" type="submit">Cadastrar e gerar o acesso</button>
+        </form></details>
+    </div>
+    {% endif %}
     {% if e_orientador and estagio.observacoes_orientador %}
     <div class="card"><h3>Minhas anotações</h3><p class="quebra mb-0">{{ estagio.observacoes_orientador }}</p><small>Só você vê isto.</small></div>
     {% endif %}

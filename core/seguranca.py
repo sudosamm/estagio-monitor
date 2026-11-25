@@ -71,13 +71,21 @@ def senha_inicial_antiga(user, password):
 
 
 def usuario_do_identificador(texto):
-    """Entrar com o e-mail: vale quando um único cadastro ativo usa aquele e-mail. Senão, o texto segue como usuário."""
+    """Entrar com o e-mail ou o CPF: vale quando um único cadastro ativo usa aquele e-mail/CPF. Senão, o texto segue
+    como usuário."""
     texto = (texto or "").strip()
-    if "@" not in texto:
-        return texto
     from .models import Usuario
 
-    achados = list(Usuario.objects.filter(email__iexact=texto, is_active=True).values_list("username", flat=True)[:2])
+    if "@" in texto:
+        filtro = {"email__iexact": texto}
+    else:  # CPF, com ou sem pontuação (útil para os responsáveis)
+        digitos = "".join(c for c in texto if c.isdigit())
+        if len(digitos) != 11 or len(digitos) != len(texto.replace(".", "").replace("-", "").replace(" ", "")):
+            return texto
+        from .validators import formatar_cpf
+
+        filtro = {"cpf": formatar_cpf(digitos)}
+    achados = list(Usuario.objects.filter(is_active=True, **filtro).values_list("username", flat=True)[:2])
     return achados[0] if len(achados) == 1 else texto
 
 

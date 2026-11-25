@@ -15,7 +15,7 @@ from PIL import Image
 from .forms import EscalaForm
 from .models import (
     Agendamento, AvisoExterno, Candidatura, Configuracao, VagaCandidatura, Curso, DiaPlanejado, DiaSemEstagio, Documento, Escala, Estagio, ImpressaoFrequencia,
-    FolhaEnviada, HistoricoRegistro, LocalEstagio, Notificacao, Registro, TrocaSupervisor, Turma, Usuario,
+    Comunicado, FolhaEnviada, HistoricoRegistro, LocalEstagio, Notificacao, Registro, TrocaSupervisor, Turma, Usuario,
 )
 from .services import criar_usuario, gerar_username, linhas_folha, resumo_horas, status_periodo
 from .validators import cnpj_valido, cpf_valido
@@ -4432,3 +4432,178 @@ class ModoAdministradorTests(Base):
         self.assertNotContains(self.client.get(reverse("agendamentos")), "Visita da turma de redes")
         # pelo link, o administrador ainda abre a visita de outro orientador
         self.assertEqual(self.client.get(visita_do_outro.get_absolute_url()).status_code, 200)
+
+
+class MapaDosEstagiosTests(Base):
+    def setUp(self):
+        super().setUp()
+        from decimal import Decimal as D
+
+        Escala.objects.filter(estagio=self.est).update(dias="0,1,2,3,4")
+        self.local.latitude, self.local.longitude = D("-3.7319"), D("-38.5267")
+        self.local.save()
+        outra = _ativo(criar_usuario("Lia Prado Nunes", Usuario.Papel.ESTAGIARIO))
+        self.est2 = Estagio.objects.create(estagiario=outra, orientador=self.ori, supervisor=self.sup, curso=self.curso,
+                                           turma=self.turma, local=self.local, data_inicio=date(2026, 11, 2))
+        Escala.objects.create(estagio=self.est2, vigente_desde=date(2026, 11, 2), dias="0,1,2,3,4", horas_por_dia=4)
+
+    def test_estagiario_informa_o_supervisor_ao_marcar_presenca(self):
+        self.entrar(self.aluno)
+        self.assertContains(self.client.get(self.est.get_absolute_url()), "Seu supervisor está aí agora?")
+        self.client.post(reverse("marcar_presenca", args=[self.est.pk]), {"supervisor": "sim"})
+        reg = Registro.objects.get(estagio=self.est, data=QUARTA)
+        self.assertTrue(reg.supervisor_presente)
+        aluna2 = self.est2.estagiario
+        self.entrar(aluna2)
+        self.client.post(reverse("marcar_presenca", args=[self.est2.pk]))  # sem responder: fica sem informação
+        self.assertIsNone(Registro.objects.get(estagio=self.est2, data=QUARTA).supervisor_presente)
+
+    def test_situacao_do_dia_por_concedente(self):
+        from datetime import time as hora
+
+        from . import mapa
+
+        Registro.objects.create(estagio=self.est, data=QUARTA, situacao=Registro.Situacao.PRESENTE, horas=4,
+                                hora_chegada=hora(7, 58), supervisor_presente=True)
+        locais = mapa.situacao(Estagio.objects.filter(pk__in=[self.est.pk, self.est2.pk]), QUARTA)
+        self.assertEqual(len(locais), 1)
+        p = locais[0]
+        self.assertEqual((p["cor"], p["presentes"], p["contagem"]["nao_chegou"], p["total"]), ("ambar", 1, 1, 2))
+        self.assertEqual(p["supervisor"]["presente"], True)
+        self.assertIn("Maria às 07:58", p["supervisor"]["texto"])
+        self.assertEqual([i["codigo"] for i in p["estagiarios"]], ["nao_chegou", "no_local"])
+        Registro.objects.create(estagio=self.est2, data=QUARTA, situacao=Registro.Situacao.FALTA, horas=0)
+        self.assertEqual(mapa.situacao(Estagio.objects.filter(local=self.local), QUARTA)[0]["cor"], "vermelho")
+
+    def test_pagina_do_mapa_so_com_os_estagiarios_visiveis(self):
+        outro_ori = _ativo(criar_usuario("Davi Redes", Usuario.Papel.ORIENTADOR))
+        longe = LocalEstagio.objects.create(nome="Provedor Rede Sul")
+        aluno = _ativo(criar_usuario("Igor Redes Lima", Usuario.Papel.ESTAGIARIO))
+        Estagio.objects.create(estagiario=aluno, orientador=outro_ori, curso=self.curso, local=longe,
+                               data_inicio=date(2026, 11, 2))
+        self.entrar(self.ori)
+        r = self.client.get(reverse("mapa_estagios"))
+        self.assertContains(r, "Empresa X")
+        self.assertContains(r, 'id="dados-mapa"')
+        self.assertContains(r, "vendor/leaflet/leaflet.js")
+        self.assertNotContains(r, "Provedor Rede Sul")
+        self.assertContains(r, "Montar roteiro")
+        self.entrar(self.aluno)
+        self.assertEqual(self.client.get(reverse("mapa_estagios")).status_code, 403)
+
+    def test_ficha_da_concedente_tem_o_mapa_para_marcar(self):
+        self.ori.is_superuser = True
+        self.ori.save()
+        self.entrar(self.ori)
+        r = self.client.get(reverse("local_editar", args=[self.local.pk]))
+        self.assertContains(r, "data-ponto-mapa")
+        self.assertContains(r, "Procurar pelo endereço")
+
+
+class ResponsaveisLegaisTests(Base):
+    CPF_MAE = "529.982.247-25"
+
+    def setUp(self):
+        super().setUp()
+        self.aluno.cpf = "111.444.777-35"
+        self.aluno.save()
+        Escala.objects.filter(estagio=self.est).update(dias="0,1,2,3,4")
+
+    def _cadastrar(self, **extra):
+        self.entrar(self.ori)
+        dados = {"acao": "adicionar", "resp-nome": "Joana da Silva Souza", "resp-cpf": self.CPF_MAE,
+                 "resp-telefone": "(85) 99876-1234", "resp-parentesco": "mãe", "resp-origem": "TCE", **extra}
+        return self.client.post(reverse("responsaveis_estagio", args=[self.est.pk]), dados)
+
+    def test_escola_cadastra_e_manda_o_acesso_pelo_whatsapp(self):
+        from .models import VinculoResponsavel
+
+        r = self._cadastrar()
+        mae = Usuario.objects.get(papel=Usuario.Papel.RESPONSAVEL)
+        self.assertEqual((mae.cpf, mae.telefone, mae.deve_trocar_senha), (self.CPF_MAE, "(85) 99876-1234", True))
+        self.assertEqual(VinculoResponsavel.objects.get().parentesco, "mãe")
+        self.assertContains(r, "https://wa.me/5585998761234?text=")
+        self.assertContains(r, "acompanhar%20o%20est%C3%A1gio%20de%20Maria")
+        self.assertContains(self.client.get(self.est.get_absolute_url()), "Joana da Silva Souza")
+
+    def test_area_do_responsavel_e_so_de_leitura(self):
+        from datetime import time as hora
+
+        self._cadastrar()
+        mae = Usuario.objects.get(papel=Usuario.Papel.RESPONSAVEL)
+        _ativo(mae)
+        Registro.objects.create(estagio=self.est, data=QUARTA, situacao=Registro.Situacao.PRESENTE, horas=4,
+                                hora_chegada=hora(7, 55), diario="Conversa reservada do diário")
+        self.entrar(mae)
+        r = self.client.get(reverse("inicio"), follow=True)
+        self.assertEqual(r.redirect_chain[-1][0], reverse("responsavel_estagio", args=[self.est.pk]))
+        self.assertContains(r, "Chegou às 07:55")
+        self.assertNotContains(r, "Conversa reservada do diário")
+        self.assertNotContains(r, reverse("estagio_dia", args=[self.est.pk, "2026-11-11"]))
+        # telas do estágio, do dia e de marcar presença ficam fechadas
+        self.assertRedirects(self.client.get(self.est.get_absolute_url()), reverse("responsavel_inicio"),
+                             fetch_redirect_response=False)
+        self.assertEqual(self.client.post(reverse("marcar_presenca", args=[self.est.pk])).status_code, 403)
+        outro = Estagio.objects.create(estagiario=_ativo(criar_usuario("Rui Prado Lima", Usuario.Papel.ESTAGIARIO)),
+                                       orientador=self.ori, curso=self.curso, data_inicio=date(2026, 11, 2))
+        self.assertEqual(self.client.get(reverse("responsavel_estagio", args=[outro.pk])).status_code, 404)
+        self.assertEqual(self.client.get(self.aluno.foto_url or reverse("foto_usuario", args=[self.aluno.pk])).status_code,
+                         404)  # sem foto: 404, mas não 403
+
+    def test_avisos_da_turma_e_faltas_chegam_ao_responsavel(self):
+        self._cadastrar()
+        mae = Usuario.objects.get(papel=Usuario.Papel.RESPONSAVEL)
+        self.client.post(reverse("comunicados"), {"para": "estagiarios", "titulo": "Relatório até sexta",
+                                                  "texto": "Tragam o relatório.", "responsaveis": "on"})
+        c = Comunicado.objects.get()
+        self.assertTrue(c.destinatarios.filter(pk=mae.pk).exists())
+        with self.captureOnCommitCallbacks(execute=True):
+            Registro.objects.create(estagio=self.est, data=QUARTA, situacao=Registro.Situacao.FALTA, horas=0)
+        self.assertTrue(Notificacao.objects.filter(usuario=mae, texto__contains="registramos uma falta em 11/11").exists())
+        self.entrar(_ativo(mae))
+        self.assertContains(self.client.get(c.get_absolute_url()), "Tragam o relatório.")
+
+    def test_entrar_com_cpf_e_estudante_ve_quem_acompanha(self):
+        self._cadastrar()
+        mae = Usuario.objects.get(papel=Usuario.Papel.RESPONSAVEL)
+        mae.set_password("Caju#Doce2026")
+        mae.deve_trocar_senha = False
+        mae.save()
+        r = self.client.post(reverse("login"), {"username": "52998224725", "password": "Caju#Doce2026"})
+        self.assertEqual(r.status_code, 302)
+        self.entrar(self.aluno)
+        self.assertContains(self.client.get(reverse("perfil")), "Quem acompanha o seu estágio")
+
+    def test_tirar_acesso_desativa_quem_nao_acompanha_mais_ninguem(self):
+        from .models import VinculoResponsavel
+
+        self._cadastrar()
+        v = VinculoResponsavel.objects.get()
+        self.client.post(reverse("responsaveis_estagio", args=[self.est.pk]), {"acao": "encerrar", "id": v.pk})
+        v.refresh_from_db()
+        self.assertFalse(v.ativo)
+        self.assertFalse(Usuario.objects.get(papel=Usuario.Papel.RESPONSAVEL).is_active)
+
+    def test_importacao_irmaos_e_maior_de_idade(self):
+        from .models import VinculoResponsavel
+
+        irmao = _ativo(criar_usuario("Pedro da Silva Souza", Usuario.Papel.ESTAGIARIO, cpf="390.533.447-05"))
+        Estagio.objects.create(estagiario=irmao, orientador=self.ori, curso=self.curso, data_inicio=date(2026, 11, 2))
+        adulto = _ativo(criar_usuario("Tiago Alves Rocha", Usuario.Papel.ESTAGIARIO, cpf="153.509.460-56",
+                                      data_nascimento=date(2007, 1, 10)))
+        Estagio.objects.create(estagiario=adulto, orientador=self.ori, curso=self.curso, data_inicio=date(2026, 11, 2))
+        csv_ = ("estagiario_cpf;estagiario_nome;responsavel_nome;responsavel_cpf;responsavel_telefone;parentesco\n"
+                f"111.444.777-35;;Joana da Silva Souza;{self.CPF_MAE};(85) 99876-1234;mãe\n"
+                f";Pedro da Silva Souza;Joana da Silva Souza;{self.CPF_MAE};;mãe\n"
+                "153.509.460-56;;Rosa Alves Rocha;;;mãe\n"
+                "000.000.000-00;Fulano Inexistente;Ana Lima;;;\n")
+        self.entrar(self.ori)
+        r = self.client.post(reverse("importar_responsaveis"),
+                             {"etapa": "previa", "arquivo": SimpleUploadedFile("r.csv", csv_.encode(), "text/csv")})
+        self.assertEqual(len(r.context["ok"]), 2)
+        self.assertIn("18 anos", r.context["ignoradas"][0][1])
+        self.assertEqual(len(r.context["erros"]), 1)
+        r = self.client.post(reverse("importar_responsaveis"), {"etapa": "confirmar"})
+        self.assertEqual(Usuario.objects.filter(papel=Usuario.Papel.RESPONSAVEL).count(), 1)  # irmãos: uma conta
+        self.assertEqual(VinculoResponsavel.objects.count(), 2)
+        self.assertContains(r, "wa.me/5585998761234")

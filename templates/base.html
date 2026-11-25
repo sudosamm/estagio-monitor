@@ -97,6 +97,9 @@
         </details>
         {% endfor %}
         <button type="button" class="nav-busca" data-busca-abrir title="Buscar estagiário, concedente ou página (atalho: /)">{% icone "busca" %}<span>Buscar</span><kbd>/</kbd></button>
+      {% elif user.is_responsavel %}
+        <a href="{% url 'responsavel_inicio' %}" class="{% if n in 'responsavel_inicio,responsavel_estagio' %}ativo{% endif %}">Acompanhar o estágio</a>
+        <a href="{% url 'meus_comunicados' %}" class="{% if n in 'meus_comunicados,comunicado' %}ativo{% endif %}">Avisos da escola</a>
       {% elif user.is_supervisor and not user.vinculado_a_concedente %}
         <a href="{% url 'minhas_candidaturas' %}" class="{% if n in 'minhas_candidaturas,minha_candidatura,editar_candidatura,candidatura_publica' %}ativo{% endif %}">Cadastro da concedente</a>
       {% elif user.is_supervisor %}
