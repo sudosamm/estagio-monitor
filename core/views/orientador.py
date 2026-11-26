@@ -20,7 +20,7 @@ from ..forms import (
 from ..models import (
     HistoricoRegistro,
     DIAS_ABREV, Agendamento, Configuracao, Curso, DiaSemEstagio, Documento, Escala, Estagio, LocalEstagio, Registro, Turma, Usuario,
-    chave_municipio,
+    chave_municipio, nome_municipio,
 )
 from ..services import (
     agrupar_periodos, ano_em_uso, ano_referencia, anos_disponiveis, cadastrar_dias, pessoas_da_concedente, criar_usuario, estagios_do_municipio, estagios_visiveis,
@@ -724,7 +724,7 @@ def dias_sem_estagio(request):
                 estagios = Estagio.objects.filter(ativo=True).select_related("estagiario", "supervisor")
             pessoas = [p for e in estagios for p in (e.estagiario, e.supervisor)]
             periodo = f"{d['data']:%d/%m}" + (f" a {ate:%d/%m}" if ate != d["data"] else "")
-            onde = f" ({d['municipio'].strip()})" if chave else f" ({d['concedente']})" if d.get("concedente") else ""
+            onde = f" ({nome_municipio(d['municipio'])})" if chave else f" ({d['concedente']})" if d.get("concedente") else ""
             notificar(pessoas, f"Sem estágio em {periodo}{onde}: {d['descricao']}.", reverse("inicio"))
             messages.success(request, f"{n} dia(s) cadastrado(s)" + (f"; {len(estagios)} estágio(s) neste município" if chave else "")
                              + ".")
