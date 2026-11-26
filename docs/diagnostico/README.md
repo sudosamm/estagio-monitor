@@ -21,3 +21,11 @@ Outros documentos desta etapa:
 Nenhum dado real foi aberto, copiado ou usado. As pastas e arquivos com dados pessoais (`TCEs/`, `importacao/`,
 `Relatorio-estagio/`, `data/`, `sicereport.pdf`, `file.csv`, `.env`) não foram lidos; a verificação do histórico do
 Git leu só nomes de arquivos e metadados de commits.
+
+## Etapa 1 (26/11/2026)
+
+- [ADR 0002 — Escopo por escola](../decisoes/0002-escopo-por-escola.md)
+- [ADR 0003 — Backup do volume de dados](../decisoes/0003-backup-do-volume-de-dados.md)
+- [ADR 0004 — Cópia do SQLite para o PostgreSQL](../decisoes/0004-copia-sqlite-postgresql.md)
+- Operação: [backup](../operacao/backup.md) · [troca para o PostgreSQL](../operacao/migracao-postgresql.md) ·
+  [deploy multiescola](../operacao/deploy-multiescola.md)

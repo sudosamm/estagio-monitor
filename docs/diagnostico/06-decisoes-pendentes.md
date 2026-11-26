@@ -1,5 +1,9 @@
 # 06 — Decisões pendentes (para você)
 
+> **Situação em 26/11/2026:** as decisões 1 a 22 foram tomadas por você ao fim da Etapa 0 (resumo na seção 3.1 do
+> prompt e nas ADRs 0001 a 0004). Seguem abertas: a 20 (lista de rótulos da ficha da SEDUC e do TCE, em
+> `docs/referencias/`) e a 24 (datas da captação de 2027). As decisões novas da Etapa 1 estão no relatório da etapa.
+
 Nenhuma destas foi tomada pelo agente. Cada uma tem uma recomendação, mas a decisão é sua.
 
 ## Urgentes (antes da Etapa 1)

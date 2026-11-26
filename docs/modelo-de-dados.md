@@ -25,6 +25,18 @@
 Escola e configuração → Cursos → Turmas → Equipe escolar → Concedentes → Contatos e responsáveis da concedente →
 Supervisores → Estudantes → Responsáveis legais → Estágios e escalas.
 
+> **Etapa 1 (26/11/2026):** `RedeEnsino`, `Escola` e `VinculoEscola` foram criadas (app `escolas`), e a coluna
+> `escola` entrou nas entidades da escola (lista em `core/migrations/0048_associar_escola_atual.py`). Divergências
+> do rascunho, a resolver na versão final do dicionário (Etapa 2):
+> - `nome_escola` e `municipio_escola` **continuam** na `Configuracao` (a tela de Configurações edita por lá) e são
+>   copiados para `Escola` ao salvar; `logo_folha`, `cabecalho_folha`, `contato_privacidade` e `sice_url` também
+>   continuam na `Configuracao` em 2027. A `Escola` tem `brasao`/`cabecalho_folha` próprios, ainda sem tela;
+> - a escola é gravada também em `ErroSistema`, `RegistroAcao`, `Sugestao`, `Notificacao` e `ModeloEmail`
+>   (opcional: vazio = da plataforma); `VinculoResponsavel`, `Encerramento`, `Anonimizacao`, `AvisoExterno`,
+>   `FolhaEnviada` e `LinkConfirmacao` têm a escola obrigatória;
+> - o papel `CONTATO` (contato de concedente) já existe no `VinculoEscola`, mas só será usado com o
+>   `ContatoConcedente` (Etapas 2 e 4).
+
 ---
 
 ## RedeEnsino — nova (opcional)

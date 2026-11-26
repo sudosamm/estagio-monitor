@@ -24,6 +24,12 @@ def _p(*publico):
 
 
 VERSOES = (
+    Versao("2026.11.26", "Preparação para várias escolas", (
+        (GESTAO, "O sistema agora está pronto para atender mais de uma escola, com os dados de cada uma separados. "
+                 "Para a nossa escola nada muda: as mesmas telas, os mesmos textos e a mesma folha de frequência."),
+        (_p("todos"), "Quem participa de mais de uma escola (por exemplo, supervisor numa e responsável noutra) "
+                      "continua com um login só e troca de escola pelo menu da conta."),
+    )),
     Versao("2026.11.25", "Mapa dos estágios", (
         (GESTAO, "Acompanhamento → Mapa dos estágios: cada concedente com a cor do dia (todos presentes, alguém não "
                  "chegou, falta), quem está no local e o que os estagiários informaram do supervisor. Marque concedentes "

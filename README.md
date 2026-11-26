@@ -509,6 +509,31 @@ Responsável pela concedente (conta de supervisor marcada pela escola): cadastra
 - A previsão de término simula os próximos dias da escala, sem contar feriados e recessos.
 - Para quem já tinha horas antes de começar a usar o sistema, preencha *Horas já cumpridas antes do sistema* na edição do estágio.
 
+## Várias escolas (preparação para o piloto de 2027)
+
+O sistema está pronto para atender várias escolas na mesma instalação, com os dados de cada uma separados. Hoje ele
+continua com **uma escola só**, e nada muda para quem usa (ver `docs/decisoes/0001` e `0002`).
+
+- **Escola e rede.** Cada escola tem nome, identificador no endereço (`slug`), código INEP, município, UF, fuso,
+  contatos, encarregado de dados e identidade visual (logotipo, brasão e cabeçalho da folha). A **rede de ensino**
+  guarda o que é comum (secretaria, sistema oficial, brasão e cabeçalho padrão). A escola atual faz parte da rede
+  SEDUC/CE, então os textos continuam dizendo “SICE” e a folha sai com o mesmo brasão.
+- **Uma conta por pessoa, vínculos por escola.** A mesma pessoa pode ser, por exemplo, supervisora numa escola e
+  responsável legal noutra, com um login só. Quem tem vínculo com duas ou mais escolas vê o seletor de escola no
+  menu da conta. O `Usuario.papel` continua como papel principal e é mantido em sincronia com os vínculos.
+- **Administrador da escola × da plataforma.** O administrador da escola cuida da gestão escolar. O `/admin/` do
+  Django é só do administrador da plataforma (técnico), que nele vê todas as escolas e cadastra escolas, redes e
+  vínculos. Com uma escola só, quem era administrador continua sendo as duas coisas.
+- **Escopo obrigatório.** Toda consulta aos dados de uma escola sai filtrada pela escola em uso, inclusive as listas,
+  buscas, exportações, formulários e endereços diretos (um id de outra escola dá “não encontrado”). Sem escola
+  definida e com mais de uma escola no banco, a consulta **falha** em vez de mostrar tudo.
+- **Arquivos novos** vão para `escolas/<id>/…` com nome aleatório. Os antigos ficam onde estão, e todo download
+  confere a escola.
+- **Tarefas com hora marcada** (resumo semanal, lembretes, “Confirmar todas”, resumo do mês) rodam escola por escola,
+  com a configuração e o fuso de cada uma.
+- **Captação pública por escola:** `/seja-concedente/<identificador-da-escola>/`. O endereço antigo continua
+  valendo para a escola atual.
+
 ## Rodar no computador (desenvolvimento)
 
 ```bash
@@ -533,15 +558,31 @@ DEBUG=1 COOKIES_SEGUROS=0 .venv/bin/python manage.py runserver
 
 Acesse http://localhost:8000. O comando `popular_demo` cria contas fictícias (a lista está no topo de `core/management/commands/popular_demo.py`), todas com a senha padrão e já ativadas (o primeiro acesso não vale para elas).
 
-Testes automatizados:
+Testes automatizados (todos os apps):
 
 ```bash
-.venv/bin/python manage.py test core
+.venv/bin/python manage.py test
+```
+
+Com PostgreSQL 18 local (o mesmo da produção), pelo `docker-compose.dev.yml`:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+```
+
+```bash
+DATABASE_URL=postgres://estagio:estagio-dev@127.0.0.1:5432/estagio .venv/bin/python manage.py test
+```
+
+Ative uma vez o *hook* que recusa commits de bancos, chaves, planilhas e PDFs fora de `docs/` e `static/`:
+
+```bash
+git config core.hooksPath .githooks
 ```
 
 ## Colocar na VPS (Coolify + Cloudflare Tunnel)
 
-O serviço sobe com **Gunicorn na porta 8000** dentro do container. O banco (SQLite) e os anexos ficam no volume `/data`, então **não se perdem** ao atualizar.
+O serviço sobe com **Gunicorn na porta 8000** dentro do container. Os anexos e a chave das notificações ficam no volume `/data`, então **não se perdem** ao atualizar. O banco é o SQLite em `/data` ou, com `DATABASE_URL`, um **PostgreSQL 18** criado como recurso de banco próprio no Coolify (sem porta pública, pela URL interna). Um deploy da aplicação nunca recria esse banco. A troca de SQLite para PostgreSQL tem procedimento próprio: `docs/operacao/migracao-postgresql.md`.
 
 1. Suba este projeto para um repositório Git (privado).
 2. No Coolify: **New Resource → Docker Compose** (ou *Dockerfile*) apontando para o repositório.
@@ -571,7 +612,21 @@ python manage.py criar_orientador "Nome Completo"
 - Arquivos enviados pelos usuários nunca são públicos. Só PDF e fotos abrem no navegador; o resto baixa, e todos vão com CSP *sandbox*, sem rodar script.
 
 ### Backup
-Tudo fica em `/data` (`db.sqlite3` e a pasta `anexos/`). Copiar esse volume já é um backup completo.
+- **Volume `/data`** (banco SQLite, anexos e chave VAPID): `python manage.py backup_dados` faz uma cópia consistente,
+  cifra (AES-256-GCM, com `BACKUP_CHAVE`, guardada fora do servidor) e envia para o **Cloudflare R2**, com retenção de
+  7 diários, 4 semanais e 6 mensais. Agende nas *Scheduled Tasks* do Coolify, todo dia de madrugada.
+- **Teste de restauração** (mensal): `python manage.py backup_dados --testar-restauracao` baixa o último backup,
+  decifra, extrai numa pasta temporária e confere com o manifesto (linhas por tabela, arquivos).
+- **PostgreSQL**: backup agendado do próprio recurso no Coolify, também para o R2.
+- **Antes de um deploy com migrations**: rode o backup na hora (ou o backup manual do PostgreSQL) e anote a migration.
+- Passo a passo, restauração e guarda das chaves: `docs/operacao/backup.md`.
+
+### Tarefas agendadas
+Nas *Scheduled Tasks* do recurso da aplicação no Coolify:
+- a cada 10 minutos: `python manage.py tarefas_periodicas` (resumos, lembretes, confirmações e limpezas, escola por
+  escola). O disparo pelo próprio movimento do sistema continua como reserva; nada sai duas vezes;
+- todo dia às 3h: `python manage.py backup_dados`;
+- todo dia 1º às 4h: `python manage.py backup_dados --testar-restauracao`.
 
 ## Primeiros passos como orientador
 1. **Turmas e cursos**: cadastre os cursos com a carga horária (ex.: Informática, 300h) e as turmas de cada ano (ex.: turma de 2024, estágio em 2026).
@@ -600,6 +655,12 @@ core/avaliacoes.py  Avaliações do estagiário e o texto para copiar no SICE
 core/sice.py        Listas do SICE (atividades práticas por curso)
 core/novidades.py   “O que há de novo”: versões e itens por tipo de usuário
 core/sugestoes.py   Envio das sugestões e erros por e-mail, com anexos
+core/backup.py      Backup cifrado do volume /data para o R2 (S3), retenção 7/4/6 e restauração conferida
+core/migracao_banco.py  Troca de banco: verificação do SQLite e comparação entre bancos
+core/cifragem.py    Campos cifrados no banco (segredo da verificação em duas etapas)
+core/tarefas.py     Tarefas com hora marcada, escola por escola
+escolas/            Escolas, redes, vínculos e o escopo por escola (escopo.py, middleware.py)
+docs/               Diagnóstico, decisões (ADRs), dicionário de dados e procedimentos de operação
 templates/          HTML (visual inspirado no portal ce.gov.br)
 static/             CSS e JS próprios, sem frameworks
 ```

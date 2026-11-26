@@ -1,5 +1,10 @@
 # 04 — Plano de migração do SQLite para o PostgreSQL 18
 
+> **Atualizado na Etapa 1:** o procedimento para executar está em
+> [docs/operacao/migracao-postgresql.md](../operacao/migracao-postgresql.md). O comando de cópia abaixo foi
+> corrigido (sem `--natural-primary`, com `--all` e no formato `jsonlp`): ver o
+> [ADR 0004](../decisoes/0004-copia-sqlite-postgresql.md).
+
 > **Plano, não execução.** O agente escreve o procedimento e as ferramentas (Etapa 1); **você executa** no servidor.
 > Nenhum banco real foi aberto nesta etapa.
 

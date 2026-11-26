@@ -1,6 +1,7 @@
 # 0001 — Arquitetura para várias escolas
 
-- **Situação:** proposta (Etapa 0, 25/11/2026). Vira "aceita" quando você aprovar a Etapa 1.
+- **Situação:** aceita (aprovada na Etapa 0; implementada na Etapa 1, 26/11/2026). Como o escopo é aplicado:
+  [ADR 0002](0002-escopo-por-escola.md).
 - **Decide:** como várias escolas usam o mesmo sistema com dados isolados, configuração e identidade próprias, sem
   cópia de código por escola.
 

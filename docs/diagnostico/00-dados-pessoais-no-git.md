@@ -1,5 +1,7 @@
 # 00 — Dados pessoais versionados no Git (achado da Etapa 0)
 
+> **Situação em 26/11/2026: resolvido.** Ver "Conclusão" no fim do documento.
+
 > **Prioridade máxima.** Este achado vem antes de qualquer etapa da atualização.
 > A verificação leu **só os nomes dos arquivos e os metadados dos commits** (as "árvores" do Git). Nenhum conteúdo de
 > arquivo com dados pessoais foi aberto, copiado ou usado. Os nomes dos arquivos dentro de `TCEs/` também não foram
@@ -97,3 +99,25 @@ Em ordem de urgência:
   medida mais segura: o que não está na pasta não entra em commit, imagem ou ferramenta.
 - Um *hook* de `pre-commit` que recuse arquivos `.sqlite3`, `.pem`, `.csv` e `.pdf` fora de `docs/` e `static/`.
   Fica como sugestão; não foi criado porque a Etapa 0 só pode criar arquivos em `docs/`.
+
+## Conclusão (Etapa 1, 26/11/2026)
+
+- **Resolvido.** Os dados pessoais saíram do histórico: repositório novo e privado, com o histórico reescrito, e o
+  repositório antigo foi apagado. Os arquivos também saíram da pasta do projeto.
+- **O banco versionado não era o de produção:** era o banco local de testes, populado pelo agente. Não havia banco nem
+  segredo de produção no Git, então não foi preciso trocar o `SECRET_KEY`, refazer a verificação em duas etapas nem
+  gerar novos tokens da agenda.
+- **Comunicação:** o diretor da escola foi informado. O tratamento formal (LGPD) fica para o fim de 2026.
+- **Prevenção, já no repositório:**
+  - `.gitignore` e `.dockerignore` cobrem `data/`, `TCEs/`, `importacao/`, `Relatorio-estagio/`, `file.csv`, `*.pdf`
+    e `*.csv` da raiz (a imagem Docker não leva mais esses arquivos);
+  - **hook de `pre-commit`** em `.githooks/pre-commit`: recusa `.sqlite3`, `.db`, `.pem`, `.key`, `.csv`, `.xlsx`,
+    `.xls` e `.pdf` fora de `docs/` e `static/`, e qualquer arquivo de `data/`, `TCEs/`, `importacao/`,
+    `Relatorio-estagio/` e `.env`. Ative uma vez em cada clone:
+
+    ```bash
+    git config core.hooksPath .githooks
+    ```
+
+  - o segredo da verificação em duas etapas agora é guardado cifrado (chave fora do banco), e os backups saem
+    cifrados: uma cópia esquecida do banco ou do volume não revela esses dados sozinha.
