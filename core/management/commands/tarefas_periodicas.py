@@ -14,7 +14,12 @@ class Command(BaseCommand):
     help = "Roda as tarefas periódicas (resumos, lembretes, confirmações, limpezas) de todas as escolas."
 
     def handle(self, *args, **opts):
+        from core.threads import aguardar_threads
+
         falhas = rodar_tarefas()
+        # e-mails e pushes saem em threads daemon: sem esperar, morreriam com o processo (e a semana já foi reservada)
+        if restantes := aguardar_threads():
+            self.stderr.write(f"{restantes} envio(s) em segundo plano ainda não terminaram após 120 s.")
         com_falha = {k: v for k, v in falhas.items() if v}
         self.stdout.write(f"Tarefas rodadas: {len(falhas) - 1} escola(s) e a plataforma.")
         if com_falha:

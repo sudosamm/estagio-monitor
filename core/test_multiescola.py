@@ -215,6 +215,17 @@ class IsolamentoTests(TestCase):
         self.assertEqual(set(falhas), {self.escola_a.slug, "escola-b", "plataforma"})
         self.assertEqual({k: v for k, v in falhas.items() if v}, {})
 
+    def test_comando_tarefas_periodicas_espera_os_envios_em_segundo_plano(self):
+        """As threads de e-mail são daemon: sem esperar, morreriam com o processo do Scheduled Task."""
+        from io import StringIO
+        from unittest import mock
+
+        from django.core.management import call_command
+
+        with mock.patch("core.threads.aguardar_threads", return_value=0) as aguardar:
+            call_command("tarefas_periodicas", stdout=StringIO())
+        aguardar.assert_called_once_with()
+
 
 class MigrationMultiescolaTests(TransactionTestCase):
     """A migration de dados preserva as contagens, associa tudo à escola atual e é reversível."""
