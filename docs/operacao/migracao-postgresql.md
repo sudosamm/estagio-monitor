@@ -173,3 +173,57 @@ DATABASE_URL=postgres://estagio:estagio-dev@127.0.0.1:5432/estagio .venv/bin/pyt
   (as contagens devem ser iguais ou só um pouco menores, pelo que entrou depois do backup) e
   `DATABASE_URL=postgres://...temporario... python manage.py check --database default`. Registre data e resultado e
   apague o recurso temporário.
+
+## Diferenças entre o SQLite e o PostgreSQL (verificação de 26/11/2026)
+
+A suíte passava no SQLite e tinha 5 falhas no PostgreSQL 18 (nas duas branches da Etapa 1). As duas causas foram
+corrigidas, e o código foi varrido atrás de outras diferenças que mudariam o que o usuário vê. Os testes estão em
+`core/test_diferencas_bancos.py` e rodam nos dois bancos.
+
+### Causas das 5 falhas
+
+1. **"the connection is closed" (4 testes do resumo semanal).** Com `EMAIL_ASSINCRONO=False`, o envio rodava na
+   própria thread de quem chamou, e o `finally` chamava `connections.close_all()`, fechando a conexão do teste (ou da
+   requisição). O SQLite em memória ignora o `close`; o PostgreSQL fecha de verdade. **Correção:** só a thread criada
+   por `iniciar_thread` (`core/threads.py`) fecha as conexões, ela mesma, num `try/finally` em volta da função. Nenhum
+   ponto de chamada fecha mais nada (e-mail em `services.py`, push, sugestões, resumo semanal). As conexões do Django
+   são por thread, então isso vale também com o Gunicorn em `gthread`. De quebra: o `tarefas_periodicas` (Scheduled
+   Tasks) espera as threads de envio terminarem antes de sair; antes, como são threads daemon, os e-mails podiam
+   morrer com o processo depois de a semana já ter sido "reservada".
+2. **Feriado municipal (1 teste).** Confirmado: o teste procurava `texto__contains="General Sampaio"`, e a notificação
+   trazia o município como foi digitado ("GENERAL SAMPAIO - CE"). O `contains` vira `LIKE`, que no SQLite ignora
+   maiúsculas e minúsculas (só de A a Z) e no PostgreSQL não. **Correção:** a notificação mostra o município
+   formatado (`nome_municipio`: "General Sampaio"), e o teste continua com `contains`.
+
+### Varredura
+
+| Diferença | SQLite | PostgreSQL | Onde aparece no código | Resultado |
+|---|---|---|---|---|
+| `__contains`, `__startswith`, `__endswith` (LIKE) | ignora maiúsculas de A a Z | diferencia | limite de tentativas (`username__contains=":"`, prefixos `1o:`, `senha:`…), busca por IP no Registro de ações | Os prefixos e os usuários das tentativas são gravados sempre em minúsculas: igual nos dois. **Corrigido:** a busca por IP passou a `istartswith` (IPv6 tem letras). |
+| `__iexact`, `__icontains` | ignora maiúsculas só de A a Z ("É" ≠ "é") | ignora todas (`UPPER`), com acentos | login por e-mail, "Esqueci minha senha", primeiro acesso, aviso de senha errada, importação (orientador, estagiário pelo nome, concedente), sugestões da captação, turmas, filtros das listas (estagiários, contas, concedentes, banco de talentos, registro de ações) | O PostgreSQL acha o mesmo ou mais, nunca menos. Acentos continuam diferenciando nos dois ("joao" não acha "João" no filtro das listas, como hoje). Única mudança: nomes que só diferem por maiúscula acentuada passam a ser iguais (ex.: na importação, "JOSÉ" e "José" viram homônimos). O `verificar_para_postgres` avisa se houver casos. |
+| Igualdade (`=`) | diferencia maiúsculas | diferencia (ICU pt-BR determinística) | login pelo usuário (exato), CPF (formatado), e-mail exato | Igual nos dois. |
+| Busca global (Ctrl+K) | — | — | `views/roteiro.py`: compara em Python, sem acentos e sem maiúsculas (`chave_texto`) | Não depende do banco. |
+| Municípios, cursos, concedentes e supervisores por nome | — | — | `chave_municipio`, `_chave` da importação: comparação em Python | Não depende do banco. O `iexact` antes do Python só restringe a lista, e há o caminho completo quando ele não acha. |
+| Ordem alfabética | bytes (maiúsculas antes, acentos no fim) | ICU pt-BR ("Álvaro" junto de "Alvaro") | todas as listas por nome | Melhora, sem correção. Onde a importação pega "o primeiro" de nomes repetidos, a escolha pode mudar: o `verificar_para_postgres` avisa. |
+| Vazios (NULL) na ordem | primeiro na crescente, por último na decrescente | o contrário | histórico da agenda, última visita da ficha, atestados decididos, responsáveis (ativos primeiro), exportação das visitas, solicitações do painel | **Corrigido:** ordem explícita (`nulls_first`/`nulls_last`), igual à de sempre. A ordem padrão de `Agendamento` (`-data_hora`) ficou como está (mudar pediria migration); as telas onde há visita sem data já usam ordem explícita. |
+| Caractere NUL (`\x00`) | aceita | recusa (erro 500) | qualquer busca, o login, parâmetros de URL | **Corrigido:** `CaractereNuloMiddleware` responde 400 antes de consultar o banco. Os dados antigos com NUL já são apontados pelo `verificar_para_postgres`. |
+| Tamanho do texto | não confere | recusa acima do `max_length` | cabeçalhos guardados (navegador, endereço de origem) | O código já corta no limite; os dados antigos são conferidos pelo `verificar_para_postgres`. |
+| Datas e fuso | texto em UTC | `timestamptz` | `__date`, `__year`, `__month`, `TruncMonth` | O Django converte igual nos dois (suíte verde). Os microssegundos são preservados na cópia (`jsonlp`). |
+| Booleanos | 0/1 | `true`/`false` | só pelo ORM; o único SQL escrito à mão (migration 0046) não usa booleanos | Igual nos dois. Valores fora de 0/1 no SQLite são apontados pelo `verificar_para_postgres`. |
+| Erro dentro de transação | segue | a transação inteira fica abortada | `sessoes._adotar` (`except IntegrityError`) | Usa `get_or_create`, que já abre um savepoint: igual nos dois. |
+
+### O que o `verificar_para_postgres` passou a avisar
+
+Além dos **problemas** (que impedem a cópia), o comando lista **avisos**, que não a impedem. São só ids, sem
+conteúdo:
+
+- usuários que só diferem por maiúsculas e minúsculas (o login exige a grafia exata; o aviso de senha errada e o
+  primeiro acesso procuram sem diferenciar e podem achar a outra conta);
+- o mesmo e-mail, ignorando maiúsculas, em mais de uma conta ativa (o login pelo e-mail não vale para elas);
+- estagiários cujos nomes só diferem por maiúscula acentuada (no PostgreSQL, a importação passa a vê-los como
+  homônimos);
+- concedentes com o mesmo nome (sem acentos e maiúsculas) e o mesmo CNPJ/CPF, e cursos com o mesmo nome: a
+  importação usa o primeiro em ordem alfabética, e essa ordem muda.
+
+Com avisos, confira os casos pela tela do sistema (contas, concedentes, cursos) antes do passo 7, e corrija o que
+for duplicata de verdade. Se não for, a cópia pode seguir.
