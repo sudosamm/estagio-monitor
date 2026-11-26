@@ -74,7 +74,7 @@ def acoes(request):
     q, tipo = request.GET.get("q", "").strip(), request.GET.get("tipo", "")
     de, ate = _data(request.GET.get("de")), _data(request.GET.get("ate"))
     if q:
-        qs = qs.filter(Q(quem__icontains=q) | Q(alvo__icontains=q) | Q(descricao__icontains=q) | Q(ip__startswith=q))
+        qs = qs.filter(Q(quem__icontains=q) | Q(alvo__icontains=q) | Q(descricao__icontains=q) | Q(ip__istartswith=q))
     if tipo:
         qs = qs.filter(tipo=tipo)
     if de:

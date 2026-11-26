@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -22,7 +22,7 @@ from ..forms import (
 from ..models import (
     HistoricoRegistro,
     DIAS_ABREV, Agendamento, Configuracao, Curso, DiaSemEstagio, Documento, Escala, Estagio, LocalEstagio, Registro, Turma, Usuario,
-    chave_municipio,
+    chave_municipio, nome_municipio,
 )
 from ..services import (
     agrupar_periodos, ano_em_uso, ano_referencia, anos_disponiveis, cadastrar_dias, pessoas_da_concedente, criar_usuario, estagios_do_municipio, estagios_visiveis,
@@ -101,6 +101,7 @@ def painel(request):
     ).select_related("solicitante").prefetch_related("estagios__estagiario")
     if request.user.is_superuser:
         solicitacoes = Agendamento.objects.filter(status=Agendamento.Status.SOLICITADO)
+    solicitacoes = solicitacoes.order_by(F("data_hora").desc(nulls_last=True), "-criado_em")  # vazios no fim (PostgreSQL)
     proximas = Agendamento.objects.filter(
         orientador=request.user, status=Agendamento.Status.AGENDADO, data_hora__gte=timezone.now() - timedelta(hours=2)
     ).prefetch_related("estagios__estagiario").select_related("local").order_by("data_hora")[:8]
@@ -727,7 +728,7 @@ def dias_sem_estagio(request):
                 estagios = Estagio.objects.filter(ativo=True).select_related("estagiario", "supervisor")
             pessoas = [p for e in estagios for p in (e.estagiario, e.supervisor)]
             periodo = f"{d['data']:%d/%m}" + (f" a {ate:%d/%m}" if ate != d["data"] else "")
-            onde = f" ({d['municipio'].strip()})" if chave else f" ({d['concedente']})" if d.get("concedente") else ""
+            onde = f" ({nome_municipio(d['municipio'])})" if chave else f" ({d['concedente']})" if d.get("concedente") else ""
             notificar(pessoas, f"Sem estágio em {periodo}{onde}: {d['descricao']}.", reverse("inicio"))
             messages.success(request, f"{n} dia(s) cadastrado(s)" + (f"; {len(estagios)} estágio(s) neste município" if chave else "")
                              + ".")

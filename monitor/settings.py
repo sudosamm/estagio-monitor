@@ -57,6 +57,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "core.middleware.CaractereNuloMiddleware",  # o PostgreSQL recusa NUL: 400 em vez de erro 500
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "core.middleware.CacheDaRequisicaoMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -216,6 +217,9 @@ VAPID_CONTATO = os.environ.get("VAPID_CONTATO") or (
 # Termos de Uso e Aviso de Privacidade: quem ainda não aceitou a versão atual é levado à tela de aceite.
 # Nos testes fica desligado (cada teste que precisa liga com override_settings).
 EXIGIR_ACEITE_TERMOS = env_bool("EXIGIR_ACEITE_TERMOS", "test" not in sys.argv)
+
+# Só nos testes: tira da saída os logs esperados (403, 404, backup sem chave). Ver core/executor_testes.py.
+TEST_RUNNER = "core.executor_testes.ExecutorDeTestes"
 
 LOGGING = {
     "version": 1,

@@ -2,7 +2,7 @@
 import io
 from datetime import date
 
-from django.db.models import Sum
+from django.db.models import F, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from openpyxl import Workbook
@@ -96,7 +96,7 @@ def gerar_planilha(linhas, tot, descricao, emitido_por, agora):
     ws3 = wb.create_sheet("Visitas e conversas")
     agendamentos = (Agendamento.objects.filter(estagios__in=estagios).distinct()
                     .select_related("local", "orientador").prefetch_related("estagios__estagiario")
-                    .order_by("data_hora", "criado_em"))
+                    .order_by(F("data_hora").asc(nulls_first=True), "criado_em"))
     dados3 = []
     for a in agendamentos:
         quando = timezone.localtime(a.data_hora).replace(tzinfo=None) if a.data_hora else None

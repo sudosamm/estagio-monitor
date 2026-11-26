@@ -3,7 +3,7 @@ import logging
 
 from django.conf import settings
 from django.core.mail import EmailMessage
-from .threads import fechar_conexoes_da_thread, iniciar_thread
+from .threads import iniciar_thread
 from django.utils import timezone
 
 from .models import Configuracao, Sugestao
@@ -64,9 +64,6 @@ def enviar(sugestao_id, assincrono=None):
             Sugestao.objects.filter(pk=sugestao_id).update(enviada_em=timezone.now())
         except Exception:  # noqa: BLE001 — a mensagem já está guardada no sistema; o e-mail é um extra
             log.exception("Falha ao enviar a sugestão %s por e-mail", sugestao_id)
-        finally:
-            if assincrono_:
-                fechar_conexoes_da_thread()
 
     assincrono_ = settings.EMAIL_ASSINCRONO if assincrono is None else assincrono
     if not settings.EMAIL_ATIVO:

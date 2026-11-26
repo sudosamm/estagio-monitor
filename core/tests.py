@@ -3535,11 +3535,13 @@ class AlertaErroTests(Base):
 
         from django.test import RequestFactory
 
+        logger = logging.getLogger("django.request")
         try:
             1 / 0
         except ZeroDivisionError:
-            logging.getLogger("django.request").error("Internal Server Error: %s", caminho, exc_info=True,
-                                                      extra={"request": RequestFactory().get(caminho)})
+            with mock.patch.object(logger, "propagate", False):  # erro de propósito: só o aviso, sem sujar a saída
+                logger.error("Internal Server Error: %s", caminho, exc_info=True,
+                             extra={"request": RequestFactory().get(caminho)})
 
     @override_settings(EMAIL_ATIVO=True)
     def test_erro_registra_e_avisa_sem_repetir(self):

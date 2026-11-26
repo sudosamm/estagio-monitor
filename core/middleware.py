@@ -2,6 +2,25 @@ from django.shortcuts import redirect
 from django.urls import reverse
 
 
+class CaractereNuloMiddleware:
+    """Recusa (400) endereço, parâmetros ou campos de formulário com o caractere NUL (\\x00).
+
+    Nenhum navegador o envia ao digitar. O SQLite aceitava o texto; o PostgreSQL recusa qualquer texto com NUL e a
+    consulta viraria um erro 500 (e um aviso de erro para os administradores), por exemplo numa busca ou no login."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.http import HttpResponseBadRequest
+
+        if "\x00" in request.path or any("\x00" in v for v in request.GET.values()):
+            return HttpResponseBadRequest("Caractere inválido no endereço.")
+        if request.method == "POST" and any("\x00" in v for vs in request.POST.lists() for v in [vs[0], *vs[1]]):
+            return HttpResponseBadRequest("Caractere inválido no formulário.")
+        return self.get_response(request)
+
+
 class CacheDaRequisicaoMiddleware:
     """Abre um cache que vale só durante esta requisição (ex.: a configuração geral, lida várias vezes por página)."""
 

@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
@@ -50,7 +50,7 @@ def agendamentos(request):
         "historico": qs.filter(
             Q(status__in=[Agendamento.Status.REALIZADO, Agendamento.Status.CANCELADO])
             | Q(status=Agendamento.Status.AGENDADO, data_hora__lt=agora)
-        ).order_by("-data_hora", "-criado_em")[:50],
+        ).order_by(F("data_hora").desc(nulls_last=True), "-criado_em")[:50],
     })
 
 
@@ -145,7 +145,8 @@ def ficha_contexto(estagio, user, hoje=None):
         "sem_registro": sum(1 for s in recentes if s.codigo == "sem_registro"),
         "a_validar": estagio.registros.filter(situacao=Registro.Situacao.PRESENTE,
                                               confirmacao=Registro.Confirmacao.PENDENTE, data__lt=hoje).count(),
-        "ultima_visita": visitas.filter(status=Agendamento.Status.REALIZADO).order_by("-data_hora").first(),
+        "ultima_visita": visitas.filter(status=Agendamento.Status.REALIZADO)
+                                .order_by(F("data_hora").desc(nulls_last=True)).first(),
         "proxima_visita": visitas.filter(status=Agendamento.Status.AGENDADO, data_hora__gte=timezone.now())
                                  .order_by("data_hora").first(),
         "outros": list(outros), "mapa": mapa,

@@ -4,6 +4,7 @@ import mimetypes
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db.models import F
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -119,7 +120,8 @@ def atestados(request):
     estagios = estagios_visiveis(request.user)
     filtro = request.GET.get("status", "")
     decididos = (Justificativa.objects.filter(estagio__in=estagios).exclude(status=Justificativa.Status.PENDENTE)
-                 .select_related("estagio__estagiario", "decidido_por").order_by("-decidido_em"))
+                 .select_related("estagio__estagiario", "decidido_por")
+                 .order_by(F("decidido_em").desc(nulls_last=True), "-criado_em"))
     if filtro in (Justificativa.Status.ACEITA, Justificativa.Status.RECUSADA):
         decididos = decididos.filter(status=filtro)
     return render(request, "core/atestados.html", {

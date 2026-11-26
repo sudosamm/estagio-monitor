@@ -251,16 +251,8 @@ def enviar_emails(mensagens):
 
     from .threads import iniciar_thread
 
-    def enviar_em_segundo_plano():
-        from .threads import fechar_conexoes_da_thread
-
-        try:
-            enviar()
-        finally:
-            fechar_conexoes_da_thread()  # o aviso de erro grava no banco
-
     if settings.EMAIL_ASSINCRONO:
-        iniciar_thread(enviar_em_segundo_plano)
+        iniciar_thread(enviar)  # a thread fecha a própria conexão (o aviso de erro grava no banco)
     else:
         enviar()
 
