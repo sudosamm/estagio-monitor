@@ -9,6 +9,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from escolas.marca import sistema_oficial
+
 from ..avaliacoes import (
     SIGLAS_MES, RespostasForm, linhas, mes_de, meses_do_estagio, nome_mes, perguntas, pode_ler, quadro,
 )
@@ -83,7 +85,7 @@ def responder_avaliacao(request, tipo, mes):
                 notificar([estagio.orientador], f"{estagio.estagiario.primeiro_nome} concluiu a {TIPOS[tipo].lower()} "
                           f"de {nome_mes(mes)}.", "/avaliacoes/escola/")
             if concluir:
-                messages.success(request, "Avaliação concluída. Agora é só copiar as respostas para o SICE.")
+                messages.success(request, f"Avaliação concluída. Agora é só copiar as respostas para o {sistema_oficial()}.")
                 return redirect("copiar_avaliacao", tipo=tipo.lower(), mes=f"{mes:%Y-%m}")
             messages.success(request, "Respostas salvas. Dá para continuar depois.")
             return redirect("responder_avaliacao", tipo=tipo.lower(), mes=f"{mes:%Y-%m}")
@@ -105,7 +107,7 @@ def copiar_avaliacao(request, tipo, mes):
         av.copiada_sice_em = None if request.POST.get("acao") == "desfazer" else timezone.now()
         av.save(update_fields=["copiada_sice_em", "atualizada_em"])
         if av.copiada_sice_em:
-            messages.success(request, f"Pronto! {TIPOS[tipo]} de {nome_mes(mes)} marcada como colada no SICE.")
+            messages.success(request, f"Pronto! {TIPOS[tipo]} de {nome_mes(mes)} marcada como colada no {sistema_oficial()}.")
         return redirect("minhas_avaliacoes")
     cabecalho = [("Mês de Referência", SIGLAS_MES[mes.month - 1]), ("Ano", str(mes.year))]
     if tipo == PerguntaAvaliacao.Tipo.ORIENTADOR:
@@ -241,6 +243,6 @@ def avisar_avaliacoes(request):
     estagios = list(estagios_visiveis(request.user).filter(ativo=True).select_related("estagiario"))
     pendentes = estagiarios_pendentes(estagios, mes)
     notificar(pendentes, f"Faltam as suas avaliações de {nome_mes(mes)} (autoavaliação e avaliação do orientador). "
-                         "Responda no sistema e copie as respostas para o SICE.", "/avaliacoes/")
+                         f"Responda no sistema e copie as respostas para o {sistema_oficial()}.", "/avaliacoes/")
     messages.success(request, f"Lembrete enviado para {len(pendentes)} estagiário(s).")
     return redirect("avaliacoes_escola")

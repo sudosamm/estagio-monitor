@@ -5,6 +5,8 @@ from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
+from escolas.pessoas import administradores
+
 from .. import novidades as nov
 
 
@@ -91,7 +93,7 @@ def sugestoes(request):
                     navegador=request.META.get("HTTP_USER_AGENT", "")[:300], ip=ip)
                 for a in d["anexos"]:
                     AnexoSugestao.objects.create(sugestao=s, arquivo=a, nome_original=a.name[:255], tamanho=a.size)
-                admins = Usuario.objects.filter(is_superuser=True, is_active=True).exclude(pk=getattr(user, "pk", None))
+                admins = administradores().exclude(pk=getattr(user, "pk", None))
                 notificar(admins, f"{s.get_tipo_display()} enviado por {s.nome}: {' '.join(s.mensagem.split())[:90]}",
                           reverse("admin:core_sugestao_change", args=[s.pk]))
                 transaction.on_commit(lambda: enviar(s.pk))

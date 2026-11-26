@@ -261,12 +261,21 @@ def _ics_dobrar(linha):
 
 def agenda_ics(request, token):
     """Calendário .ics das visitas e conversas, sem login: o link secreto identifica a pessoa."""
+    from escolas.escopo import todas_as_escolas
+    from escolas.middleware import escolas_da_conta
+
     user = Usuario.objects.filter(token_agenda=token, is_active=True).first() if len(token) >= 20 else None
     if not user or _sem_agenda(user):
         raise Http404
+    varias = len(escolas_da_conta(user)) > 1
+    with todas_as_escolas():  # um calendário só para a pessoa, com as visitas de todas as escolas dela
+        return _agenda_ics(request, user, varias)
+
+
+def _agenda_ics(request, user, varias_escolas):
     desde = timezone.now() - timedelta(days=120)
     qs = (_agendamentos_de(user, so_meus=True).filter(data_hora__isnull=False, data_hora__gte=desde)
-          .exclude(status=Agendamento.Status.SOLICITADO).order_by("data_hora"))
+          .exclude(status=Agendamento.Status.SOLICITADO).order_by("data_hora").select_related("escola"))
     host = request.get_host().split(":")[0]
     agora = timezone.now().strftime("%Y%m%dT%H%M%SZ")
     site = settings.SITE_URL or f"{request.scheme}://{request.get_host()}"
@@ -295,6 +304,8 @@ def agenda_ics(request, token):
         status = {Agendamento.Status.CANCELADO: "CANCELLED"}.get(a.status, "CONFIRMED")
         if a.status == Agendamento.Status.CANCELADO:
             resumo = f"[Cancelado] {resumo}"
+        if varias_escolas:
+            resumo = f"{resumo} ({a.escola.nome})"
         linhas += ["BEGIN:VEVENT", f"UID:agendamento-{a.pk}@{host}", f"DTSTAMP:{agora}",
                    f"LAST-MODIFIED:{a.atualizado_em.astimezone(dt_timezone.utc):%Y%m%dT%H%M%SZ}",
                    f"DTSTART:{inicio:%Y%m%dT%H%M%SZ}", f"DTEND:{fim:%Y%m%dT%H%M%SZ}",

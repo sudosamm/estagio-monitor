@@ -8,6 +8,8 @@ from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
+from escolas.pessoas import na_escola
+
 from ..forms import ImportarCSVForm
 from ..importacao import COLUNAS, ErroImportacao, Opcoes, importar, ler_csv, modelo_csv
 from ..models import Curso, Turma, Usuario
@@ -55,7 +57,7 @@ def importar_csv(request):
         conteudo = gerar_modelo(
             cursos=Curso.objects.values_list("nome", flat=True),
             turmas=Turma.objects.filter(ativa=True).values_list("nome", flat=True),
-            orientadores=Usuario.objects.filter(papel=Usuario.Papel.ORIENTADOR, is_active=True).values_list("username", flat=True),
+            orientadores=na_escola(Usuario.objects.filter(papel=Usuario.Papel.ORIENTADOR, is_active=True)).values_list("username", flat=True),
         )
         resposta = HttpResponse(conteudo, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         resposta["Content-Disposition"] = 'attachment; filename="planilha-cadastro-estagio.xlsx"'

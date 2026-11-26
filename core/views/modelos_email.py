@@ -27,7 +27,8 @@ def _exemplo(request):
 def lista(request):
     if not request.user.is_superuser:
         raise PermissionDenied
-    salvos = {m.tipo: m for m in ModeloEmail.objects.all()}
+    salvos = {m.tipo: m for m in ModeloEmail.objects.filter(escola__isnull=True)}  # padrão da plataforma
+    salvos.update({m.tipo: m for m in ModeloEmail.objects.filter(escola=request.escola)})  # versão da escola
     itens = [(chave, t, salvos.get(chave)) for chave, t in emails.TIPOS.items()]
     return render(request, "core/modelos_email.html", {"itens": itens})
 
@@ -39,11 +40,11 @@ def editar(request, tipo):
     if tipo not in emails.TIPOS:
         raise Http404
     t = emails.TIPOS[tipo]
-    salvo = ModeloEmail.objects.filter(tipo=tipo).first()
+    salvo = ModeloEmail.objects.filter(tipo=tipo, escola=request.escola).first()
     assunto, corpo, ativo = emails.modelo(tipo)
     acao = request.POST.get("acao", "salvar")
     if acao == "padrao" and request.method == "POST":
-        ModeloEmail.objects.filter(tipo=tipo).delete()
+        ModeloEmail.objects.filter(tipo=tipo, escola=request.escola).delete()  # volta ao padrão
         messages.success(request, f"“{t.nome}” voltou ao texto padrão.")
         return redirect("modelo_email", tipo=tipo)
     form = ModeloEmailForm(request.POST or None, tipo=tipo, initial={"assunto": assunto, "corpo": corpo, "ativo": ativo})
@@ -51,7 +52,7 @@ def editar(request, tipo):
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         if acao == "salvar":
-            ModeloEmail.objects.update_or_create(tipo=tipo, defaults={
+            ModeloEmail.objects.update_or_create(tipo=tipo, escola=request.escola, defaults={
                 "assunto": d["assunto"], "corpo": d["corpo"], "ativo": d["ativo"], "atualizado_por": request.user})
             messages.success(request, f"Texto de “{t.nome}” salvo.")
             return redirect("modelos_email")

@@ -6,6 +6,7 @@ from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import path, reverse
 
+from escolas import views as escolas_views
 from core.views import acessos, agenda, mapa, responsavel, atestados, avaliacoes, avisos, captacao, comum, confirmacao, conta, dois_fatores, encerramento, equipe, estagio, feedback, frequencia, importacao, legal, novidades, opinioes, roteiro, sistema, visitas, modelos_email, orientador, pasta, primeiro_acesso, pwa, qrcheckin, relatorios, supervisor
 
 
@@ -147,6 +148,9 @@ urlpatterns = [
     path("encerramento/", encerramento.encerramento, name="encerramento"),
     # captação de concedentes
     path("seja-concedente/", captacao.candidatura_publica, name="candidatura_publica"),
+    # com a escola no caminho (várias escolas); a escola é definida pelo EscolaAtualMiddleware
+    path("seja-concedente/<slug:escola>/", captacao.candidatura_publica, name="candidatura_publica_escola"),
+    path("escola/trocar/", escolas_views.trocar_escola, name="trocar_escola"),
     path("captacao/", captacao.captacao_lista, name="captacao"),
     path("captacao/<int:pk>/", captacao.captacao_detalhe, name="captacao_detalhe"),
     path("captacao/<int:pk>/alterar/", captacao.editar_candidatura, name="editar_candidatura"),

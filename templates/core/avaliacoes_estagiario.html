@@ -2,21 +2,21 @@
 {% load ui %}
 {% block titulo %}Avaliações{% endblock %}
 {% block conteudo %}
-<div class="titulo-pagina"><div><h1>Avaliações do estágio</h1><p>No SICE, a autoavaliação e a avaliação do orientador são <strong>mensais</strong>. Responda aqui com calma (dá para salvar e continuar depois) e o sistema mostra tudo pronto para copiar lá.</p></div></div>
+<div class="titulo-pagina"><div><h1>Avaliações do estágio</h1><p>No {{ SISTEMA_OFICIAL }}, a autoavaliação e a avaliação do orientador são <strong>mensais</strong>. Responda aqui com calma (dá para salvar e continuar depois) e o sistema mostra tudo pronto para copiar lá.</p></div></div>
 {% if not config.avaliacoes_abertas %}<div class="caixa-info">As avaliações ainda não foram liberadas pela escola. Você recebe um aviso quando abrirem.</div>
-{% elif faltam %}<div class="caixa-alerta">{% if faltam == 1 %}Falta 1 mês{% else %}Faltam {{ faltam }} meses{% endif %} com avaliação por concluir. O SICE mostra o mesmo aviso: “Você ainda não fez a Auto Avaliação de …”.</div>{% endif %}
+{% elif faltam %}<div class="caixa-alerta">{% if faltam == 1 %}Falta 1 mês{% else %}Faltam {{ faltam }} meses{% endif %} com avaliação por concluir. O {{ SISTEMA_OFICIAL }} mostra o mesmo aviso: “Você ainda não fez a Auto Avaliação de …”.</div>{% endif %}
 <div class="card"><div class="tabela-wrap"><table class="tabela avaliacoes-meses">
   <thead><tr><th>Mês</th>{% for t, rotulo in tipos.items %}<th>{{ rotulo }}</th>{% endfor %}</tr></thead>
   <tbody>{% for m, avs in linhas %}<tr{% if m == mes_atual %} class="mes-atual"{% endif %}>
     <td><strong>{{ m|date:"F/Y"|capfirst }}</strong>{% if m == mes_atual %}<small class="muted" style="display:block">mês atual</small>{% endif %}</td>
     {% for t, av in avs.items %}<td data-rotulo="{% if t == 'AUTO' %}Autoavaliação{% else %}Avaliação do orientador{% endif %}">
-      {% if av.copiada_sice_em %}<span class="selo pasta-conferido">no SICE</span>
-      {% elif av.concluida_em %}<span class="selo pasta-enviado">falta colar no SICE</span>
+      {% if av.copiada_sice_em %}<span class="selo pasta-conferido">no {{ SISTEMA_OFICIAL }}</span>
+      {% elif av.concluida_em %}<span class="selo pasta-enviado">falta colar no {{ SISTEMA_OFICIAL }}</span>
       {% elif av %}<span class="selo pasta-pendente">rascunho</span>
       {% else %}<span class="muted">não feita</span>{% endif %}
       <div class="acoes-celula">
         {% if config.avaliacoes_abertas or av %}<a class="btn sm {% if av.concluida_em %}sec{% endif %}" href="{% url 'responder_avaliacao' t|lower m|date:'Y-m' %}">{% if av.concluida_em %}Editar{% elif av %}Continuar{% else %}Responder{% endif %}</a>{% endif %}
-        {% if av.concluida_em %}<a class="btn sm" href="{% url 'copiar_avaliacao' t|lower m|date:'Y-m' %}">Copiar p/ SICE</a>{% endif %}
+        {% if av.concluida_em %}<a class="btn sm" href="{% url 'copiar_avaliacao' t|lower m|date:'Y-m' %}">Copiar p/ {{ SISTEMA_OFICIAL }}</a>{% endif %}
       </div></td>{% endfor %}
   </tr>{% empty %}<tr><td colspan="3" class="vazio">Nenhum mês de estágio ainda.</td></tr>{% endfor %}</tbody>
 </table></div></div>

@@ -63,7 +63,7 @@
 <p class="dica">Imprima em papel A4, com margens <em>padrão</em> (ou “nenhuma”) e sem “cabeçalhos e rodapés” do navegador. Assine todos os dias e entregue ao orientador no último dia do mês.</p>
 
 <div class="papel-wrap">{% for f in folhas %}{% with estagio=f.estagio linhas=f.linhas log=f.log %}<div class="folha">
-  <img class="logo" src="{% if config.logo_folha %}{% url 'logo_folha' %}{% else %}{% static 'img/brasao-ceara-seduc.png' %}{% endif %}" alt="">
+  <img class="logo" src="{% if config.logo_folha %}{% url 'logo_folha' %}{% elif BRASAO_PADRAO %}{% static BRASAO_PADRAO %}{% endif %}" alt="">
   {% with linhas_cab=config.cabecalho_folha.splitlines %}
     {% for linha in linhas_cab %}{% if linha.strip %}<div class="a centro t10" style="top:{% if forloop.counter == 1 %}6.6{% else %}10.6{% endif %}mm">{{ linha }}</div>{% endif %}{% endfor %}
   {% endwith %}

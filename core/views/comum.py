@@ -13,6 +13,8 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from escolas.pessoas import na_escola
+
 from .. import emails
 from ..forms import PerfilForm
 from ..models import Configuracao, Documento, Estagio, Notificacao, Usuario
@@ -174,7 +176,7 @@ def pode_ver_foto(user, alvo):
 @login_required
 def foto_usuario(request, pk):
     """Fotos de perfil: nunca públicas, e só para quem tem motivo de ver (não dá para listar a escola toda)."""
-    alvo = get_object_or_404(Usuario, pk=pk)
+    alvo = get_object_or_404(na_escola(Usuario.objects.all()), pk=pk)
     if not alvo.foto or not pode_ver_foto(request.user, alvo):
         raise Http404
     return _servir(alvo.foto, f"{alvo.username}.jpg")
@@ -202,7 +204,7 @@ def pode_ver_perfil_profissional(user, alvo):
 
 @login_required
 def curriculo_usuario(request, pk):
-    alvo = get_object_or_404(Usuario, pk=pk, papel=Usuario.Papel.ESTAGIARIO)
+    alvo = get_object_or_404(na_escola(Usuario.objects.all()), pk=pk, papel=Usuario.Papel.ESTAGIARIO)
     if not alvo.curriculo or not pode_ver_perfil_profissional(request.user, alvo):
         raise Http404
     return _servir(alvo.curriculo, f"curriculo-{alvo.username}.pdf")
@@ -219,7 +221,7 @@ def banco_talentos(request):
         raise Http404
     if not (user.is_gestor or user.vinculado_a_concedente):  # conta de candidatura sem aprovação não vê
         raise PermissionDenied
-    qs = Usuario.objects.filter(papel=Usuario.Papel.ESTAGIARIO, is_active=True, perfil_visivel=True)
+    qs = na_escola(Usuario.objects.filter(papel=Usuario.Papel.ESTAGIARIO, is_active=True, perfil_visivel=True))
     q, curso = request.GET.get("q", "").strip(), request.GET.get("curso", "")
     if q:
         qs = qs.filter(Q(nome_completo__icontains=q) | Q(habilidades__icontains=q) | Q(apresentacao__icontains=q))

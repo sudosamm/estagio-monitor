@@ -136,7 +136,7 @@ def modelo(tipo):
     """(assunto, corpo, ativo) em vigor para o tipo."""
     from .models import ModeloEmail
 
-    salvo = ModeloEmail.objects.filter(tipo=tipo).first()
+    salvo = ModeloEmail.vigente(tipo)  # o da escola, senão o padrão da plataforma
     if salvo:
         return salvo.assunto, salvo.corpo, salvo.ativo
     t = TIPOS[tipo]

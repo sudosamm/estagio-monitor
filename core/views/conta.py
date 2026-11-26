@@ -9,6 +9,8 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlencode, urlsafe_base64_encode
 from django.views.decorators.cache import never_cache
 
+from escolas.pessoas import administradores
+
 from .. import emails
 from ..forms import EsqueciSenhaForm, PedidoAjudaForm
 from ..models import Notificacao, Usuario
@@ -81,7 +83,7 @@ def pedir_ajuda(request):
             form.add_error(None, "Você já mandou alguns pedidos. Aguarde a resposta ou tente de novo daqui a uma hora.")
         else:
             registrar_pedido(PREFIXO_AJUDA, d["usuario"] or d["nome"], ip)
-            admins = list(Usuario.objects.filter(is_superuser=True, is_active=True))
+            admins = list(administradores())
             link = (reverse("usuarios") + (f"?{urlencode({'q': d['usuario']})}" if d["usuario"] else ""))[:255]
             texto = f"Pedido de ajuda com o acesso: {d['nome']}" + (f" ({d['usuario']})" if d["usuario"] else "")
             Notificacao.objects.bulk_create([Notificacao(usuario=a, link=link, texto=texto[:255]) for a in admins])

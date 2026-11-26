@@ -54,7 +54,7 @@ def checkin_qr(request, token):
     if not sup_id:
         return render(request, "core/qr_estagiario.html", {"erro": "Este QR code expirou. Peça para o supervisor mostrar "
                                                                     "a tela de novo e escaneie outra vez."}, status=410)
-    request.session[qr.SESSAO] = {"s": sup_id, "em": time.time()}
+    request.session[qr.SESSAO] = {"s": sup_id, "e": qr.escola_do_token(token), "em": time.time()}
     destino = reverse("checkin_qr_confirmar")
     if not request.user.is_authenticated:
         return redirect(f"{reverse('login')}?next={destino}")
@@ -68,6 +68,11 @@ def checkin_qr_confirmar(request):
     if not dados or time.time() - dados.get("em", 0) > qr.SESSAO_VALIDADE:
         request.session.pop(qr.SESSAO, None)
         return render(request, "core/qr_estagiario.html", {"erro": "Escaneie o QR code do supervisor para marcar."})
+    escola = getattr(request, "escola", None)
+    if dados.get("e") and escola is not None and dados["e"] != escola.pk:
+        request.session.pop(qr.SESSAO, None)
+        return render(request, "core/qr_estagiario.html", {"erro": "Este QR code é de outra escola. Troque a escola no "
+                                                                    "topo da página e escaneie de novo."})
     supervisor = Usuario.objects.filter(pk=dados["s"]).first()
     estagio = (Estagio.objects.filter(estagiario=request.user, supervisor_id=dados["s"], ativo=True)
                .select_related("estagiario", "supervisor").first())

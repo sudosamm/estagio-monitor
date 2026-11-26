@@ -13,6 +13,8 @@ from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_POST
 
+from escolas.pessoas import na_escola
+
 from ..forms import (
     AnoReferenciaForm, ImportarCalendarioForm, RecessoForm, ConfiguracaoForm, CoordenadorForm, CursoForm, DiaSemEstagioForm, DocumentoGeralForm, EscalaLoteForm,
     EstagiariosLoteForm, LocalForm, OrientadorForm, SubstitutosForm, SupervisoresLoteForm, TurmaForm, UsuarioEditForm,
@@ -263,7 +265,7 @@ def _resultado_contas(request, usuarios, titulo):
 
 def _contas(request, papel, q, situacao):
     if request.user.is_superuser:
-        qs = Usuario.objects.all()
+        qs = na_escola(Usuario.objects.all())
     else:
         meus = estagios_visiveis(request.user)
         qs = Usuario.objects.filter(
@@ -271,6 +273,7 @@ def _contas(request, papel, q, situacao):
             | Q(criado_por=request.user) | Q(papel=Usuario.Papel.SUPERVISOR) | Q(pk=request.user.pk)
             | Q(estudantes_acompanhados__estagiario__in=meus.values("estagiario"))
         )
+        qs = na_escola(qs)
     if papel:
         qs = qs.filter(papel=papel)
     if situacao == "pendentes":
@@ -322,7 +325,7 @@ def _pode_liberar_acesso(request, alvo):
 
 @permissao("contas")
 def editar_usuario(request, pk):
-    alvo = get_object_or_404(Usuario, pk=pk)
+    alvo = get_object_or_404(na_escola(Usuario.objects.all()), pk=pk)
     if not _pode_gerir(request, alvo):
         raise PermissionDenied
     form = UsuarioEditForm(request.POST or None, instance=alvo)
@@ -347,7 +350,7 @@ def editar_usuario(request, pk):
 @require_POST
 def redefinir_senha(request, pk):
     """Esqueceu a senha: a atual deixa de valer e a pessoa faz o primeiro acesso de novo (com um código novo)."""
-    alvo = get_object_or_404(Usuario, pk=pk)
+    alvo = get_object_or_404(na_escola(Usuario.objects.all()), pk=pk)
     if not _pode_liberar_acesso(request, alvo):
         raise PermissionDenied
     codigo = liberar_primeiro_acesso(alvo)
@@ -385,7 +388,7 @@ def pedir_confirmacao_email(request, pk):
 
     from .. import emails
 
-    alvo = get_object_or_404(Usuario, pk=pk)
+    alvo = get_object_or_404(na_escola(Usuario.objects.all()), pk=pk)
     if not _pode_pedir_confirmacao(request, alvo):
         raise PermissionDenied
     if not settings.EMAIL_ATIVO:
@@ -437,7 +440,7 @@ def confirmacao_lote(request):
 @permissao("contas")
 def ativacao_usuario(request, pk):
     """Desativar ou reativar uma conta. Supervisor com estagiários ativos só sai com um substituto para cada um."""
-    alvo = get_object_or_404(Usuario, pk=pk)
+    alvo = get_object_or_404(na_escola(Usuario.objects.all()), pk=pk)
     if not _pode_gerir(request, alvo) or alvo.pk == request.user.pk or alvo.is_superuser:
         raise PermissionDenied
     desativar = alvo.is_active

@@ -2,7 +2,7 @@
 <div class="cabecalho-sice">{% for rotulo, valor in cabecalho %}<div><small class="muted">{{ rotulo }}</small><strong>{{ valor }}</strong></div>{% endfor %}</div>
 {% for s in secoes %}
 <h3 class="mt-1">{{ s.titulo }}</h3>
-{% if s.chave == "pratica" %}<p class="muted" style="font-size:.85rem;margin-top:0">{% if s.linhas %}No SICE, use <strong>Atividade Sugerida</strong> e inclua só estas {{ s.linhas|length }} atividade{{ s.linhas|length|pluralize }}.{% else %}Nenhuma atividade prática marcada nesta visita.{% endif %}</p>{% endif %}
+{% if s.chave == "pratica" %}<p class="muted" style="font-size:.85rem;margin-top:0">{% if s.linhas %}No {{ SISTEMA_OFICIAL }}, use <strong>Atividade Sugerida</strong> e inclua só estas {{ s.linhas|length }} atividade{{ s.linhas|length|pluralize }}.{% else %}Nenhuma atividade prática marcada nesta visita.{% endif %}</p>{% endif %}
 {% if s.linhas %}<div class="tabela-wrap"><table class="tabela tabela-sice"><thead><tr><th>{{ s.coluna }}</th><th>Situação</th></tr></thead>
   <tbody>{% for p, r in s.linhas %}<tr><td>{{ p.enunciado }}</td><td>{% if r %}<strong>{{ r }}</strong>{% else %}<span class="muted">em branco (borracha)</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
 <div class="form-linha mt-1">

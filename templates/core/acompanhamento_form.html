@@ -3,8 +3,8 @@
 {% block titulo %}Acompanhamento de visita{% endblock %}
 {% block conteudo %}
 <div class="titulo-pagina"><div><div class="migalha"><a href="{{ e.get_absolute_url }}?aba=agenda">← {{ e.estagiario }}</a></div>
-  <h1>Acompanhamento de visita</h1><p>{{ e.estagiario }} · {{ e.curso }} · {{ e.local|default:"" }}. Os itens são os mesmos do SICE, na mesma ordem.</p></div></div>
-{% if sem_pratica %}<div class="caixa-alerta">Ainda não há atividades da avaliação prática para {{ e.curso }}. {% if user|pode:"avaliacoes" %}Cadastre as atividades do SICE em <a href="{% url 'perguntas_avaliacao' %}?tipo=PRATICA">Avaliações → Perguntas</a> (tipo “avaliação prática”, curso {{ e.curso }}).{% endif %}</div>{% endif %}
+  <h1>Acompanhamento de visita</h1><p>{{ e.estagiario }} · {{ e.curso }} · {{ e.local|default:"" }}. Os itens são os mesmos do {{ SISTEMA_OFICIAL }}, na mesma ordem.</p></div></div>
+{% if sem_pratica %}<div class="caixa-alerta">Ainda não há atividades da avaliação prática para {{ e.curso }}. {% if user|pode:"avaliacoes" %}Cadastre as atividades do {{ SISTEMA_OFICIAL }} em <a href="{% url 'perguntas_avaliacao' %}?tipo=PRATICA">Avaliações → Perguntas</a> (tipo “avaliação prática”, curso {{ e.curso }}).{% endif %}</div>{% endif %}
 <div class="card destaque" style="max-width:900px">
   <form method="post" novalidate>{% csrf_token %}
     {% if erros %}<div class="aviso error">Faltam respostas: confira os itens marcados.</div>{% endif %}
@@ -14,14 +14,14 @@
       {% with opcoes=campos.0.field.pergunta.lista_opcoes %}{% if "Realizou Sem Auxílio" in opcoes %}{% firstof "Realizou Sem Auxílio" as padrao %}{% else %}{% firstof opcoes.0 as padrao %}{% endif %}
       <div class="card-cab"><h2>{{ titulo }}</h2><button class="btn sec sm" type="button" data-marcar-todos-opcao="{{ padrao }}" data-secao-alvo="{{ chave }}" data-sem-trava="1">Marcar todos: {{ padrao }}</button></div>{% endwith %}
       {% if chave == "pratica" %}
-      <p class="muted" style="font-size:.82rem;margin-top:0">Deixe “Em branco” a atividade que não entra nesta visita: no SICE você inclui só as marcadas (Atividade Sugerida). “Marcar todos” vale só para as atividades que aparecem na busca.</p>
+      <p class="muted" style="font-size:.82rem;margin-top:0">Deixe “Em branco” a atividade que não entra nesta visita: no {{ SISTEMA_OFICIAL }} você inclui só as marcadas (Atividade Sugerida). “Marcar todos” vale só para as atividades que aparecem na busca.</p>
       {% if campos|length > 15 %}<div class="busca-atividades">
         <input type="search" placeholder="Buscar atividade (ex.: banco de dados, CorelDRAW)" data-buscar-atividade aria-label="Buscar atividade">
         <label class="check" style="margin:0"><input type="checkbox" data-so-incluidas> Só as incluídas</label>
       </div>{% endif %}
       <p class="contagem-incluidas"><strong data-incluidas>0</strong> de {{ campos|length }} atividades incluídas nesta visita</p>
       {% else %}
-      <p class="muted" style="font-size:.82rem;margin-top:0">{{ coluna }}: marque todos de uma vez e ajuste só as exceções. “Em branco” é a borracha do SICE.</p>
+      <p class="muted" style="font-size:.82rem;margin-top:0">{{ coluna }}: marque todos de uma vez e ajuste só as exceções. “Em branco” é a borracha do {{ SISTEMA_OFICIAL }}.</p>
       {% endif %}
       {% for campo in campos %}
       <fieldset class="criterio pergunta-av" data-texto="{{ campo.label|lower }}"><legend>{{ campo.label }}</legend>

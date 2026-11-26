@@ -150,6 +150,12 @@ details.drop > summary::-webkit-details-marker { display: none; }
 .drop-menu a:hover, .drop-menu button:hover { background: var(--cinza-100); }
 .drop-menu .info { padding: .5rem .75rem; border-bottom: 1px solid var(--cinza-200); margin-bottom: .3rem; }
 .drop-menu .info small { display: block; }
+.drop-menu .info .escola-atual { color: var(--cinza-700); font-weight: 600; }
+.drop-menu .seletor-escola { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; padding: .4rem .75rem;
+  border-bottom: 1px solid var(--cinza-200); }
+.drop-menu .seletor-escola label { width: 100%; font-size: .8rem; color: var(--cinza-500); }
+.drop-menu .seletor-escola select { flex: 1; min-width: 0; width: auto; padding: .35rem .5rem; min-height: 2.25rem; }
+.drop-menu .seletor-escola button { width: auto; }
 .drop-menu [hidden] { display: none; }
 .drop-menu > small { display: block; padding: .4rem .75rem .2rem; font-size: .78rem; }
 

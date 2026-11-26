@@ -52,7 +52,7 @@
 
 <div class="papel-wrap"><div class="papel">
   <div class="cab">
-    <img src="{% if config.logo_folha %}{% url 'logo_folha' %}{% else %}{% static 'img/brasao-ceara-seduc.png' %}{% endif %}" alt="">
+    <img src="{% if config.logo_folha %}{% url 'logo_folha' %}{% elif BRASAO_PADRAO %}{% static BRASAO_PADRAO %}{% endif %}" alt="">
     <div>{% for linha in config.cabecalho_folha.splitlines %}{% if linha.strip %}{{ linha }}<br>{% endif %}{% endfor %}
       {% if config.nome_escola %}<strong>{{ config.nome_escola }}</strong>{% endif %}</div>
   </div>

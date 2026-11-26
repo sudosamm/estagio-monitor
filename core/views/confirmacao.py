@@ -5,6 +5,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
+from escolas.pessoas import na_escola
+
 from .. import confirmacao as conf
 from ..models import Usuario
 from ..services import estagios_visiveis
@@ -13,7 +15,16 @@ from .base import destino_seguro, orientador_requerido
 
 @never_cache
 def confirmar_por_link(request, codigo):
+    from escolas.escopo import escola_ativa
+
     link = conf.link_do_codigo(codigo)
+    if link is None:
+        return _confirmar_por_link(request, link)
+    with escola_ativa(link.escola):  # registros e configuração só da escola do link
+        return _confirmar_por_link(request, link)
+
+
+def _confirmar_por_link(request, link):
     estado = conf.situacao(link)
     ctx = {"estado": estado, "link": link}
     if estado == "ok":
@@ -33,7 +44,7 @@ def confirmar_por_link(request, codigo):
 @orientador_requerido
 @require_POST
 def pedir_confirmacao(request, pk):
-    sup = get_object_or_404(Usuario, pk=pk, papel=Usuario.Papel.SUPERVISOR, is_active=True)
+    sup = get_object_or_404(na_escola(Usuario.objects.all()), pk=pk, papel=Usuario.Papel.SUPERVISOR, is_active=True)
     if not estagios_visiveis(request.user).filter(supervisor=sup, ativo=True).exists():
         raise PermissionDenied
     voltar = destino_seguro(request, "/painel/")

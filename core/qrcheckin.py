@@ -13,7 +13,18 @@ SESSAO_VALIDADE = 600  # tempo para entrar no sistema, se o estagiário não est
 
 
 def gerar(supervisor):
-    return signing.dumps({"s": supervisor.pk, "n": get_random_string(4)}, salt=SALT, compress=True)
+    from escolas.escopo import escola_corrente_ou_nada
+
+    return signing.dumps({"s": supervisor.pk, "e": escola_corrente_ou_nada(), "n": get_random_string(4)}, salt=SALT,
+                         compress=True)
+
+
+def escola_do_token(token, max_age=VALIDADE):
+    """Id da escola em que o QR foi gerado (None em códigos antigos)."""
+    try:
+        return signing.loads(token, salt=SALT, max_age=max_age).get("e")
+    except (signing.BadSignature, AttributeError):
+        return None
 
 
 def ler(token, max_age=VALIDADE):

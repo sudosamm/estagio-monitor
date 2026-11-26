@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Q, Sum
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -33,9 +34,11 @@ def _modo(user):
     return None  # estagiário: o cadastro é para empresas e órgãos
 
 
-def candidatura_publica(request):
+def candidatura_publica(request, escola=None):
     """Cadastro da concedente na captação. Sem login, quem preenche cria a própria conta junto; com conta de
     supervisor/responsável, manda pela conta; orientador/coordenador preenche a pedido da concedente."""
+    if escola is not None and getattr(request, "escola", None) is None:
+        raise Http404  # escola inexistente ou inativa no caminho
     config = Configuracao.atual()
     modo = _modo(request.user)
     if modo is None:

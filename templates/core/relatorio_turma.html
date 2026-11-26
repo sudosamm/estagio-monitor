@@ -68,7 +68,7 @@
 
 <div class="papel-wrap"><div class="papel">
   <div class="cab">
-    <img src="{% if config.logo_folha %}{% url 'logo_folha' %}{% else %}{% static 'img/brasao-ceara-seduc.png' %}{% endif %}" alt="">
+    <img src="{% if config.logo_folha %}{% url 'logo_folha' %}{% elif BRASAO_PADRAO %}{% static BRASAO_PADRAO %}{% endif %}" alt="">
     <div class="txt">
       {% for linha in config.cabecalho_folha.splitlines %}{% if linha.strip %}<div>{{ linha }}</div>{% endif %}{% endfor %}
       <h1>RELATÓRIO GERAL DE ESTÁGIO — {{ titulo }}</h1>

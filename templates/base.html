@@ -63,9 +63,13 @@
         <details class="drop">
           <summary>{% avatar user %}</summary>
           <div class="drop-menu">
-            <div class="info"><strong>{{ user.nome_completo }}</strong><small>{{ user.username }} · {% if user.e_administrador %}{% if user.no_modo_orientador %}modo orientador{% else %}modo administrador{% endif %}{% else %}{{ user.get_papel_display }}{% endif %}</small></div>
+            <div class="info"><strong>{{ user.nome_completo }}</strong>{% if ESCOLA %}<small class="escola-atual">{{ ESCOLA.nome }}</small>{% endif %}<small>{{ user.username }} · {% if user.e_administrador %}{% if user.no_modo_orientador %}modo orientador{% else %}modo administrador{% endif %}{% else %}{{ user.get_papel_display }}{% endif %}</small></div>
             {% if user.e_administrador %}<form method="post" action="{% url 'alternar_modo' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
               {% if user.no_modo_orientador %}<button type="submit" name="modo" value="admin">Ligar o modo administrador</button>{% else %}<button type="submit" name="modo" value="orientador">Usar como orientador</button>{% endif %}</form>{% endif %}
+            {% if ESCOLAS_DA_CONTA %}<form method="post" action="{% url 'trocar_escola' %}" class="seletor-escola">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <label for="seletor-escola">Escola</label>
+              <select id="seletor-escola" name="escola">{% for e in ESCOLAS_DA_CONTA %}<option value="{{ e.pk }}"{% if ESCOLA and e.pk == ESCOLA.pk %} selected{% endif %}>{{ e.nome }}</option>{% endfor %}</select>
+              <button type="submit">Trocar</button></form>{% endif %}
             <a href="{% url 'perfil' %}">Meus dados</a>
             <a href="{% url 'trocar_senha' %}">Alterar senha</a>
             <a href="{% url 'novidades' %}">O que há de novo</a>
@@ -135,7 +139,7 @@
   <footer class="rodape">
     <div class="container">
       <span>{{ NOME_SISTEMA }} — ferramenta de apoio ao acompanhamento de estágio</span>
-      <span><a href="{% url 'novidades' %}">Novidades</a> · <a href="{% url 'sugestoes' %}">Sugestões e erros</a> · <a href="{% url 'termos' %}">Termos de Uso</a> · <a href="{% url 'privacidade' %}">Privacidade</a> · Os registros oficiais continuam no SICE</span>
+      <span><a href="{% url 'novidades' %}">Novidades</a> · <a href="{% url 'sugestoes' %}">Sugestões e erros</a> · <a href="{% url 'termos' %}">Termos de Uso</a> · <a href="{% url 'privacidade' %}">Privacidade</a> · Os registros oficiais continuam no {{ SISTEMA_OFICIAL }}</span>
     </div>
   </footer>
 {% endblock %}

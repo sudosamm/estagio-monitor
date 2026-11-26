@@ -8,6 +8,8 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
+from escolas.pessoas import na_escola
+
 from .models import (
     DIAS_SEMANA, Agendamento, Candidatura, Configuracao, Curso, DiaSemEstagio, Documento, Estagio, FolhaEnviada,
     Feedback, Justificativa, LocalEstagio, Mensagem, PerguntaAvaliacao, Sugestao, Registro, TipoDocumento, Turma, Usuario, horas_dos_horarios,
@@ -92,7 +94,7 @@ class SupervisorSelect(forms.Select):
 
 
 def supervisores_qs():
-    return Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR, is_active=True).prefetch_related("concedentes")
+    return na_escola(Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR, is_active=True)).prefetch_related("concedentes")
 
 
 def concedentes_ativas(atual=None):
@@ -245,7 +247,7 @@ class EstagiariosLoteForm(CamposEscalaMixin, Formulario):
     field_order = ["nomes", "turma", "local", "setor", "supervisor", "data_inicio", "data_fim", *CAMPOS_ESCALA]
 
     orientador = forms.ModelChoiceField(
-        queryset=Usuario.objects.filter(papel=Usuario.Papel.ORIENTADOR, is_active=True), required=False,
+        queryset=na_escola(Usuario.objects.filter(papel=Usuario.Papel.ORIENTADOR, is_active=True)), required=False,
         label="Orientador(a) responsável",
     )
 
@@ -1402,7 +1404,7 @@ class ImportarCSVForm(CamposEscalaMixin, Formulario):
     arquivo = forms.FileField(label="Planilha", widget=forms.ClearableFileInput(attrs={"accept": ".xlsx,.csv,text/csv"}),
                               help_text="A planilha modelo preenchida (.xlsx) ou um CSV com uma linha por estagiário.")
     orientador = forms.ModelChoiceField(
-        queryset=Usuario.objects.filter(papel=Usuario.Papel.ORIENTADOR, is_active=True), label="Orientador(a) responsável",
+        queryset=na_escola(Usuario.objects.filter(papel=Usuario.Papel.ORIENTADOR, is_active=True)), label="Orientador(a) responsável",
         help_text="Usado nas linhas em que a coluna “orientador” estiver vazia.",
     )
     acompanhamento_desde = forms.DateField(

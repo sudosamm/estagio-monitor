@@ -14,6 +14,8 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from escolas.pessoas import administradores
+
 from ..forms import OpiniaoForm
 from ..models import Sugestao, Usuario
 from ..services import notificar
@@ -46,7 +48,7 @@ def enviar_opiniao(request):
                                     mensagem=mensagem, usuario=user, pagina=voltar[:300], ip=_ip(request),
                                     navegador=request.META.get("HTTP_USER_AGENT", "")[:300])
         if d["tipo"] == "ERRO" or (d["nota"] and d["nota"] <= 2):  # só o que pede atenção vai para o sino
-            admins = Usuario.objects.filter(is_superuser=True, is_active=True).exclude(pk=user.pk)
+            admins = administradores().exclude(pk=user.pk)
             notificar(admins, f"Opinião ({s.get_tipo_display().lower()}{f', nota {s.nota}' if s.nota else ''}) de "
                       f"{user.primeiro_nome}: {' '.join(mensagem.split())[:80]}", reverse("opinioes"))
     if quer_json:

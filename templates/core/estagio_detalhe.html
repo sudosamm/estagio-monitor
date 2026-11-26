@@ -43,7 +43,7 @@
 </nav>
 
 {% if aba == "visao" %}
-{% if avaliacoes_faltam %}<a class="faixa-aviso" href="{% url 'minhas_avaliacoes' %}">{% icone "estrela" %}<span><strong>Avaliações mensais do SICE:</strong> {% if avaliacoes_faltam == 1 %}falta 1 mês{% else %}faltam {{ avaliacoes_faltam }} meses{% endif %} (autoavaliação e avaliação do orientador). Responda aqui e copie as respostas prontas.</span><span class="btn sm">Responder</span></a>{% endif %}
+{% if avaliacoes_faltam %}<a class="faixa-aviso" href="{% url 'minhas_avaliacoes' %}">{% icone "estrela" %}<span><strong>Avaliações mensais do {{ SISTEMA_OFICIAL }}:</strong> {% if avaliacoes_faltam == 1 %}falta 1 mês{% else %}faltam {{ avaliacoes_faltam }} meses{% endif %} (autoavaliação e avaliação do orientador). Responda aqui e copie as respostas prontas.</span><span class="btn sm">Responder</span></a>{% endif %}
 {% if pasta_falta %}<a class="faixa-aviso" href="?aba=arquivos#pasta">{% icone "arquivo" %}<span><strong>Pasta do estágio:</strong> {% if e_estagiario or e_supervisor %}você precisa enviar{% else %}faltam{% endif %} {% for i in pasta_falta %}{{ i.tipo.nome }}{% if i.codigo == "atrasado" %} (atrasado){% elif i.codigo == "recusado" %} (recusado){% elif i.prazo %} (até {{ i.prazo|date:"d/m" }}){% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}.</span><span class="btn sm">Enviar</span></a>{% endif %}
 <div class="grade grade-lado">
   <div>
@@ -150,13 +150,13 @@
 
 {% elif aba == "registros" %}
 {% if frequencia_mensal %}<div class="card">
-  <div class="card-cab"><h2>Mês a mês</h2><small>Mesmo formato da “Frequência Detalhada” do SICE (CH Estágio), para conferir.</small></div>
+  <div class="card-cab"><h2>Mês a mês</h2><small>Mesmo formato da “Frequência Detalhada” do {{ SISTEMA_OFICIAL }} (CH Estágio), para conferir.</small></div>
   <div class="tabela-wrap"><table class="tabela">
     <thead><tr><th>Mês</th><th class="num">Dias</th><th class="num">Horas</th><th class="num">CH cumprida / CH total</th><th style="min-width:160px">CH cumprida (%)</th></tr></thead>
     <tbody>{% for m in frequencia_mensal %}<tr><td>{{ m.mes|date:"m/Y" }}</td><td class="num">{{ m.dias }}</td><td class="num">{{ m.horas|horas }}</td><td class="num">{{ m.acumulado|horas }} / {{ horas.total|horas }}</td>
       <td><div class="medidor"><div class="trilho"><span style="width:{{ m.pct|stringformat:'.1f' }}%"></span></div><span class="valor-medidor">{{ m.pct|floatformat:0 }}%</span></div></td></tr>{% endfor %}</tbody>
   </table></div>
-  <p class="muted" style="font-size:.8rem;margin-bottom:0">Só presenças validadas pelo supervisor{% if estagio.horas_anteriores %}, somadas às {{ estagio.horas_anteriores|horas }} anteriores ao sistema{% endif %}. Se o SICE mostrar outro número, confira os dias pendentes de validação.</p>
+  <p class="muted" style="font-size:.8rem;margin-bottom:0">Só presenças validadas pelo supervisor{% if estagio.horas_anteriores %}, somadas às {{ estagio.horas_anteriores|horas }} anteriores ao sistema{% endif %}. Se o {{ SISTEMA_OFICIAL }} mostrar outro número, confira os dias pendentes de validação.</p>
 </div>{% endif %}
 <div class="card">
   <div class="card-cab"><h2>Registros</h2><small>Clique em um dia para ver detalhes, anotar ou ajustar.</small></div>
@@ -287,9 +287,9 @@
 {% if e_orientador or acompanhamentos %}
 <div class="card">
   <div class="card-cab"><h2>Acompanhamento de visita</h2>{% if e_orientador %}<a class="btn sm" href="{% url 'acompanhamento_novo' estagio.pk %}">{% icone "mais" %} Novo</a>{% endif %}</div>
-  <p class="muted" style="font-size:.85rem;margin-top:0">A avaliação prática e atitudinal que o orientador faz em cada visita, a mesma do SICE.</p>
+  <p class="muted" style="font-size:.85rem;margin-top:0">A avaliação prática e atitudinal que o orientador faz em cada visita, a mesma do {{ SISTEMA_OFICIAL }}.</p>
   <ul class="lista compacta">{% for a in acompanhamentos %}<li><a class="cresce" href="{{ a.get_absolute_url }}"><strong>{{ a.data|date:"d/m/Y" }}</strong></a>
-    {% if e_orientador %}{% if a.lancado_sice_em %}<span class="selo pasta-conferido">no SICE</span>{% else %}<a class="btn sm" href="{% url 'acompanhamento_sice' a.pk %}">Copiar p/ SICE</a>{% endif %}{% endif %}</li>
+    {% if e_orientador %}{% if a.lancado_sice_em %}<span class="selo pasta-conferido">no {{ SISTEMA_OFICIAL }}</span>{% else %}<a class="btn sm" href="{% url 'acompanhamento_sice' a.pk %}">Copiar p/ {{ SISTEMA_OFICIAL }}</a>{% endif %}{% endif %}</li>
   {% empty %}<li class="vazio">Nenhum acompanhamento registrado.</li>{% endfor %}</ul>
 </div>
 {% endif %}

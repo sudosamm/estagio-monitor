@@ -11,6 +11,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from escolas.pessoas import na_escola
+
 from ..models import Agendamento, LocalEstagio, Usuario
 from ..seguranca import chave_texto
 from ..services import estagios_do_orientador, estagios_visiveis, notificar, preparar_lote, status_periodo
@@ -301,7 +303,7 @@ def buscar(request):
         if locais:
             grupos.append({"nome": "Concedentes", "itens": locais})
     if user.pode("contas"):
-        contas = Usuario.objects.filter(is_active=True).exclude(papel=Usuario.Papel.ESTAGIARIO)
+        contas = na_escola(Usuario.objects.filter(is_active=True).exclude(papel=Usuario.Papel.ESTAGIARIO))
         if not user.is_superuser:  # contas da gestão só o administrador edita
             contas = contas.filter(papel=Usuario.Papel.SUPERVISOR)
         pessoas = [{"titulo": u.nome_completo, "detalhe": f"{u.get_papel_display()} · {u.username}" + (f" · {u.concedentes_txt}" if u.is_supervisor else ""),

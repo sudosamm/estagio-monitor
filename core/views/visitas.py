@@ -6,6 +6,8 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
+from escolas.marca import sistema_oficial
+
 from ..avaliacoes import RespostasForm, linhas, perguntas
 from ..forms import DataInput, Formulario
 from ..models import AcompanhamentoVisita, Agendamento, Configuracao, PerguntaAvaliacao
@@ -70,7 +72,7 @@ def acompanhamento_form(request, estagio_pk, pk=None):
         if novo:
             notificar([estagio.estagiario], f"{request.user.primeiro_nome} registrou o acompanhamento da visita de "
                       f"{ac.data:%d/%m}.", ac.get_absolute_url())
-        messages.success(request, "Acompanhamento salvo. Agora é só lançar no SICE.")
+        messages.success(request, f"Acompanhamento salvo. Agora é só lançar no {sistema_oficial()}.")
         return redirect("acompanhamento_sice", pk=ac.pk)
     campos = {c.field.pergunta.pk: c for c in respostas}
     textos = {"pratica": (dados["observacoes"], dados["intervencoes"]),
@@ -122,7 +124,7 @@ def acompanhamento_sice(request, pk):
         ac.lancado_sice_em = None if request.POST.get("acao") == "desfazer" else timezone.now()
         ac.save(update_fields=["lancado_sice_em", "atualizado_em"])
         if ac.lancado_sice_em:
-            messages.success(request, "Marcado como lançado no SICE.")
+            messages.success(request, f"Marcado como lançado no {sistema_oficial()}.")
         return redirect(ac.estagio.get_absolute_url() + "?aba=agenda")
     return render(request, "core/acompanhamento_sice.html", _contexto(ac))
 

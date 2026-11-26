@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.urls import reverse
 
+from escolas.marca import brasao_estatico, nome_instituicao, sistema_oficial
+
 
 def _item(rotulo, nome, ativos, url_atual, contador=0):
     return {"rotulo": rotulo, "url": reverse(nome), "ativo": url_atual in ativos, "contador": contador or 0}
@@ -18,7 +20,7 @@ def menu_gestor(user, url_atual, config, atestados=0, candidaturas=0, opinioes=0
         pode("agenda") and _item("Roteiro de visitas", "roteiro", {"roteiro"}, url_atual),
         _item("Frequências", "frequencias", {"frequencias"}, url_atual),
         _item("Feedback dos supervisores", "feedback_geral", {"feedback_geral"}, url_atual),
-        _item("Avaliações (SICE)", "avaliacoes_escola", {"avaliacoes_escola", "ver_avaliacao", "perguntas_avaliacao",
+        _item(f"Avaliações ({sistema_oficial()})", "avaliacoes_escola", {"avaliacoes_escola", "ver_avaliacao", "perguntas_avaliacao",
                                                          "pergunta_avaliacao_editar"}, url_atual),
         _item("Atestados", "atestados", {"atestados", "atestado_detalhe", "enviar_atestado"}, url_atual, atestados),
         _item("Pasta de documentos", "pasta_geral", {"pasta_geral", "tipos_documento", "tipo_documento_editar"},
@@ -79,7 +81,9 @@ def preferencia_tema(user, config):
 def globais(request):
     from .models import Configuracao
 
-    ctx = {"NOME_SISTEMA": settings.NOME_SISTEMA, "NOME_INSTITUICAO": settings.NOME_INSTITUICAO}
+    ctx = {"NOME_SISTEMA": settings.NOME_SISTEMA, "NOME_INSTITUICAO": nome_instituicao(),
+           "SISTEMA_OFICIAL": sistema_oficial(), "BRASAO_PADRAO": brasao_estatico(),
+           "ESCOLA": getattr(request, "escola", None)}
     user = getattr(request, "user", None)
     config = Configuracao.atual()
     ctx["TEMA"] = preferencia_tema(user, config)
@@ -93,6 +97,11 @@ def globais(request):
         from .models import Configuracao
 
         ctx["notificacoes_nao_lidas"] = user.notificacoes.filter(lida=False).count()
+        from escolas.middleware import escolas_da_conta
+
+        escolas = escolas_da_conta(user)
+        if len(escolas) > 1:  # o seletor só aparece para quem tem vínculo com duas ou mais escolas
+            ctx["ESCOLAS_DA_CONTA"] = escolas
         if not user.deve_trocar_senha and request.resolver_match and request.resolver_match.url_name != "novidades":
             from .novidades import pendentes
 

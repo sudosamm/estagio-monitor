@@ -76,7 +76,7 @@ IGNORAR = {
     "dois_fatores", "aceitar_termos", "perfil", "trocar_senha", "reenviar_confirmacao", "sugestoes",
     "primeiro_acesso", "primeiro_acesso_senha", "esqueci_senha", "redefinir_senha_email", "pedir_ajuda",
     "confirmar_por_link", "candidatura_publica", "checkin_qr", "checkin_qr_confirmar", "qr_novo", "buscar",
-    "marcar_presenca", "registrar_saida", "informar_ausencia", "enviar_mensagem", "acessos", "desconectar_usuario", "remover_importadas_fora",
+    "trocar_escola", "marcar_presenca", "registrar_saida", "informar_ausencia", "enviar_mensagem", "acessos", "desconectar_usuario", "remover_importadas_fora",
 }
 # tela -> modelo do pk da URL, para dizer “sobre quem”
 ALVOS = {

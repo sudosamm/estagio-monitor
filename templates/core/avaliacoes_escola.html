@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% load ui %}
-{% block titulo %}Avaliações (SICE){% endblock %}
+{% block titulo %}Avaliações ({{ SISTEMA_OFICIAL }}){% endblock %}
 {% block conteudo %}
 <div class="titulo-pagina">
-  <div><h1>Avaliações para o SICE · {{ nome_mes }}</h1><p>Autoavaliação e avaliação do orientador são mensais no SICE: o estagiário responde aqui e cola lá.</p></div>
+  <div><h1>Avaliações para o {{ SISTEMA_OFICIAL }} · {{ nome_mes }}</h1><p>Autoavaliação e avaliação do orientador são mensais no {{ SISTEMA_OFICIAL }}: o estagiário responde aqui e cola lá.</p></div>
   <div class="acoes">{% include "core/_seletor_ano.html" %}<a class="btn sec" href="{% url 'avaliacoes_sobre_mim' %}">{% icone "estrela" %} Avaliações sobre mim</a>{% if user|pode:"avaliacoes" %}<a class="btn sec" href="{% url 'perguntas_avaliacao' %}">{% icone "engrenagem" %} Perguntas</a>{% endif %}</div>
 </div>
 {% if not config.avaliacoes_abertas %}<div class="caixa-alerta">As avaliações estão <strong>fechadas</strong> para os estagiários. {% if user.is_superuser %}Libere em <a href="{% url 'configuracoes' %}">Configurações</a> (“Liberar as avaliações”), depois de conferir as perguntas.{% else %}Peça ao administrador para liberar.{% endif %}</div>{% endif %}
 <div class="kpis">
-  {% for t, rotulo in tipos.items %}{% with d=tot|get_item:t %}<div class="kpi"><div class="valor">{{ d.feitas }} / {{ total }}</div><div class="rotulo">{{ rotulo|lower }} concluídas · {{ d.sice }} já no SICE</div></div>{% endwith %}{% endfor %}
+  {% for t, rotulo in tipos.items %}{% with d=tot|get_item:t %}<div class="kpi"><div class="valor">{{ d.feitas }} / {{ total }}</div><div class="rotulo">{{ rotulo|lower }} concluídas · {{ d.sice }} já no {{ SISTEMA_OFICIAL }}</div></div>{% endwith %}{% endfor %}
 </div>
 <form class="filtros card" method="get">{% if ano %}<input type="hidden" name="ano" value="{{ ano }}">{% endif %}
   <div><label class="rotulo">Buscar</label><input type="search" name="q" value="{{ f.q }}" placeholder="Nome"></div>
@@ -19,7 +19,7 @@
 <div class="card"><div class="tabela-wrap"><table class="tabela">
   <thead><tr><th>Estagiário</th>{% for t, rotulo in tipos.items %}<th>{{ rotulo }}</th>{% endfor %}<th class="num">Meses anteriores pendentes</th></tr></thead>
   <tbody>{% for l in linhas %}<tr><td><strong>{{ l.e.estagiario }}</strong><small style="display:block" class="muted">{{ l.e.turma.rotulo|default:"" }}</small></td>
-    {% for t, a, pode in l.celulas %}<td>{% if a.copiada_sice_em %}<span class="selo pasta-conferido">no SICE</span>{% elif a.concluida_em %}<span class="selo pasta-enviado">concluída</span>{% elif a %}<span class="selo pasta-pendente">rascunho</span>{% else %}<span class="muted">não iniciada</span>{% endif %}
+    {% for t, a, pode in l.celulas %}<td>{% if a.copiada_sice_em %}<span class="selo pasta-conferido">no {{ SISTEMA_OFICIAL }}</span>{% elif a.concluida_em %}<span class="selo pasta-enviado">concluída</span>{% elif a %}<span class="selo pasta-pendente">rascunho</span>{% else %}<span class="muted">não iniciada</span>{% endif %}
       {% if a and pode %} <a class="btn sec sm" href="{% url 'ver_avaliacao' a.pk %}">Ver</a>{% endif %}</td>{% endfor %}
     <td class="num">{% if l.atrasados %}<span class="alerta-txt">{{ l.atrasados }}</span>{% else %}0{% endif %}</td></tr>
   {% empty %}<tr><td colspan="4" class="vazio">Nenhum estagiário com estágio neste mês.</td></tr>{% endfor %}</tbody>

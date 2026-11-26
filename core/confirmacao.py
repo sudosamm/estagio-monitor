@@ -14,6 +14,8 @@ from urllib.parse import quote
 from django.urls import reverse
 from django.utils import timezone
 
+from escolas.pessoas import na_escola
+
 VALIDADE = timedelta(days=7)
 HORA_SEMANAL = 14     # e-mail da semana a partir das 14h do dia escolhido
 HORA_MENSAL = 7       # resumo do mês a partir das 7h do dia 1º
@@ -50,7 +52,9 @@ def link_do_codigo(codigo):
 
     if not codigo or len(codigo) > 64:
         return None
-    return LinkConfirmacao.objects.select_related("supervisor").filter(resumo=_resumo(codigo)).first()
+    # link público (sem login): procurado em todas as escolas; a tela trabalha na escola do link
+    return (LinkConfirmacao.objects.todas_as_escolas().select_related("supervisor", "escola")
+            .filter(resumo=_resumo(codigo)).first())
 
 
 def situacao(link):
@@ -193,7 +197,8 @@ def disparar_confirmacoes(agora=None):
     Configuracao.objects.filter(pk=config.pk).update(confirmacao_enviada_em=agora)  # uma vez só, mesmo com vários processos
     config.confirmacao_enviada_em = agora
     n = 0
-    for sup in Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR, is_active=True, avisos_email=True).exclude(email=""):
+    for sup in na_escola(Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR, is_active=True,
+                                                avisos_email=True).exclude(email="")):
         n += 1 if enviar_email(sup) else 0
     return n
 
@@ -258,7 +263,8 @@ def disparar_resumo_mensal(agora=None):
     inicio, fim = mes_anterior(agora.date())
     link = f"{settings.SITE_URL}{reverse('painel_supervisor')}"
     n = 0
-    for sup in Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR, is_active=True, avisos_email=True).exclude(email=""):
+    for sup in na_escola(Usuario.objects.filter(papel=Usuario.Papel.SUPERVISOR, is_active=True,
+                                                avisos_email=True).exclude(email="")):
         linhas = resumo_do_mes(sup, inicio, fim)
         if linhas and emails.enviar("RESUMO_MENSAL_SUPERVISOR", [sup.email], nome=sup.primeiro_nome,
                                     mes=f"{MESES[inicio.month]} de {inicio.year}", lista="\n".join(linhas), link=link):
