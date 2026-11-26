@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -99,6 +99,7 @@ def painel(request):
     ).select_related("solicitante").prefetch_related("estagios__estagiario")
     if request.user.is_superuser:
         solicitacoes = Agendamento.objects.filter(status=Agendamento.Status.SOLICITADO)
+    solicitacoes = solicitacoes.order_by(F("data_hora").desc(nulls_last=True), "-criado_em")  # vazios no fim (PostgreSQL)
     proximas = Agendamento.objects.filter(
         orientador=request.user, status=Agendamento.Status.AGENDADO, data_hora__gte=timezone.now() - timedelta(hours=2)
     ).prefetch_related("estagios__estagiario").select_related("local").order_by("data_hora")[:8]

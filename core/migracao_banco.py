@@ -251,6 +251,81 @@ def comparar(alias_origem, alias_destino):
     return diferencas, a
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# Avisos: dados que o PostgreSQL trata diferente do SQLite (não impedem a cópia; ver docs/operacao/migracao-postgresql.md)
+# ---------------------------------------------------------------------------------------------------------------
+_ASCII_MINUSCULAS = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+
+
+def _igual_no_sqlite(texto):
+    """O que o ``iexact``/``LIKE`` do SQLite considera igual: só A-Z viram a-z (“É” e “é” continuam diferentes)."""
+    return texto.translate(_ASCII_MINUSCULAS)
+
+
+def _igual_no_postgres(texto):
+    """O que o ``iexact`` do PostgreSQL considera igual: ``UPPER(a) = UPPER(b)``, com acentos."""
+    return texto.upper()
+
+
+def _chave_nome(texto):
+    """A chave de nomes da importação (core/importacao.py): sem acentos, minúsculas, espaços simples."""
+    import unicodedata
+
+    t = unicodedata.normalize("NFKD", texto)
+    return " ".join("".join(c for c in t if not unicodedata.combining(c)).lower().split())
+
+
+def _digitos(texto):
+    return "".join(c for c in texto if c.isdigit())
+
+
+# (tabela, colunas lidas, filtro SQL, chave do grupo, só grupos que o SQLite não juntava?, aviso)
+AVISOS = (
+    ("core_usuario", ("username",), "", lambda r: _igual_no_postgres(r[0]), False,
+     "usuários que só diferem por maiúsculas e minúsculas: o login exige a grafia exata, mas o aviso de senha errada "
+     "e o primeiro acesso procuram sem diferenciar e podem achar a outra conta"),
+    ("core_usuario", ("email",), "is_active = 1 AND email <> ''", lambda r: _igual_no_postgres(r[0]), False,
+     "o mesmo e-mail (ignorando maiúsculas) em mais de uma conta ativa: o login pelo e-mail não vale para essas "
+     "contas (a pessoa entra pelo usuário)"),
+    ("core_usuario", ("nome_completo",), "papel = 'ESTAGIARIO'", lambda r: _igual_no_postgres(r[0]), True,
+     "estagiários cujos nomes só diferem por maiúsculas acentuadas (ex.: “É” e “é”): no SQLite a importação os via "
+     "como nomes diferentes; no PostgreSQL, como homônimos (e não reaproveita nenhuma das contas pelo nome)"),
+    ("core_localestagio", ("nome", "cnpj"), "", lambda r: (_digitos(r[1]), _chave_nome(r[0])), False,
+     "concedentes com o mesmo nome (ignorando acentos e maiúsculas) e o mesmo CNPJ/CPF: a importação usa a primeira "
+     "em ordem alfabética, e essa ordem muda no PostgreSQL (acentos e maiúsculas)"),
+    ("core_curso", ("nome",), "", lambda r: _chave_nome(r[0]), False,
+     "cursos com o mesmo nome ignorando acentos e maiúsculas: a importação usa o primeiro em ordem alfabética, e "
+     "essa ordem muda no PostgreSQL"),
+)
+
+
+def avisos_sqlite(caminho):
+    """Grupos de linhas que o PostgreSQL vai tratar diferente. Só ids; nunca o conteúdo. Devolve uma lista de
+    {"tabela", "campo", "aviso", "grupos": [[ids], …]}."""
+    con = sqlite3.connect(f"file:{caminho}?mode=ro", uri=True)
+    saida = []
+    try:
+        existentes = {t for (t,) in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        for tabela, colunas, filtro, chave, so_novos, aviso in AVISOS:
+            if tabela not in existentes:
+                continue
+            tem_escola = any(c[1] == "escola_id" for c in con.execute(f'PRAGMA table_info("{tabela}")'))
+            sql = (f'SELECT id, {"escola_id" if tem_escola else "NULL"}, {", ".join(colunas)} FROM "{tabela}"'
+                   + (f" WHERE {filtro}" if filtro else "") + " ORDER BY id")
+            grupos = defaultdict(list)
+            for pk, escola, *valores in con.execute(sql):
+                valores = [v or "" for v in valores]
+                if valores[0]:
+                    grupos[(escola, chave(valores))].append((pk, _igual_no_sqlite(valores[0])))
+            achados = [[pk for pk, _ in g] for g in grupos.values()
+                       if len(g) > 1 and (not so_novos or len({s for _, s in g}) > 1)]
+            if achados:
+                saida.append({"tabela": tabela, "campo": colunas[0], "aviso": aviso, "grupos": achados[:LIMITE_IDS]})
+    finally:
+        con.close()
+    return saida
+
+
 def agrupar(problemas):
     grupos = defaultdict(list)
     for p in problemas:

@@ -56,6 +56,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "core.middleware.CaractereNuloMiddleware",  # o PostgreSQL recusa NUL: 400 em vez de erro 500
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "core.middleware.CacheDaRequisicaoMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
