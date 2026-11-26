@@ -4,7 +4,7 @@ import threading
 
 from django.conf import settings
 from django.core.mail import EmailMessage
-from django.db import close_old_connections
+from .threads import fechar_conexoes_da_thread
 from django.utils import timezone
 
 from .models import Configuracao, Sugestao, Usuario
@@ -66,7 +66,7 @@ def enviar(sugestao_id, assincrono=None):
             log.exception("Falha ao enviar a sugestão %s por e-mail", sugestao_id)
         finally:
             if assincrono_:
-                close_old_connections()
+                fechar_conexoes_da_thread()
 
     assincrono_ = settings.EMAIL_ASSINCRONO if assincrono is None else assincrono
     if not settings.EMAIL_ATIVO:

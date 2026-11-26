@@ -1,0 +1,25 @@
+# Só para o DESENVOLVIMENTO LOCAL: PostgreSQL 18 com collation ICU pt-BR, na mesma versão da produção.
+# Em produção e na homologação o banco é um recurso próprio do Coolify (nunca este arquivo): assim um deploy da
+# aplicação não recria o banco. Ver docs/operacao/migracao-postgresql.md.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   export DATABASE_URL=postgres://estagio:estagio-dev@127.0.0.1:5432/estagio
+#   .venv/bin/python manage.py migrate && .venv/bin/python manage.py popular_demo
+#   .venv/bin/python manage.py test            # a suíte inteira no PostgreSQL (cria e apaga test_estagio)
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: estagio
+      POSTGRES_PASSWORD: estagio-dev
+      POSTGRES_DB: estagio
+      # o mesmo do recurso do Coolify ("Initial Database Arguments"): ordem alfabética do português
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale-provider=icu --icu-locale=pt-BR"
+    ports:
+      - "127.0.0.1:5432:5432"   # só na própria máquina
+    volumes:
+      - estagio-postgres-dev:/var/lib/postgresql
+
+volumes:
+  estagio-postgres-dev:

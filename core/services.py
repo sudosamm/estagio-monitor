@@ -250,8 +250,16 @@ def enviar_emails(mensagens):
         except Exception:  # noqa: BLE001 — servidor de e-mail fora do ar não pode quebrar o sistema
             logging.getLogger("core.email").exception("Falha ao enviar %d e-mail(s) de aviso", len(mensagens))
 
+    def enviar_em_segundo_plano():
+        from .threads import fechar_conexoes_da_thread
+
+        try:
+            enviar()
+        finally:
+            fechar_conexoes_da_thread()  # o aviso de erro grava no banco
+
     if settings.EMAIL_ASSINCRONO:
-        threading.Thread(target=enviar, daemon=True).start()
+        threading.Thread(target=enviar_em_segundo_plano, daemon=True).start()
     else:
         enviar()
 

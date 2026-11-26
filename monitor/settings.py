@@ -96,16 +96,33 @@ WSGI_APPLICATION = "monitor.wsgi.application"
 DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# Banco: com DATABASE_URL (postgres://usuario:senha@host:5432/nome), PostgreSQL; sem ela, o SQLite de sempre em
+# DATA_DIR. Tirar a variável é a reversão do deploy do PostgreSQL (ver docs/operacao/migracao-postgresql.md).
+from .banco import config_da_url, config_sqlite  # noqa: E402
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": DATA_DIR / "db.sqlite3",
-        "OPTIONS": {
-            "transaction_mode": "IMMEDIATE",
-            "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;",
-        },
-    }
+    "default": config_da_url(DATABASE_URL, int(os.environ.get("DB_CONN_MAX_AGE", "60")))
+    if DATABASE_URL else config_sqlite(DATA_DIR / "db.sqlite3")
 }
+
+# dumpdata/loaddata sem perder os microssegundos das datas (troca de banco; ver core/serializacao_precisa.py)
+SERIALIZATION_MODULES = {"jsonlp": "core.serializacao_precisa"}
+
+# Backup do volume de dados para fora do servidor (Cloudflare R2 ou outro S3). Ver docs/operacao/backup.md.
+BACKUP_CHAVE = os.environ.get("BACKUP_CHAVE", "")
+BACKUP_S3_ENDPOINT = os.environ.get("BACKUP_S3_ENDPOINT", "")  # https://<conta>.r2.cloudflarestorage.com
+BACKUP_S3_BUCKET = os.environ.get("BACKUP_S3_BUCKET", "")
+BACKUP_S3_CHAVE_ID = os.environ.get("BACKUP_S3_CHAVE_ID", "")
+BACKUP_S3_SEGREDO = os.environ.get("BACKUP_S3_SEGREDO", "")
+BACKUP_S3_REGIAO = os.environ.get("BACKUP_S3_REGIAO", "auto")
+BACKUP_PREFIXO = os.environ.get("BACKUP_PREFIXO", "volume-dados")
+BACKUP_PASTA = os.environ.get("BACKUP_PASTA", "")  # alternativa ao S3: uma pasta (disco externo montado)
+BACKUP_SQLITE = os.environ.get("BACKUP_SQLITE", "")  # arquivo SQLite a copiar (padrão: o banco em uso, se for SQLite)
+BACKUP_TRABALHO = os.environ.get("BACKUP_TRABALHO", "")  # pasta temporária (padrão: DATA_DIR/.backup-trabalho)
+BACKUP_RETENCAO_DIAS = int(os.environ.get("BACKUP_RETENCAO_DIAS", "7"))
+BACKUP_RETENCAO_SEMANAS = int(os.environ.get("BACKUP_RETENCAO_SEMANAS", "4"))
+BACKUP_RETENCAO_MESES = int(os.environ.get("BACKUP_RETENCAO_MESES", "6"))
 
 AUTH_USER_MODEL = "core.Usuario"
 AUTH_PASSWORD_VALIDATORS = [

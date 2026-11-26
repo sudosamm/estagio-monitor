@@ -32,6 +32,17 @@ services:
       SUGESTOES_EMAIL: ${SUGESTOES_EMAIL:-}
       DEBUG: ${DEBUG:-0}
       FORCAR_HTTPS: ${FORCAR_HTTPS:-0}
+      # banco: vazio = SQLite em /data. O PostgreSQL é um recurso próprio do Coolify (nunca neste arquivo)
+      DATABASE_URL: ${DATABASE_URL:-}
+      DB_CONN_MAX_AGE: ${DB_CONN_MAX_AGE:-60}
+      # backup do volume /data para o Cloudflare R2 (docs/operacao/backup.md)
+      BACKUP_CHAVE: ${BACKUP_CHAVE:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_CHAVE_ID: ${BACKUP_S3_CHAVE_ID:-}
+      BACKUP_S3_SEGREDO: ${BACKUP_S3_SEGREDO:-}
+      BACKUP_S3_REGIAO: ${BACKUP_S3_REGIAO:-auto}
+      BACKUP_PREFIXO: ${BACKUP_PREFIXO:-volume-dados}
     volumes:
       - estagio-dados:/data
 
