@@ -239,7 +239,6 @@ def mensagem_aviso(usuario, texto, link="", detalhe=""):
 def enviar_emails(mensagens):
     """Envia numa conexão só. Em produção roda em segundo plano: uma falha no e-mail nunca derruba a página."""
     import logging
-    import threading
 
     from django.conf import settings
     from django.core.mail import send_mass_mail
@@ -250,8 +249,10 @@ def enviar_emails(mensagens):
         except Exception:  # noqa: BLE001 — servidor de e-mail fora do ar não pode quebrar o sistema
             logging.getLogger("core.email").exception("Falha ao enviar %d e-mail(s) de aviso", len(mensagens))
 
+    from .threads import iniciar_thread
+
     if settings.EMAIL_ASSINCRONO:
-        threading.Thread(target=enviar, daemon=True).start()
+        iniciar_thread(enviar)  # a thread fecha a própria conexão (o aviso de erro grava no banco)
     else:
         enviar()
 

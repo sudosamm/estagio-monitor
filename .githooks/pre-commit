@@ -1,0 +1,21 @@
+#!/bin/sh
+# Recusa o commit de arquivos que costumam trazer dados pessoais ou segredos:
+# bancos (.sqlite3, .db), chaves (.pem, .key), planilhas e documentos (.csv, .xlsx, .pdf) fora de docs/ e static/,
+# e as pastas de dados reais. Recusa também arquivos gerados pelo Python (*.pyc, __pycache__/), em qualquer pasta.
+# Ative uma vez por clone:   git config core.hooksPath .githooks
+# Para um caso legítimo (ex.: um PDF de exemplo em docs/), coloque o arquivo em docs/ ou static/.
+recusados=$(git diff --cached --name-only --diff-filter=ACMR -z | tr '\0' '\n' | while IFS= read -r arq; do
+  case "$arq" in
+    *.pyc|*.pyo|__pycache__/*|*/__pycache__/*) echo "$arq" ;;
+    docs/*|static/*) ;;
+    TCEs/*|importacao/*|Relatorio-estagio/*|data/*|.env|.env.*) [ "$arq" = ".env.example" ] || echo "$arq" ;;
+    *.sqlite3|*.sqlite|*.db|*.sqlite3-wal|*.sqlite3-shm|*.pem|*.key|*.csv|*.xlsx|*.xls|*.pdf) echo "$arq" ;;
+  esac
+done)
+if [ -n "$recusados" ]; then
+  echo "Commit recusado: estes arquivos podem ter dados pessoais ou segredos, ou são gerados pelo Python:" >&2
+  echo "$recusados" | sed 's/^/  - /' >&2
+  echo "Tire-os do commit com:  git restore --staged <arquivo>   (ver docs/diagnostico/00-dados-pessoais-no-git.md)" >&2
+  exit 1
+fi
+exit 0

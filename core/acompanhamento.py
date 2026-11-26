@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, time, timedelta
 
 from django.conf import settings
-from django.db import close_old_connections
+from .threads import iniciar_thread
 from django.db.models import Count, Q
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -257,13 +257,9 @@ def disparar_resumo_se_preciso(agora=None):
             log.info("Resumo semanal enviado para %d pessoa(s)", n)
         except Exception:  # noqa: BLE001 — falha no e-mail não pode derrubar o sistema; tenta de novo na próxima semana
             log.exception("Falha ao enviar o resumo semanal")
-        finally:
-            close_old_connections()
 
     if settings.EMAIL_ASSINCRONO:
-        import threading
-
-        threading.Thread(target=enviar, daemon=True).start()
+        iniciar_thread(enviar)
     else:
         enviar()
     return True

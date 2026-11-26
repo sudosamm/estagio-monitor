@@ -9,7 +9,7 @@ import logging
 import threading
 
 from django.conf import settings
-from django.db import close_old_connections
+from .threads import iniciar_thread
 from django.utils import timezone
 
 from .models import InscricaoPush
@@ -103,11 +103,5 @@ def enviar(notificacoes, assincrono=None):
     if not assincrono:
         return _enviar_agora(itens)
 
-    def rodar():
-        try:
-            _enviar_agora(itens)
-        finally:
-            close_old_connections()
-
-    threading.Thread(target=rodar, daemon=True).start()
+    iniciar_thread(lambda: _enviar_agora(itens))  # a thread fecha a própria conexão ao terminar
     return len(itens)

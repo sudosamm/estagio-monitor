@@ -607,6 +607,24 @@ def chave_municipio(nome):
     return " ".join(re.sub(r"[^a-z0-9 ]", " ", texto).split())
 
 
+PALAVRAS_MINUSCULAS_MUNICIPIO = {"de", "da", "do", "das", "dos", "e"}
+
+
+def nome_municipio(nome):
+    """Município para mostrar ao usuário: “GENERAL SAMPAIO - CE” → “General Sampaio”.
+
+    Tira a UF do fim (como ``chave_municipio``) e, se veio todo em maiúsculas ou todo em minúsculas, põe só as
+    iniciais em maiúscula (“de”, “da”, “do”… ficam minúsculas). Quem já escreveu misturando fica como escreveu."""
+    import re
+
+    texto = re.sub(r"\s*[-/(]\s*[A-Za-z]{2}\)?\s*$", "", " ".join((nome or "").split()))
+    if not (texto.isupper() or texto.islower()):
+        return texto
+    partes = re.split(r"([\s'’-])", texto.lower())
+    return "".join(p if (i and p in PALAVRAS_MINUSCULAS_MUNICIPIO) else p[:1].upper() + p[1:]
+                   for i, p in enumerate(partes))
+
+
 class DiaSemEstagio(models.Model):
     """Feriados, recessos, eventos da escola — dias em que o estagiário não vai ao estágio.
 

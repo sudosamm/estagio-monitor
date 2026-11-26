@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -140,7 +140,7 @@ def estagio_detalhe(request, pk):
             from ..responsaveis import maior_no_inicio
 
             ctx["responsaveis"] = (estagio.estagiario.responsaveis_legais.select_related("responsavel")
-                                   .order_by("encerrado_em", "responsavel__nome_completo"))
+                                   .order_by(F("encerrado_em").asc(nulls_first=True), "responsavel__nome_completo"))
             ctx["form_responsavel"] = ResponsavelForm(prefix="resp")
             ctx["maior_no_inicio"] = maior_no_inicio(estagio.estagiario)
         ctx.update(
