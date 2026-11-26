@@ -11,3 +11,16 @@ def fechar_conexoes_da_thread():
     """
     connections.close_all()
 
+
+def iniciar_thread(funcao):
+    """Roda ``funcao`` numa thread em segundo plano **com o mesmo contexto** (a escola atual da requisição).
+
+    Threads novas não herdam os contextvars; sem isto, o envio de e-mails e pushes perderia a escola e, num banco
+    com várias escolas, as consultas falhariam fechado (EscopoAusente)."""
+    import contextvars
+    import threading
+
+    contexto = contextvars.copy_context()
+    t = threading.Thread(target=contexto.run, args=(funcao,), daemon=True)
+    t.start()
+    return t

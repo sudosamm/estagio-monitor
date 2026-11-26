@@ -35,6 +35,7 @@ services:
       # banco: vazio = SQLite em /data. O PostgreSQL é um recurso próprio do Coolify (nunca neste arquivo)
       DATABASE_URL: ${DATABASE_URL:-}
       DB_CONN_MAX_AGE: ${DB_CONN_MAX_AGE:-60}
+      CHAVE_DADOS: ${CHAVE_DADOS:-}
       # backup do volume /data para o Cloudflare R2 (docs/operacao/backup.md)
       BACKUP_CHAVE: ${BACKUP_CHAVE:-}
       BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}

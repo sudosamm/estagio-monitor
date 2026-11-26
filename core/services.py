@@ -239,7 +239,6 @@ def mensagem_aviso(usuario, texto, link="", detalhe=""):
 def enviar_emails(mensagens):
     """Envia numa conexão só. Em produção roda em segundo plano: uma falha no e-mail nunca derruba a página."""
     import logging
-    import threading
 
     from django.conf import settings
     from django.core.mail import send_mass_mail
@@ -250,6 +249,8 @@ def enviar_emails(mensagens):
         except Exception:  # noqa: BLE001 — servidor de e-mail fora do ar não pode quebrar o sistema
             logging.getLogger("core.email").exception("Falha ao enviar %d e-mail(s) de aviso", len(mensagens))
 
+    from .threads import iniciar_thread
+
     def enviar_em_segundo_plano():
         from .threads import fechar_conexoes_da_thread
 
@@ -259,7 +260,7 @@ def enviar_emails(mensagens):
             fechar_conexoes_da_thread()  # o aviso de erro grava no banco
 
     if settings.EMAIL_ASSINCRONO:
-        threading.Thread(target=enviar_em_segundo_plano, daemon=True).start()
+        iniciar_thread(enviar_em_segundo_plano)
     else:
         enviar()
 
@@ -761,8 +762,10 @@ def gestores_da_candidatura(cand):
 
     cursos = set(cand.vagas.values_list("curso_id", flat=True))
     pessoas = []
-    for u in Usuario.objects.filter(is_active=True).filter(
-            Q(papel__in=[Usuario.Papel.ORIENTADOR, Usuario.Papel.COORDENADOR]) | Q(is_superuser=True)):
+    from escolas.pessoas import na_escola
+
+    for u in na_escola(Usuario.objects.filter(is_active=True).filter(
+            Q(papel__in=[Usuario.Papel.ORIENTADOR, Usuario.Papel.COORDENADOR]) | Q(is_superuser=True))):
         if not u.pode("candidaturas"):
             continue
         ids = u.cursos_ids() if u.is_coordenador else None

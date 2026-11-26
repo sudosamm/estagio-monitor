@@ -1,13 +1,12 @@
 """Envio das sugestões e relatos de erro por e-mail (com os anexos)."""
 import logging
-import threading
 
 from django.conf import settings
 from django.core.mail import EmailMessage
-from .threads import fechar_conexoes_da_thread
+from .threads import fechar_conexoes_da_thread, iniciar_thread
 from django.utils import timezone
 
-from .models import Configuracao, Sugestao, Usuario
+from .models import Configuracao, Sugestao
 
 log = logging.getLogger("core.sugestoes")
 
@@ -18,8 +17,9 @@ def destinatarios():
         return [cfg.email_sugestoes]
     if settings.SUGESTOES_EMAIL:
         return [e.strip() for e in settings.SUGESTOES_EMAIL.split(",") if e.strip()]
-    return list(Usuario.objects.filter(is_superuser=True, is_active=True).exclude(email="")
-                .values_list("email", flat=True))
+    from escolas.pessoas import administradores
+
+    return list(administradores().exclude(email="").values_list("email", flat=True))
 
 
 def montar_email(s):
@@ -72,6 +72,6 @@ def enviar(sugestao_id, assincrono=None):
     if not settings.EMAIL_ATIVO:
         return
     if assincrono_:
-        threading.Thread(target=rodar, daemon=True).start()
+        iniciar_thread(rodar)
     else:
         rodar()

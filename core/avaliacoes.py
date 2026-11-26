@@ -5,6 +5,8 @@ from datetime import date
 from django import forms
 from django.utils import timezone
 
+from escolas.marca import sistema_oficial
+
 from .models import Feedback, PerguntaAvaliacao
 
 ESCALA = [(str(v), f"{v} — {r}") for v, r in reversed(Feedback.NOTAS)]  # 1 — Insuficiente … 5 — Excelente
@@ -190,7 +192,7 @@ def disparar_lembrete(agora=None):
         return 0
     mes = mes_de(agora.date())
     marco = timezone.make_aware(datetime(mes.year, mes.month, 20))
-    reservado = Configuracao.objects.filter(pk=1).filter(
+    reservado = Configuracao.objects.filter(pk=cfg.pk).filter(
         Q(lembrete_avaliacoes_em__isnull=True) | Q(lembrete_avaliacoes_em__lt=marco)).update(lembrete_avaliacoes_em=agora)
     if not reservado:
         return 0
@@ -198,6 +200,6 @@ def disparar_lembrete(agora=None):
 
     estagios = list(Estagio.objects.filter(ativo=True).select_related("estagiario"))
     pendentes = [u for u in estagiarios_pendentes(estagios, mes) if u.is_active]
-    notificar(pendentes, f"Faltam as suas avaliações de {nome_mes(mes)} no SICE (autoavaliação e avaliação do "
+    notificar(pendentes, f"Faltam as suas avaliações de {nome_mes(mes)} no {sistema_oficial()} (autoavaliação e avaliação do "
                          "orientador). Responda aqui e copie as respostas prontas.", reverse("minhas_avaliacoes"))
     return len(pendentes)

@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "escolas",
     "core",
 ]
 
@@ -62,6 +63,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "escolas.middleware.EscolaAtualMiddleware",  # escola atual e papel da pessoa nela (antes do modo administrador)
     "core.middleware.ModoAdministradorMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "core.sessoes.SessaoAparelhoMiddleware",
@@ -105,6 +107,10 @@ DATABASES = {
     "default": config_da_url(DATABASE_URL, int(os.environ.get("DB_CONN_MAX_AGE", "60")))
     if DATABASE_URL else config_sqlite(DATA_DIR / "db.sqlite3")
 }
+
+# Chave dos campos cifrados no banco (segredo da verificação em duas etapas). Vazia = derivada do SECRET_KEY.
+# Gere com: python manage.py chave_dados --nova   (ver core/cifragem.py)
+CHAVE_DADOS = os.environ.get("CHAVE_DADOS", "")
 
 # dumpdata/loaddata sem perder os microssegundos das datas (troca de banco; ver core/serializacao_precisa.py)
 SERIALIZATION_MODULES = {"jsonlp": "core.serializacao_precisa"}

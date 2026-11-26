@@ -10,6 +10,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
+from escolas.escopo import EscopoEscolaManager, escola_corrente_id, escola_corrente_ou_nada
+
+from .cifragem import CampoCifrado
+
 # Guardados só durante uma requisição (o middleware CacheDaRequisicaoMiddleware abre e fecha): evita reler a
 # configuração várias vezes na mesma página. Fora de uma requisição (comandos, testes sem cliente) não guarda nada.
 CACHE_REQUISICAO = contextvars.ContextVar("cache_requisicao", default=None)
@@ -114,7 +118,8 @@ class Usuario(AbstractUser):
     termos_versao = models.CharField(max_length=20, blank=True, editable=False)
     termos_aceitos_em = models.DateTimeField(null=True, blank=True, editable=False)
     # verificação em duas etapas (código de 6 dígitos de um app autenticador; ver core/dois_fatores.py)
-    totp_segredo = models.CharField(max_length=64, blank=True, editable=False)
+    totp_segredo = CampoCifrado(max_length=255, blank=True, editable=False,
+                                help_text="Cifrado no banco com CHAVE_DADOS (core/cifragem.py)")
     totp_ativo_em = models.DateTimeField(null=True, blank=True, editable=False)
     totp_ultimo_passo = models.BigIntegerField(default=0, editable=False)
     codigos_recuperacao = models.JSONField(default=list, blank=True, editable=False)
@@ -159,18 +164,23 @@ class Usuario(AbstractUser):
         obj = super().from_db(db, field_names, values)
         obj._email_original = obj.__dict__.get("email")
         obj._ativo_original = obj.__dict__.get("is_active")
+        obj._papel_original = obj.__dict__.get("papel")
+        obj._superuser_original = obj.__dict__.get("is_superuser")
         return obj
 
     def save(self, *args, **kwargs):
-        # administrador no modo orientador: nesta requisição ele “não é” superusuário (ver ModoAdministradorMiddleware),
-        # mas o banco nunca pode perder isso
-        if getattr(self, "_admin_real", False):
+        # Nesta requisição a conta pode estar com o papel e o "administrador" da escola atual
+        # (escolas.middleware.aplicar_escola) ou no modo orientador (ModoAdministradorMiddleware). O banco grava
+        # sempre os valores originais da conta.
+        papel_req, super_req = self.papel, self.is_superuser
+        if hasattr(self, "_papel_bd"):
+            self.papel, self.is_superuser = self._papel_bd, self._superuser_bd
+        elif getattr(self, "_admin_real", False):
             self.is_superuser = True
-            try:
-                return self._salvar(*args, **kwargs)
-            finally:
-                self.is_superuser = False
-        return self._salvar(*args, **kwargs)
+        try:
+            return self._salvar(*args, **kwargs)
+        finally:
+            self.papel, self.is_superuser = papel_req, super_req
 
     def _salvar(self, *args, **kwargs):
         # e-mail trocado (pela pessoa ou pela gestão) precisa ser confirmado de novo
@@ -185,7 +195,13 @@ class Usuario(AbstractUser):
             self.papel = self.Papel.ORIENTADOR
         if not self.nome_completo:
             self.nome_completo = f"{self.first_name} {self.last_name}".strip() or self.username
+        criado = self._state.adding
         super().save(*args, **kwargs)
+        if not kwargs.get("using") or kwargs.get("using") == "default":
+            from escolas.vinculos import sincronizar
+
+            sincronizar(self, criado, getattr(self, "_papel_original", None), getattr(self, "_superuser_original", False))
+        self._papel_original, self._superuser_original = self.papel, self.is_superuser
         self._email_original = self.email
         if getattr(self, "_ativo_original", None) and not self.is_active and (campos is None or "is_active" in campos):
             from .sessoes import desconectar_todas
@@ -196,6 +212,11 @@ class Usuario(AbstractUser):
     @property
     def is_orientador(self):
         return self.papel == self.Papel.ORIENTADOR
+
+    @property
+    def administrador_plataforma(self):
+        """Administrador técnico da plataforma (o ``is_superuser`` gravado), separado do administrador da escola."""
+        return getattr(self, "_superuser_bd", self.is_superuser or getattr(self, "_admin_real", False))
 
     @property
     def e_administrador(self):
@@ -296,7 +317,12 @@ class Usuario(AbstractUser):
 
 
 class Curso(models.Model):
-    nome = models.CharField(max_length=120, unique=True)
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
+
+    nome = models.CharField(max_length=120)
     carga_horaria = models.PositiveIntegerField("Carga horária total (h)", default=300)
     horas_por_dia_padrao = models.DecimalField("Horas por dia (padrão)", max_digits=4, decimal_places=2, default=Decimal("4"))
     na_captacao = models.BooleanField("Aparece na captação de concedentes", default=True,
@@ -304,6 +330,7 @@ class Curso(models.Model):
 
     class Meta:
         ordering = ["nome"]
+        constraints = [models.UniqueConstraint(fields=["escola", "nome"], name="curso_nome_unico_na_escola")]
 
     def __str__(self):
         return self.nome
@@ -376,6 +403,9 @@ class Turma(models.Model):
     As listas do sistema mostram as turmas do ano de referência (ver Configuracao.ano_referencia).
     """
 
+    _caminho_escola = "curso__escola"
+    objects = EscopoEscolaManager()
+
     curso = models.ForeignKey(Curso, on_delete=models.PROTECT, related_name="turmas")
     nome = models.CharField("Nome da turma", max_length=40, blank=True,
                             help_text="Ex.: 3º A. Vazio = nome do curso. Pode repetir o nome dos anos anteriores.")
@@ -412,6 +442,11 @@ CAMPOS_CONCEDENTE = [
 class LocalEstagio(DadosConcedente):
     """Concedente: empresa, órgão ou profissional liberal que recebe estagiários."""
 
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
+
     ativa = models.BooleanField("Ativa", default=True,
                                 help_text="Concedentes inativas não aparecem nos cadastros de estágio e supervisores.")
     # check-in com localização: ponto da concedente e distância aceita
@@ -429,6 +464,11 @@ class LocalEstagio(DadosConcedente):
 
 
 class Estagio(models.Model):
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
+
     estagiario = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="estagios",
         limit_choices_to={"papel": Usuario.Papel.ESTAGIARIO},
@@ -490,8 +530,17 @@ class Estagio(models.Model):
                 return e
         return None
 
+    def save(self, *args, **kwargs):
+        if self.curso_id and not self.escola_id:
+            self.escola_id = Curso._base_manager.filter(pk=self.curso_id).values_list("escola_id", flat=True).first()
+        super().save(*args, **kwargs)
+
     def clean(self):
         super().clean()
+        for campo in ("curso", "local"):
+            obj = getattr(self, campo) if getattr(self, f"{campo}_id") else None
+            if obj is not None and self.escola_id and obj.escola_id != self.escola_id:
+                raise ValidationError({campo: "É de outra escola."})
         if self.turma_id and self.curso_id and self.turma.curso_id != self.curso_id:
             raise ValidationError({"turma": "A turma é de outro curso."})
         if self.pk and not self.supervisor_id:
@@ -503,6 +552,11 @@ class Estagio(models.Model):
                                                  f"{self.local}. Vincule-o(a) a essa concedente primeiro."})
 
     def pode_ver(self, usuario):
+        from escolas.escopo import TODAS, escola_corrente
+
+        atual = escola_corrente(obrigatoria=False)
+        if atual is not None and atual is not TODAS and self.escola_id != atual.pk:
+            return False  # nunca, por nenhum caminho, um estágio de outra escola
         if usuario.is_superuser or usuario.coordena(self.curso_id):
             return True
         return usuario.pk in {self.estagiario_id, self.orientador_id, self.supervisor_id}
@@ -513,6 +567,9 @@ class Estagio(models.Model):
 
 class TrocaSupervisor(models.Model):
     """Histórico de troca do supervisor de um estágio (só o orientador/coordenador troca)."""
+
+    _caminho_escola = "estagio__escola"
+    objects = EscopoEscolaManager()
 
     estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="trocas_supervisor")
     anterior = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
@@ -531,6 +588,9 @@ class Escala(models.Model):
     Para mudar de 'seg e ter' para 'seg a sex' a partir de 16/11, basta criar
     uma nova escala com vigente_desde = 16/11. O histórico é preservado.
     """
+
+    _caminho_escola = "estagio__escola"
+    objects = EscopoEscolaManager()
 
     estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="escalas")
     vigente_desde = models.DateField("Vale a partir de")
@@ -619,6 +679,11 @@ class DiaSemEstagio(models.Model):
     `origem` diz de onde veio ("manual", "calendario"); prepara a importação automática de calendários.
     """
 
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
+
     class Abrangencia(models.TextChoices):
         ESCOLA = "ESCOLA", "Evento ou recesso da escola"
         MUNICIPIO = "MUNICIPIO", "Feriado municipal"
@@ -687,6 +752,9 @@ def descrever_geo(geo, local):
 
 class Registro(models.Model):
     """O que aconteceu em um dia de estágio."""
+
+    _caminho_escola = "estagio__escola"
+    objects = EscopoEscolaManager()
 
     class Situacao(models.TextChoices):
         PRESENTE = "PRESENTE", "Presente"
@@ -847,9 +915,19 @@ class Registro(models.Model):
         return super().delete(*args, **kwargs)
 
 
+def _pasta_da_escola(escola_id):
+    """Arquivos novos ficam separados por escola (escolas/<id>/…). Os antigos continuam onde estão; o download
+    sempre confere a escola pela linha do banco, não pelo caminho."""
+    return f"escolas/{escola_id}" if escola_id else "plataforma"
+
+
+def _ext(filename, padrao="bin"):
+    return filename.rsplit(".", 1)[-1].lower()[:8] if "." in filename else padrao
+
+
 def caminho_atestado(instance, filename):
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
-    return f"atestados/{timezone.localdate():%Y/%m}/{get_random_string(20)}.{ext}"
+    escola = Estagio._base_manager.filter(pk=instance.estagio_id).values_list("escola_id", flat=True).first()
+    return f"{_pasta_da_escola(escola)}/atestados/{timezone.localdate():%Y/%m}/{get_random_string(20)}.{_ext(filename)}"
 
 
 class Justificativa(models.Model):
@@ -858,6 +936,9 @@ class Justificativa(models.Model):
     Os dias de estágio do período viram “ausência” aguardando análise. Aceito: ausência justificada (não conta como
     falta). Recusado: os dias passados viram falta. Atestado é dado de saúde (LGPD): só quem decide vê o arquivo.
     """
+
+    _caminho_escola = "estagio__escola"
+    objects = EscopoEscolaManager()
 
     class Tipo(models.TextChoices):
         ATESTADO = "ATESTADO", "Atestado médico"
@@ -932,6 +1013,9 @@ class HistoricoRegistro(models.Model):
     Guardado por estágio + dia, para sobreviver mesmo se o registro for excluído (ex.: ausência cancelada).
     """
 
+    _caminho_escola = "estagio__escola"
+    objects = EscopoEscolaManager()
+
     class Acao(models.TextChoices):
         ENTRADA = "ENTRADA", "marcou a entrada pelo botão"
         PONTO = "PONTO", "marcou pelo botão"
@@ -978,6 +1062,9 @@ class DiaPlanejado(models.Model):
     Entra na previsão de término e aparece no calendário como dia de estágio.
     """
 
+    _caminho_escola = "estagio__escola"
+    objects = EscopoEscolaManager()
+
     estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="dias_planejados")
     data = models.DateField()
     horas = models.DecimalField(max_digits=4, decimal_places=2)
@@ -996,6 +1083,11 @@ class DiaPlanejado(models.Model):
 
 
 class Agendamento(models.Model):
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
+
     class Tipo(models.TextChoices):
         VISITA = "VISITA", "Visita ao local"
         CONVERSA = "CONVERSA", "Conversa / atendimento"
@@ -1063,12 +1155,27 @@ class Agendamento(models.Model):
 
 
 def caminho_anexo(instance, filename):
+    """Nome aleatório (o nome original fica em ``Documento.nome_original``): o disco e os backups não guardam nomes
+    de pessoas no nome do arquivo."""
     hoje = timezone.localdate()
-    return f"{hoje:%Y/%m}/{filename}"
+    return f"{_pasta_da_escola(instance.escola_id)}/documentos/{hoje:%Y/%m}/{get_random_string(20)}.{_ext(filename)}"
+
+
+def caminho_modelo_documento(instance, filename):
+    return f"{_pasta_da_escola(instance.escola_id)}/modelos/{get_random_string(12)}.{_ext(filename)}"
+
+
+def caminho_config(instance, filename):
+    return f"{_pasta_da_escola(instance.escola_id)}/config/{get_random_string(12)}.{_ext(filename, 'png')}"
 
 
 class TipoDocumento(models.Model):
     """Documento que cada estagiário precisa ter na pasta (TCE, plano de atividades, relatório final…)."""
+
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
 
     class Momento(models.TextChoices):
         INICIO = "INICIO", "No início do estágio"
@@ -1090,7 +1197,7 @@ class TipoDocumento(models.Model):
     quem_envia = models.CharField("Quem envia", max_length=10, choices=Quem.choices, default=Quem.ESTAGIARIO)
     obrigatorio = models.BooleanField("Obrigatório", default=True)
     curso = models.ForeignKey(Curso, null=True, blank=True, on_delete=models.CASCADE, help_text="Vazio = todos os cursos")
-    modelo = models.FileField("Modelo para baixar (opcional)", upload_to="modelos/", blank=True,
+    modelo = models.FileField("Modelo para baixar (opcional)", upload_to=caminho_modelo_documento, blank=True,
                               help_text="Ex.: o formulário do plano de atividades em branco.")
     ativo = models.BooleanField("Em uso", default=True)
     ordem = models.PositiveSmallIntegerField(default=0)
@@ -1118,6 +1225,11 @@ class TipoDocumento(models.Model):
 
 
 class Documento(models.Model):
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
+
     class Situacao(models.TextChoices):
         ENVIADO = "ENVIADO", "Aguardando conferência"
         APROVADO = "APROVADO", "Conferido"
@@ -1181,6 +1293,9 @@ class Documento(models.Model):
 class Mensagem(models.Model):
     """Mural de dúvidas e conversas de um estágio (estagiário, supervisor e orientador)."""
 
+    _caminho_escola = "estagio__escola"
+    objects = EscopoEscolaManager()
+
     estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="mensagens")
     autor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     texto = models.TextField()
@@ -1195,6 +1310,10 @@ class Mensagem(models.Model):
 
 
 class Notificacao(models.Model):
+    escola = models.ForeignKey("escolas.Escola", null=True, blank=True, on_delete=models.CASCADE,
+                               related_name="+", default=escola_corrente_ou_nada, editable=False,
+                               help_text="Vazio = da plataforma (sem escola)")
+
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notificacoes")
     texto = models.CharField(max_length=255)
     link = models.CharField(max_length=255, blank=True)
@@ -1207,6 +1326,11 @@ class Notificacao(models.Model):
 
 class PerguntaAvaliacao(models.Model):
     """Pergunta de uma avaliação que o estagiário preenche (na mesma ordem e com o mesmo texto do SICE)."""
+
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
 
     class Tipo(models.TextChoices):
         AUTO = "AUTO", "Autoavaliação"
@@ -1253,6 +1377,9 @@ def primeiro_dia_do_mes():
 class Avaliacao(models.Model):
     """Respostas do estagiário a uma avaliação de um mês, para copiar no SICE (lá elas também são mensais)."""
 
+    _caminho_escola = "estagio__escola"
+    objects = EscopoEscolaManager()
+
     estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="avaliacoes")
     tipo = models.CharField(max_length=10, choices=PerguntaAvaliacao.Tipo.choices)
     mes = models.DateField("Mês de referência", default=primeiro_dia_do_mes)
@@ -1270,12 +1397,18 @@ class Avaliacao(models.Model):
 
 
 def caminho_sugestao(instance, filename):
-    ext = filename.rsplit(".", 1)[-1].lower()[:8] if "." in filename else "bin"
-    return f"sugestoes/{timezone.localdate():%Y/%m}/{get_random_string(16)}.{ext}"
+    escola = Sugestao._base_manager.filter(pk=instance.sugestao_id).values_list("escola_id", flat=True).first()
+    return f"{_pasta_da_escola(escola)}/sugestoes/{timezone.localdate():%Y/%m}/{get_random_string(16)}.{_ext(filename)}"
 
 
 class Sugestao(models.Model):
     """Sugestão, erro ou dúvida enviada pela página “Sugestões e erros” (vai por e-mail e fica guardada aqui)."""
+
+    escola = models.ForeignKey("escolas.Escola", null=True, blank=True, on_delete=models.SET_NULL,
+                               related_name="+", default=escola_corrente_ou_nada, editable=False,
+                               help_text="Vazio = da plataforma (sem escola)")
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
 
     class Tipo(models.TextChoices):
         ERRO = "ERRO", "Erro ou problema"
@@ -1321,6 +1454,9 @@ class AnexoSugestao(models.Model):
 class AcompanhamentoVisita(models.Model):
     """“Acompanhamento de Visita” do SICE: o orientador avalia o estagiário na visita (prática e atitudinal)."""
 
+    _caminho_escola = "estagio__escola"
+    objects = EscopoEscolaManager()
+
     estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="acompanhamentos")
     agendamento = models.ForeignKey(Agendamento, null=True, blank=True, on_delete=models.SET_NULL,
                                     related_name="acompanhamentos")
@@ -1351,6 +1487,11 @@ class AcompanhamentoVisita(models.Model):
 class Encerramento(models.Model):
     """Registro de um encerramento de ano letivo, com o necessário para desfazê-lo."""
 
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
+
     ano = models.PositiveIntegerField("Ano do estágio")
     feito_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     feito_em = models.DateTimeField(auto_now_add=True)
@@ -1369,6 +1510,11 @@ class Encerramento(models.Model):
 class Anonimizacao(models.Model):
     """Registro (sem dados pessoais) de cada anonimização feita."""
 
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
+
     feita_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     feita_em = models.DateTimeField(auto_now_add=True)
     anos = models.CharField(max_length=60, help_text="Anos de estágio anonimizados")
@@ -1381,6 +1527,9 @@ class Anonimizacao(models.Model):
 
 class Feedback(models.Model):
     """Feedback mensal do supervisor sobre o estagiário: notas por critério e comentários."""
+
+    _caminho_escola = "estagio__escola"
+    objects = EscopoEscolaManager()
 
     NOTAS = [(5, "Excelente"), (4, "Muito bom"), (3, "Bom"), (2, "Regular"), (1, "Insuficiente")]
     CRITERIOS = [
@@ -1456,6 +1605,11 @@ class InscricaoPush(models.Model):
 class Comunicado(models.Model):
     """Aviso que o orientador manda para uma turma, um curso, uma concedente ou todos os seus estagiários."""
 
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
+
     autor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="comunicados")
     titulo = models.CharField("Título", max_length=120)
     texto = models.TextField("Mensagem")
@@ -1474,7 +1628,9 @@ class Comunicado(models.Model):
 
 
 class Configuracao(models.Model):
-    """Configurações gerais (registro único), editadas pelo administrador."""
+    """Configurações da escola (uma por escola), editadas pelo administrador da escola."""
+
+    escola = models.OneToOneField("escolas.Escola", on_delete=models.CASCADE, related_name="configuracao")
 
     nome_escola = models.CharField("Escola", max_length=160, blank=True, help_text="Ex.: EEEP Deputado Fulano de Tal")
     municipio_escola = models.CharField("Município da escola", max_length=80, blank=True)
@@ -1483,7 +1639,7 @@ class Configuracao(models.Model):
         default="Coordenadoria de Educação Profissional\nCélula de Estágio - CEPAE",
         help_text="Uma linha por linha do cabeçalho, acima do título “FREQUÊNCIA DE ESTÁGIO”.",
     )
-    logo_folha = models.ImageField("Brasão / logotipo da folha", upload_to="config/", blank=True,
+    logo_folha = models.ImageField("Brasão / logotipo da folha", upload_to=caminho_config, blank=True,
                                    help_text="Canto superior esquerdo da folha de frequência. Vazio = brasão padrão do "
                                              "Governo do Ceará / SEDUC (o mesmo da folha oficial).")
     ano_referencia = models.PositiveIntegerField(
@@ -1621,23 +1777,48 @@ class Configuracao(models.Model):
         verbose_name_plural = "configurações"
 
     def __str__(self):
-        return "Configurações do sistema"
+        return f"Configurações de {self.escola}" if self.escola_id else "Configurações"
 
     def save(self, *args, **kwargs):
-        self.pk = 1
+        if not self.escola_id:
+            from escolas.escopo import escola_corrente
+
+            self.escola = escola_corrente()
         super().save(*args, **kwargs)
+        # nome e município continuam editáveis aqui (Configurações); a escola acompanha
+        from escolas.escopo import limpar_cache_escola_unica
+        from escolas.models import Escola
+
+        mudou = Escola.objects.filter(pk=self.escola_id).exclude(
+            nome=self.nome_escola or models.F("nome"), municipio=self.municipio_escola).update(
+            nome=models.functions.Coalesce(models.Value(self.nome_escola or None), models.F("nome")),
+            municipio=self.municipio_escola)
+        if mudou:
+            limpar_cache_escola_unica()
         cache = CACHE_REQUISICAO.get()
         if cache is not None:
-            cache["configuracao"] = self
+            cache[f"configuracao:{self.escola_id}"] = self
 
     @classmethod
-    def atual(cls):
+    def atual(cls, escola=None):
+        """Configuração da escola em uso (da requisição, de ``escola_ativa`` ou a única do banco).
+
+        Sem escola definida num banco com várias escolas (ex.: tela de entrar antes do login), devolve uma
+        configuração padrão **não gravada**, só para leitura."""
+        from escolas.escopo import TODAS, escola_corrente
+
+        escola = escola or escola_corrente(obrigatoria=False)
+        if escola is None or escola is TODAS:
+            return cls()
         cache = CACHE_REQUISICAO.get()
-        if cache is not None and "configuracao" in cache:
-            return cache["configuracao"]
-        obj, _ = cls.objects.get_or_create(pk=1)
+        chave = f"configuracao:{escola.pk}"
+        if cache is not None and chave in cache:
+            return cache[chave]
+        obj = cls.objects.filter(escola=escola).select_related("escola", "escola__rede").first()
+        if obj is None:
+            obj, _ = cls.objects.get_or_create(escola=escola)
         if cache is not None:
-            cache["configuracao"] = obj
+            cache[chave] = obj
         return obj
 
     @property
@@ -1662,6 +1843,9 @@ class ImpressaoFrequencia(models.Model):
 
     Não aparece para estagiários. O código sai impresso no rodapé da folha.
     """
+
+    _caminho_escola = "estagio__escola"
+    objects = EscopoEscolaManager()
 
     estagio = models.ForeignKey(Estagio, on_delete=models.CASCADE, related_name="impressoes")
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
@@ -1690,6 +1874,11 @@ def gerar_protocolo():
 
 class Candidatura(DadosConcedente):
     """Empresa/órgão que se cadastrou pela página pública para receber estagiários num ano letivo."""
+
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
 
     class Status(models.TextChoices):
         PENDENTE = "PENDENTE", "Aguardando análise"
@@ -1775,6 +1964,9 @@ class Candidatura(DadosConcedente):
 
 
 class VagaCandidatura(models.Model):
+    _caminho_escola = "candidatura__escola"
+    objects = EscopoEscolaManager()
+
     candidatura = models.ForeignKey(Candidatura, on_delete=models.CASCADE, related_name="vagas")
     curso = models.ForeignKey(Curso, on_delete=models.CASCADE, related_name="vagas_ofertadas")
     quantidade = models.PositiveSmallIntegerField()
@@ -1789,6 +1981,11 @@ class AvisoExterno(models.Model):
 
     Quando houver envio automático, basta processar os avisos pendentes.
     """
+
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
 
     class Status(models.TextChoices):
         PENDENTE = "PENDENTE", "A enviar"
@@ -1843,12 +2040,16 @@ class AvisoExterno(models.Model):
 
 
 def caminho_folha(instance, filename):
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "pdf"
-    return f"folhas/{instance.mes:%Y-%m}/{get_random_string(16)}.{ext}"
+    return f"{_pasta_da_escola(instance.escola_id)}/folhas/{instance.mes:%Y-%m}/{get_random_string(16)}.{_ext(filename, 'pdf')}"
 
 
 class FolhaEnviada(models.Model):
     """Folha de frequência de um mês que o orientador envia para os estagiários baixarem e imprimirem."""
+
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
 
     mes = models.DateField(help_text="Primeiro dia do mês da folha")
     turma = models.ForeignKey(Turma, null=True, blank=True, on_delete=models.CASCADE, related_name="folhas_enviadas",
@@ -1913,7 +2114,11 @@ class ModeloEmail(models.Model):
     """Texto de um tipo de e-mail automático, editado pelo administrador. Sem registro, vale o texto padrão
     (core/emails.py). Variáveis entre chaves, ex.: {nome}, {link}."""
 
-    tipo = models.CharField(max_length=30, unique=True)
+    escola = models.ForeignKey("escolas.Escola", null=True, blank=True, on_delete=models.CASCADE,
+                               related_name="+", default=escola_corrente_ou_nada, editable=False,
+                               help_text="Vazio = da plataforma (sem escola)")
+
+    tipo = models.CharField(max_length=30)
     assunto = models.CharField(max_length=200)
     corpo = models.TextField()
     ativo = models.BooleanField("Enviar este e-mail", default=True)
@@ -1924,6 +2129,21 @@ class ModeloEmail(models.Model):
     class Meta:
         verbose_name = "modelo de e-mail"
         verbose_name_plural = "modelos de e-mail"
+        constraints = [
+            models.UniqueConstraint(fields=["escola", "tipo"], name="modelo_email_unico_na_escola"),
+            models.UniqueConstraint(fields=["tipo"], condition=models.Q(escola__isnull=True),
+                                    name="modelo_email_padrao_unico"),
+        ]
+
+    @classmethod
+    def vigente(cls, tipo, escola=None):
+        """O texto da escola, senão o padrão da plataforma (escola vazia), senão None (texto do código)."""
+        from escolas.escopo import escola_corrente
+
+        escola = escola or escola_corrente(obrigatoria=False)
+        modelos = {m.escola_id: m for m in cls.objects.filter(tipo=tipo).filter(
+            models.Q(escola__isnull=True) | models.Q(escola=escola) if escola else models.Q(escola__isnull=True))}
+        return modelos.get(escola.pk if escola else None) or modelos.get(None)
 
     def __str__(self):
         return self.tipo
@@ -1931,6 +2151,12 @@ class ModeloEmail(models.Model):
 
 class ErroSistema(models.Model):
     """Erro do servidor (página que deu erro 500 ou tarefa em segundo plano que falhou), agrupado por origem."""
+
+    escola = models.ForeignKey("escolas.Escola", null=True, blank=True, on_delete=models.SET_NULL,
+                               related_name="+", default=escola_corrente_ou_nada, editable=False,
+                               help_text="Vazio = da plataforma (sem escola)")
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
 
     assinatura = models.CharField(max_length=64, unique=True)
     tipo = models.CharField(max_length=120)
@@ -1959,6 +2185,12 @@ class ErroSistema(models.Model):
 class RegistroAcao(models.Model):
     """Registro de ações: quem fez o quê, quando e de onde (entradas, contas, senhas, cadastros, exportações)."""
 
+    escola = models.ForeignKey("escolas.Escola", null=True, blank=True, on_delete=models.SET_NULL,
+                               related_name="+", default=escola_corrente_ou_nada, editable=False,
+                               help_text="Vazio = da plataforma (sem escola)")
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
+
     quando = models.DateTimeField(default=timezone.now, db_index=True)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                 related_name="acoes")
@@ -1983,6 +2215,11 @@ class RegistroAcao(models.Model):
 class VinculoResponsavel(models.Model):
     """Responsável legal que acompanha o estágio de um estudante: o do TCE ou quem pediu à escola. Um responsável
     pode acompanhar mais de um estudante (irmãos)."""
+
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
 
     class Origem(models.TextChoices):
         TCE = "TCE", "Termo de compromisso (TCE)"
@@ -2038,6 +2275,9 @@ class SessaoAparelho(models.Model):
 class Substituicao(models.Model):
     """Permissão temporária para um funcionário da concedente confirmar presenças no lugar do supervisor."""
 
+    _caminho_escola = "concedente__escola"
+    objects = EscopoEscolaManager()
+
     concedente = models.ForeignKey(LocalEstagio, on_delete=models.CASCADE, related_name="substituicoes")
     titular = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE, related_name="substituido_em",
@@ -2080,6 +2320,11 @@ class Substituicao(models.Model):
 
 class LinkConfirmacao(models.Model):
     """Link de uso único para o supervisor confirmar as presenças pendentes sem entrar no sistema."""
+
+    escola = models.ForeignKey("escolas.Escola", on_delete=models.PROTECT, related_name="+",
+                               default=escola_corrente_id, editable=False)
+    _caminho_escola = "escola"
+    objects = EscopoEscolaManager()
 
     class Canal(models.TextChoices):
         EMAIL = "EMAIL", "E-mail"

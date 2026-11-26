@@ -67,7 +67,7 @@ def disparar_lembrete(agora=None):
         return 0
     mes = inicio_mes(agora.date())
     marco = timezone.make_aware(timezone.datetime(mes.year, mes.month, DIA_LEMBRETE))
-    reservado = Configuracao.objects.filter(pk=1).filter(
+    reservado = Configuracao.objects.filter(pk=cfg.pk).filter(
         Q(lembrete_feedback_em__isnull=True) | Q(lembrete_feedback_em__lt=marco)).update(lembrete_feedback_em=agora)
     if not reservado:
         return 0

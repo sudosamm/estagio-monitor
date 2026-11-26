@@ -38,6 +38,6 @@ class Command(BaseCommand):
             if not pendente and not forcar:
                 self.stdout.write("O resumo desta semana já foi enviado (ou está desligado). Use --forcar para reenviar.")
                 return
-            Configuracao.objects.filter(pk=1).update(resumo_enviado_em=timezone.now())
+            Configuracao.objects.filter(pk=Configuracao.atual().pk).update(resumo_enviado_em=timezone.now())
         n = enviar_resumos(usuarios=pessoas)
         self.stdout.write(self.style.SUCCESS(f"Resumo enviado para {n} pessoa(s)."))

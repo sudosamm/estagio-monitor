@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, time, timedelta
 
 from django.conf import settings
-from .threads import fechar_conexoes_da_thread
+from .threads import fechar_conexoes_da_thread, iniciar_thread
 from django.db.models import Count, Q
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -124,9 +124,11 @@ def consolidar(estagios, hoje=None):
 
 def destinatarios_resumo():
     """Orientadores e coordenadores ativos, com e-mail, que não desligaram o resumo nem os avisos por e-mail."""
-    return (Usuario.objects.filter(is_active=True, resumo_semanal=True, avisos_email=True)
-            .filter(Q(papel__in=[Usuario.Papel.ORIENTADOR, Usuario.Papel.COORDENADOR]) | Q(is_superuser=True))
-            .exclude(email=""))
+    from escolas.pessoas import na_escola
+
+    return na_escola(Usuario.objects.filter(is_active=True, resumo_semanal=True, avisos_email=True)
+                     .filter(Q(papel__in=[Usuario.Papel.ORIENTADOR, Usuario.Papel.COORDENADOR]) | Q(is_superuser=True))
+                     .exclude(email=""))  # um resumo por escola: só quem é desta
 
 
 def resumo_semanal(usuario, hoje=None):
@@ -245,7 +247,7 @@ def disparar_resumo_se_preciso(agora=None):
     pendente, marco = resumo_pendente(agora)
     if not pendente:
         return False
-    reservado = Configuracao.objects.filter(pk=1).filter(
+    reservado = Configuracao.objects.filter(pk=Configuracao.atual().pk).filter(
         Q(resumo_enviado_em__isnull=True) | Q(resumo_enviado_em__lt=marco)
     ).update(resumo_enviado_em=timezone.now())
     if not reservado:
@@ -261,9 +263,7 @@ def disparar_resumo_se_preciso(agora=None):
             fechar_conexoes_da_thread()
 
     if settings.EMAIL_ASSINCRONO:
-        import threading
-
-        threading.Thread(target=enviar, daemon=True).start()
+        iniciar_thread(enviar)
     else:
         enviar()
     return True

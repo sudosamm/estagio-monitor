@@ -133,17 +133,6 @@ class ResumoSemanalMiddleware:
 
     @staticmethod
     def _tarefas():
-        import logging
+        from .tarefas import rodar_tarefas
 
-        from . import auditoria, confirmacao, lembretes, sessoes
-        from .acompanhamento import disparar_resumo_se_preciso
-        from .avaliacoes import disparar_lembrete as lembrete_avaliacoes
-        from .feedback import disparar_lembrete as lembrete_feedback
-
-        for tarefa in (disparar_resumo_se_preciso, lembrete_feedback, lembrete_avaliacoes,
-                       lembretes.disparar_lembretes_expediente, confirmacao.disparar_confirmacoes,
-                       confirmacao.disparar_resumo_mensal, auditoria.limpar_antigos, sessoes.limpar_antigas):
-            try:
-                tarefa()
-            except Exception:  # noqa: BLE001 — nunca atrapalhar a página
-                logging.getLogger("core.tarefas").exception("Falha na tarefa %s", tarefa.__name__)
+        rodar_tarefas()  # escola por escola, cada uma com a sua configuração e o seu fuso (core/tarefas.py)
