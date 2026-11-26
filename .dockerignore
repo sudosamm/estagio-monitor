@@ -6,3 +6,10 @@ staticfiles
 .env
 .git
 .claude
+# dados pessoais reais: nunca entram na imagem (o Dockerfile faz COPY . .)
+TCEs
+importacao
+Relatorio-estagio
+/*.pdf
+/*.csv
+file.csv

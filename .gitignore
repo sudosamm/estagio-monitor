@@ -12,3 +12,7 @@ importacao/
 TCEs/
 # relatórios de frequência do SICE (dados pessoais)
 Relatorio-estagio/
+# planilhas e CSVs com dados de pessoas deixados na raiz (ex.: file.csv)
+file.csv
+/*.csv
+# Atenção: o .gitignore não tira do Git o que já foi versionado. Ver docs/diagnostico/00-dados-pessoais-no-git.md
