@@ -211,6 +211,9 @@ VAPID_CONTATO = os.environ.get("VAPID_CONTATO") or (
 # Nos testes fica desligado (cada teste que precisa liga com override_settings).
 EXIGIR_ACEITE_TERMOS = env_bool("EXIGIR_ACEITE_TERMOS", "test" not in sys.argv)
 
+# Só nos testes: tira da saída os logs esperados (403, 404, backup sem chave). Ver core/executor_testes.py.
+TEST_RUNNER = "core.executor_testes.ExecutorDeTestes"
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
